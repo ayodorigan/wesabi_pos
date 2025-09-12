@@ -1,0 +1,506 @@
+import React, { useState } from 'react';
+import { 
+  ShoppingCart, 
+  Scan, 
+  Plus, 
+  Minus, 
+  Trash2,
+  Receipt,
+  CreditCard,
+  Banknote,
+  Smartphone,
+  Shield,
+  History,
+  Check,
+  Edit
+} from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useApp } from '../contexts/AppContext';
+import { Product, SaleItem } from '../types';
+import { formatKES, getMinimumSellingPrice } from '../utils/currency';
+
+const POS: React.FC = () => {
+  const { user } = useAuth();
+  const { products, addSale } = useApp();
+  const [cart, setCart] = useState<SaleItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'insurance'>('cash');
+  const [customerName, setCustomerName] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [lastReceipt, setLastReceipt] = useState<string | null>(null);
+  const [editingPrice, setEditingPrice] = useState<string | null>(null);
+  const [tempPrice, setTempPrice] = useState('');
+  const [showPriceHistory, setShowPriceHistory] = useState<string | null>(null);
+  const [useLastPrice, setUseLastPrice] = useState<Record<string, boolean>>({});
+
+  const filteredProducts = products.filter(product => 
+    product.currentStock > 0 && (
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.barcode.includes(searchTerm)
+    )
+  );
+
+  const addToCart = (product: Product) => {
+    const existingItem = cart.find(item => item.productId === product.id);
+    
+    if (existingItem) {
+      // Don't add duplicate products, just show a message
+      alert('Product already in cart. Adjust quantity if needed.');
+      return;
+    } else {
+      const lastPrice = product.priceHistory && product.priceHistory.length > 0 
+        ? product.priceHistory[product.priceHistory.length - 1]?.sellingPrice 
+        : product.sellingPrice;
+      const priceToUse = useLastPrice[product.id] ? lastPrice : product.sellingPrice;
+      
+      const newItem: SaleItem = {
+        productId: product.id,
+        productName: product.name,
+        quantity: 1,
+        unitPrice: priceToUse,
+        totalPrice: priceToUse,
+        originalPrice: product.sellingPrice,
+        priceAdjusted: priceToUse !== product.sellingPrice,
+        batchNumber: product.batchNumber,
+      };
+      setCart([...cart, newItem]);
+    }
+    setSearchTerm('');
+  };
+
+  const updateQuantity = (productId: string, newQuantity: number) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    if (newQuantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+
+    if (newQuantity > product.currentStock) return;
+
+    setCart(cart.map(item =>
+      item.productId === productId
+        ? { ...item, quantity: newQuantity, totalPrice: newQuantity * item.unitPrice }
+        : item
+    ));
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart(cart.filter(item => item.productId !== productId));
+  };
+
+  const startPriceEdit = (productId: string, currentPrice: number) => {
+    setEditingPrice(productId);
+    setTempPrice(currentPrice.toString());
+  };
+
+  const savePriceEdit = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    const newPrice = parseFloat(tempPrice);
+    const minPrice = getMinimumSellingPrice(product.costPrice);
+
+    if (newPrice < minPrice) {
+      alert(`Price cannot be less than minimum selling price: ${formatKES(minPrice)}`);
+      return;
+    }
+
+    setCart(cart.map(item =>
+      item.productId === productId
+        ? { 
+            ...item, 
+            unitPrice: newPrice, 
+            totalPrice: item.quantity * newPrice,
+            priceAdjusted: newPrice !== product.sellingPrice
+          }
+        : item
+    ));
+    setEditingPrice(null);
+  };
+
+  const cancelPriceEdit = () => {
+    setEditingPrice(null);
+    setTempPrice('');
+  };
+
+  const getTotalAmount = () => {
+    return cart.reduce((total, item) => total + item.totalPrice, 0);
+  };
+
+  const processSale = async () => {
+    if (cart.length === 0 || !user) return;
+
+    setIsProcessing(true);
+
+    try {
+      const receiptNumber = addSale({
+        items: cart,
+        totalAmount: getTotalAmount(),
+        paymentMethod,
+        customerName: customerName || undefined,
+        salesPersonId: user.id,
+        salesPersonName: user.name,
+      });
+
+      setLastReceipt(receiptNumber);
+      setCart([]);
+      setCustomerName('');
+      setPaymentMethod('cash');
+      
+      // Show success message
+      alert(`Sale completed! Receipt #${receiptNumber} - Wesabi Pharmacy`);
+    } catch (error) {
+      alert('Error processing sale. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const toggleLastPrice = (productId: string) => {
+    setUseLastPrice(prev => ({
+      ...prev,
+      [productId]: !prev[productId]
+    }));
+  };
+
+  const paymentMethods = [
+    { id: 'cash', label: 'Cash', icon: Banknote, color: 'green' },
+    { id: 'mpesa', label: 'M-Pesa', icon: Smartphone, color: 'green' },
+    { id: 'card', label: 'Card', icon: CreditCard, color: 'blue' },
+    { id: 'insurance', label: 'Insurance', icon: Shield, color: 'purple' },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Product Selection */}
+      <div className="lg:col-span-2 space-y-4">
+        <h1 className="text-3xl font-bold text-gray-900">Point of Sale</h1>
+        
+        {/* Search Bar */}
+        <div className="relative">
+          <Scan className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by product name or scan barcode..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-lg"
+          />
+        </div>
+
+        {/* Products Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+          {filteredProducts.map(product => (
+            <div 
+              key={product.id} 
+              className="bg-white p-4 rounded-lg shadow-sm border hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => addToCart(product)}
+            >
+              <div className="space-y-2">
+                <div className="flex justify-between items-start">
+                  <h3 className="font-medium text-gray-900 text-sm">{product.name}</h3>
+                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                    {product.category}
+                  </span>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-lg font-bold text-green-600">{formatKES(product.sellingPrice)}</p>
+                  {product.priceHistory.length > 1 && (
+                    <p className="text-xs text-gray-500">
+                      Last sold: {formatKES(product.priceHistory[product.priceHistory.length - 2]?.sellingPrice || product.sellingPrice)}
+                    </p>
+                  )}
+                  <p className="text-sm text-gray-600">Stock: {product.currentStock}</p>
+                  <p className="text-xs text-gray-500">Batch: {product.batchNumber}</p>
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  {product.priceHistory.length > 1 && (
+                    <label className="flex items-center text-xs">
+                      <input
+                        type="checkbox"
+                        checked={useLastPrice[product.id] || false}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleLastPrice(product.id);
+                        }}
+                        className="mr-1"
+                      />
+                      Use last price
+                    </label>
+                  )}
+                  
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowPriceHistory(product.id);
+                      }}
+                      className="p-1 text-gray-400 hover:text-gray-600"
+                      title="Price History"
+                    >
+                      <History className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addToCart(product);
+                      }}
+                      className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {filteredProducts.length === 0 && searchTerm && (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No products found matching "{searchTerm}"</p>
+          </div>
+        )}
+      </div>
+
+      {/* Cart and Checkout */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border h-fit">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+            <ShoppingCart className="h-5 w-5 mr-2" />
+            Cart
+          </h2>
+          <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-sm">
+            {cart.length} items
+          </span>
+        </div>
+
+        {/* Cart Items */}
+        <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
+          {cart.map(item => (
+            <div key={item.productId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{item.productName}</p>
+                <div className="space-y-1">
+                  {editingPrice === item.productId ? (
+                    <div className="flex items-center space-x-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={tempPrice}
+                        onChange={(e) => setTempPrice(e.target.value)}
+                        className="w-24 px-2 py-1 text-xs border rounded"
+                      />
+                      <button
+                        onClick={() => savePriceEdit(item.productId)}
+                        className="p-1 text-green-600 hover:text-green-800"
+                      >
+                        <Check className="h-3 w-3" />
+                      </button>
+                      <button
+                        onClick={cancelPriceEdit}
+                        className="p-1 text-red-600 hover:text-red-800"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <button
+                        onClick={() => startPriceEdit(item.productId, item.unitPrice)}
+                        className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+                      >
+                        {formatKES(item.unitPrice)} each
+                        {item.priceAdjusted && <span className="text-orange-500 ml-1">*</span>}
+                        <Edit className="h-3 w-3 ml-1" />
+                      </button>
+                      {(() => {
+                        const product = products.find(p => p.id === item.productId);
+                        const lastPrice = product?.priceHistory && product.priceHistory.length > 1 
+                          ? product.priceHistory[product.priceHistory.length - 2]?.sellingPrice 
+                          : null;
+                        
+                        return lastPrice && lastPrice !== item.unitPrice ? (
+                          <div className="flex items-center space-x-2 mt-1">
+                            <span className="text-xs text-gray-500">
+                              Last: {formatKES(lastPrice)}
+                            </span>
+                            <label className="flex items-center text-xs">
+                              <input
+                                type="checkbox"
+                                checked={useLastPrice[item.productId] || false}
+                                onChange={() => {
+                                  const newUseLastPrice = !useLastPrice[item.productId];
+                                  setUseLastPrice(prev => ({
+                                    ...prev,
+                                    [item.productId]: newUseLastPrice
+                                  }));
+                                  
+                                  const priceToUse = newUseLastPrice ? lastPrice : product!.sellingPrice;
+                                  setCart(cart.map(cartItem =>
+                                    cartItem.productId === item.productId
+                                      ? { 
+                                          ...cartItem, 
+                                          unitPrice: priceToUse, 
+                                          totalPrice: cartItem.quantity * priceToUse,
+                                          priceAdjusted: priceToUse !== product!.sellingPrice
+                                        }
+                                      : cartItem
+                                  ));
+                                }}
+                                className="mr-1"
+                              />
+                              Use last price
+                            </label>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => updateQuantity(item.productId, item.quantity - 1)}
+                  className="p-1 text-gray-400 hover:text-gray-600"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <span className="w-8 text-center font-medium">{item.quantity}</span>
+                <button
+                  onClick={() => updateQuantity(item.productId, item.quantity + 1)}
+                  className="p-1 text-gray-400 hover:text-gray-600"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => removeFromCart(item.productId)}
+                  className="p-1 text-red-400 hover:text-red-600 ml-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {cart.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            <ShoppingCart className="h-12 w-12 mx-auto mb-2 opacity-50" />
+            <p>Your cart is empty</p>
+            <p className="text-sm">Add products to start a sale</p>
+          </div>
+        )}
+
+        {cart.length > 0 && (
+          <>
+            {/* Customer Name */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Customer Name (Optional)
+              </label>
+              <input
+                type="text"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Enter customer name"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            {/* Payment Method */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Method
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {paymentMethods.map(method => {
+                  const Icon = method.icon;
+                  return (
+                    <button
+                      key={method.id}
+                      onClick={() => setPaymentMethod(method.id as any)}
+                      className={`flex items-center justify-center space-x-2 p-2 rounded-lg border-2 transition-colors ${
+                        paymentMethod === method.id
+                          ? `border-${method.color}-500 bg-${method.color}-50 text-${method.color}-700`
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span className="text-sm">{method.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Total */}
+            <div className="border-t pt-4 mb-4">
+              <div className="flex justify-between items-center text-lg font-bold">
+                <span>Total:</span>
+                <span className="text-green-600">{formatKES(getTotalAmount())}</span>
+              </div>
+            </div>
+
+            {/* Process Sale Button */}
+            <button
+              onClick={processSale}
+              disabled={isProcessing}
+              className="w-full flex items-center justify-center space-x-2 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Receipt className="h-5 w-5" />
+              <span>{isProcessing ? 'Processing...' : 'Complete Sale'}</span>
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Price History Modal */}
+      {showPriceHistory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+            {(() => {
+              const product = products.find(p => p.id === showPriceHistory);
+              return product ? (
+                <>
+                  <h3 className="text-lg font-semibold mb-4">Price History - {product.name}</h3>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {product.priceHistory.slice().reverse().map((history, index) => (
+                      <div key={history.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                        <div>
+                          <p className="text-sm font-medium">{formatKES(history.sellingPrice)}</p>
+                          <p className="text-xs text-gray-500">
+                            {history.date.toLocaleDateString()} by {history.userName}
+                          </p>
+                        </div>
+                        {index === 0 && (
+                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-end pt-4">
+                    <button
+                      onClick={() => setShowPriceHistory(null)}
+                      className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </>
+              ) : null;
+            })()}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default POS;
