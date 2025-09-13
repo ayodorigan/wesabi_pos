@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { useEffect } from 'react';
 import { Package, Save, AlertTriangle, CheckCircle } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
 import { formatKES } from '../utils/currency';
 
 const StockTake: React.FC = () => {
-  const { user } = useAuth();
-  const { products, stockTakes, addStockTake } = useApp();
+  const { user, products, stockTakes, addStockTake } = useApp();
   const [selectedProducts, setSelectedProducts] = useState<Record<string, { actualStock: number; reason: string }>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);

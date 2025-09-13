@@ -1,8 +1,16 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from './AuthContext';
 import { formatKES, calculateSellingPrice } from '../utils/currency';
 import { medicineDatabase, drugCategories, commonSuppliers } from '../data/medicineDatabase';
+
+// Mock user for the system
+const MOCK_USER = {
+  id: '00000000-0000-0000-0000-000000000001',
+  email: 'admin@wesabi.co.ke',
+  name: 'Administrator',
+  role: 'admin' as const,
+  phone: '+254700000001'
+};
 
 // Frontend types
 interface PriceHistory {
@@ -106,6 +114,7 @@ interface SalesHistoryItem {
 }
 
 interface AppContextType {
+  user: typeof MOCK_USER;
   products: Product[];
   sales: Sale[];
   stockTakes: StockTake[];
@@ -114,6 +123,7 @@ interface AppContextType {
   categories: string[];
   suppliers: string[];
   medicineTemplates: typeof medicineDatabase;
+  loading: boolean;
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceHistory'>) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
@@ -129,7 +139,6 @@ interface AppContextType {
   generateReceipt: (sale: Sale) => void;
   exportToPDF: (data: any, type: string) => void;
   refreshData: () => Promise<void>;
-  updateUsers: (users: any[]) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -147,7 +156,6 @@ interface AppProviderProps {
 }
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [stockTakes, setStockTakes] = useState<StockTake[]>([]);
@@ -157,120 +165,83 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [suppliers, setSuppliers] = useState<string[]>(commonSuppliers);
   const [loading, setLoading] = useState(true);
 
-  // Load data from Supabase
+  // Load data from database
   const refreshData = async () => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
     try {
-      // Load products with price history
+      setLoading(true);
+      
+      // Declare variables at function scope
+      let formattedProducts: Product[] = [];
+      let formattedSales: Sale[] = [];
+      
+      // Load products
       const { data: productsData, error: productsError } = await supabase
         .from('products')
-        .select(`
-          *,
-          price_history (*)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (productsError) {
         console.error('Error loading products:', productsError);
       } else {
-        const formattedProducts: Product[] = (productsData || []).map(product => ({
+        formattedProducts = (productsData || []).map(product => ({
           id: product.id,
           name: product.name,
           category: product.category,
           supplier: product.supplier,
           batchNumber: product.batch_number,
           expiryDate: new Date(product.expiry_date),
-          costPrice: product.cost_price,
-          sellingPrice: product.selling_price,
-          currentStock: product.current_stock,
-          minStockLevel: product.min_stock_level,
+          costPrice: parseFloat(product.cost_price) || 0,
+          sellingPrice: parseFloat(product.selling_price) || 0,
+          currentStock: product.current_stock || 0,
+          minStockLevel: product.min_stock_level || 10,
           barcode: product.barcode,
           invoiceNumber: product.invoice_number,
-          priceHistory: (product.price_history || []).map((ph: any) => ({
-            id: ph.id,
-            date: new Date(ph.created_at),
-            costPrice: ph.cost_price,
-            sellingPrice: ph.selling_price,
-            userId: ph.user_id,
-            userName: ph.user_name
-          })),
+          priceHistory: [], // We'll load this separately if needed
           createdAt: new Date(product.created_at),
-          updatedAt: new Date(product.updated_at)
+          updatedAt: new Date(product.updated_at),
         }));
-
         setProducts(formattedProducts);
-
-        // Extract categories and suppliers
-        const uniqueCategories = [...new Set([...drugCategories, ...formattedProducts.map(p => p.category)])];
-        const uniqueSuppliers = [...new Set([...commonSuppliers, ...formattedProducts.map(p => p.supplier)])];
-        setCategories(uniqueCategories);
-        setSuppliers(uniqueSuppliers);
       }
 
-      // Load sales with items
+      // Load sales
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
         .select(`
           *,
-          sale_items (*)
+          sale_items (
+            id,
+            product_id,
+            product_name,
+            quantity,
+            unit_price,
+            total_price,
+            batch_number
+          )
         `)
         .order('created_at', { ascending: false });
 
       if (salesError) {
         console.error('Error loading sales:', salesError);
       } else {
-        const formattedSales: Sale[] = (salesData || []).map(sale => ({
+        formattedSales = (salesData || []).map(sale => ({
           id: sale.id,
           receiptNumber: sale.receipt_number,
           customerName: sale.customer_name,
-          totalAmount: sale.total_amount,
+          totalAmount: parseFloat(sale.total_amount) || 0,
           paymentMethod: sale.payment_method,
-          salesPersonId: sale.sales_person_id,
+          salesPersonId: sale.sales_person_id || MOCK_USER.id,
           salesPersonName: sale.sales_person_name,
           items: (sale.sale_items || []).map((item: any) => ({
             productId: item.product_id,
             productName: item.product_name,
             quantity: item.quantity,
-            unitPrice: item.unit_price,
-            totalPrice: item.total_price,
-            batchNumber: item.batch_number
+            unitPrice: parseFloat(item.unit_price) || 0,
+            totalPrice: parseFloat(item.total_price) || 0,
+            batchNumber: item.batch_number,
           })),
-          createdAt: new Date(sale.created_at)
+          createdAt: new Date(sale.created_at),
         }));
-
         setSales(formattedSales);
-
-        // Generate sales history
-        const salesHistoryData: SalesHistoryItem[] = [];
-        formattedSales.forEach(sale => {
-          sale.items.forEach(item => {
-            const product = products.find(p => p.id === item.productId);
-            if (product) {
-              salesHistoryData.push({
-                id: `${sale.id}-${item.productId}`,
-                productId: item.productId,
-                productName: item.productName,
-                quantity: item.quantity,
-                costPrice: product.costPrice,
-                sellingPrice: item.unitPrice,
-                totalCost: product.costPrice * item.quantity,
-                totalRevenue: item.totalPrice,
-                profit: item.totalPrice - (product.costPrice * item.quantity),
-                paymentMethod: sale.paymentMethod,
-                customerName: sale.customerName,
-                salesPersonName: sale.salesPersonName,
-                receiptNumber: sale.receiptNumber,
-                saleDate: sale.createdAt
-              });
-            }
-          });
-        });
-
-        setSalesHistory(salesHistoryData);
       }
 
       // Load stock takes
@@ -282,83 +253,111 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (stockTakesError) {
         console.error('Error loading stock takes:', stockTakesError);
       } else {
-        const formattedStockTakes: StockTake[] = (stockTakesData || []).map(st => ({
-          id: st.id,
-          productId: st.product_id,
-          productName: st.product_name,
-          expectedStock: st.expected_stock,
-          actualStock: st.actual_stock,
-          difference: st.difference,
-          reason: st.reason,
-          userId: st.user_id,
-          userName: st.user_name,
-          createdAt: new Date(st.created_at)
+        const formattedStockTakes: StockTake[] = (stockTakesData || []).map(stockTake => ({
+          id: stockTake.id,
+          productId: stockTake.product_id,
+          productName: stockTake.product_name,
+          expectedStock: stockTake.expected_stock,
+          actualStock: stockTake.actual_stock,
+          difference: stockTake.difference,
+          reason: stockTake.reason,
+          userId: stockTake.user_id || MOCK_USER.id,
+          userName: stockTake.user_name,
+          createdAt: new Date(stockTake.created_at),
         }));
         setStockTakes(formattedStockTakes);
       }
 
       // Load activity logs
-      const { data: activityLogsData, error: activityLogsError } = await supabase
+      const { data: logsData, error: logsError } = await supabase
         .from('activity_logs')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-      if (activityLogsError) {
-        console.error('Error loading activity logs:', activityLogsError);
+      if (logsError) {
+        console.error('Error loading activity logs:', logsError);
       } else {
-        const formattedActivityLogs: ActivityLog[] = (activityLogsData || []).map(log => ({
+        const formattedLogs: ActivityLog[] = (logsData || []).map(log => ({
           id: log.id,
-          userId: log.user_id,
+          userId: log.user_id || MOCK_USER.id,
           userName: log.user_name,
           action: log.action,
           details: log.details,
-          timestamp: new Date(log.created_at)
+          timestamp: new Date(log.created_at),
         }));
-        setActivityLogs(formattedActivityLogs);
+        setActivityLogs(formattedLogs);
       }
 
+      // Generate sales history from sales data
+      const salesHistoryItems: SalesHistoryItem[] = [];
+      formattedSales.forEach(sale => {
+        sale.items.forEach(item => {
+          const product = formattedProducts.find(p => p.id === item.productId);
+          salesHistoryItems.push({
+            id: `${sale.id}-${item.productId}`,
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            costPrice: product?.costPrice || 0,
+            sellingPrice: item.unitPrice,
+            totalCost: (product?.costPrice || 0) * item.quantity,
+            totalRevenue: item.totalPrice,
+            profit: item.totalPrice - ((product?.costPrice || 0) * item.quantity),
+            paymentMethod: sale.paymentMethod,
+            customerName: sale.customerName,
+            salesPersonName: sale.salesPersonName,
+            receiptNumber: sale.receiptNumber,
+            saleDate: sale.createdAt,
+          });
+        });
+      });
+      setSalesHistory(salesHistoryItems);
+
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error refreshing data:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  // Initialize data on mount
   useEffect(() => {
     refreshData();
-  }, [user]);
+  }, []);
 
   const logActivity = async (action: string, details: string) => {
-    if (!user) return;
-
     try {
       const { error } = await supabase
         .from('activity_logs')
         .insert({
-          user_id: user.id,
-          user_name: user.name,
+          user_id: MOCK_USER.id,
+          user_name: MOCK_USER.name,
           action,
-          details
+          details,
         });
 
-      if (error) throw error;
-      
-      // Refresh activity logs
-      const { data } = await supabase
-        .from('activity_logs')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (data) {
-        const formattedLogs: ActivityLog[] = data.map(log => ({
-          id: log.id,
-          userId: log.user_id,
-          userName: log.user_name,
-          action: log.action,
-          details: log.details,
-          timestamp: new Date(log.created_at)
-        }));
-        setActivityLogs(formattedLogs);
+      if (error) {
+        console.error('Error logging activity:', error);
+      } else {
+        // Refresh activity logs
+        const { data: logsData } = await supabase
+          .from('activity_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        if (logsData) {
+          const formattedLogs: ActivityLog[] = logsData.map(log => ({
+            id: log.id,
+            userId: log.user_id || MOCK_USER.id,
+            userName: log.user_name,
+            action: log.action,
+            details: log.details,
+            timestamp: new Date(log.created_at),
+          }));
+          setActivityLogs(formattedLogs);
+        }
       }
     } catch (error) {
       console.error('Error logging activity:', error);
@@ -366,8 +365,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const addProduct = async (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceHistory'>) => {
-    if (!user) return;
-
     try {
       const { data, error } = await supabase
         .from('products')
@@ -376,29 +373,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           category: productData.category,
           supplier: productData.supplier,
           batch_number: productData.batchNumber,
-          expiry_date: productData.expiryDate.toISOString().split('T')[0],
+          expiry_date: productData.expiryDate.toISOString(),
           cost_price: productData.costPrice,
           selling_price: productData.sellingPrice,
           current_stock: productData.currentStock,
           min_stock_level: productData.minStockLevel,
           barcode: productData.barcode,
-          invoice_number: productData.invoiceNumber
+          invoice_number: productData.invoiceNumber,
         })
         .select()
         .single();
 
-      if (error) throw error;
-
-      // Add price history
-      await supabase
-        .from('price_history')
-        .insert({
-          product_id: data.id,
-          cost_price: productData.costPrice,
-          selling_price: productData.sellingPrice,
-          user_id: user.id,
-          user_name: user.name
-        });
+      if (error) {
+        console.error('Error adding product:', error);
+        throw error;
+      }
 
       await logActivity('ADD_PRODUCT', `Added product: ${productData.name}`);
       await refreshData();
@@ -409,8 +398,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const updateProduct = async (id: string, updates: Partial<Product>) => {
-    if (!user) return;
-
     try {
       const updateData: any = {};
       
@@ -418,37 +405,22 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (updates.category) updateData.category = updates.category;
       if (updates.supplier) updateData.supplier = updates.supplier;
       if (updates.batchNumber) updateData.batch_number = updates.batchNumber;
-      if (updates.expiryDate) updateData.expiry_date = updates.expiryDate.toISOString().split('T')[0];
+      if (updates.expiryDate) updateData.expiry_date = updates.expiryDate.toISOString();
       if (updates.costPrice !== undefined) updateData.cost_price = updates.costPrice;
       if (updates.sellingPrice !== undefined) updateData.selling_price = updates.sellingPrice;
       if (updates.currentStock !== undefined) updateData.current_stock = updates.currentStock;
       if (updates.minStockLevel !== undefined) updateData.min_stock_level = updates.minStockLevel;
       if (updates.barcode) updateData.barcode = updates.barcode;
       if (updates.invoiceNumber) updateData.invoice_number = updates.invoiceNumber;
-      
-      updateData.updated_at = new Date().toISOString();
 
       const { error } = await supabase
         .from('products')
         .update(updateData)
         .eq('id', id);
 
-      if (error) throw error;
-
-      // Add price history if price changed
-      if (updates.costPrice !== undefined || updates.sellingPrice !== undefined) {
-        const product = products.find(p => p.id === id);
-        if (product) {
-          await supabase
-            .from('price_history')
-            .insert({
-              product_id: id,
-              cost_price: updates.costPrice || product.costPrice,
-              selling_price: updates.sellingPrice || product.sellingPrice,
-              user_id: user.id,
-              user_name: user.name
-            });
-        }
+      if (error) {
+        console.error('Error updating product:', error);
+        throw error;
       }
 
       await logActivity('UPDATE_PRODUCT', `Updated product: ${updates.name || id}`);
@@ -460,8 +432,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const deleteProduct = async (id: string) => {
-    if (!user) return;
-
     try {
       const product = products.find(p => p.id === id);
       
@@ -470,7 +440,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error deleting product:', error);
+        throw error;
+      }
 
       await logActivity('DELETE_PRODUCT', `Deleted product: ${product?.name || id}`);
       await refreshData();
@@ -481,14 +454,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const addSale = async (saleData: Omit<Sale, 'id' | 'createdAt' | 'receiptNumber'>): Promise<string> => {
-    if (!user) return '';
-
     try {
       // Generate receipt number
       const receiptNumber = `WSB${String(sales.length + 1).padStart(4, '0')}`;
-
-      // Create sale
-      const { data: saleRecord, error: saleError } = await supabase
+      
+      // Insert sale
+      const { data: saleResult, error: saleError } = await supabase
         .from('sales')
         .insert({
           receipt_number: receiptNumber,
@@ -496,40 +467,44 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           total_amount: saleData.totalAmount,
           payment_method: saleData.paymentMethod,
           sales_person_id: saleData.salesPersonId,
-          sales_person_name: saleData.salesPersonName
+          sales_person_name: saleData.salesPersonName,
         })
         .select()
         .single();
 
-      if (saleError) throw saleError;
+      if (saleError) {
+        console.error('Error adding sale:', saleError);
+        throw saleError;
+      }
 
-      // Create sale items
+      // Insert sale items
       const saleItems = saleData.items.map(item => ({
-        sale_id: saleRecord.id,
+        sale_id: saleResult.id,
         product_id: item.productId,
         product_name: item.productName,
         quantity: item.quantity,
         unit_price: item.unitPrice,
         total_price: item.totalPrice,
-        batch_number: item.batchNumber
+        batch_number: item.batchNumber,
       }));
 
       const { error: itemsError } = await supabase
         .from('sale_items')
         .insert(saleItems);
 
-      if (itemsError) throw itemsError;
+      if (itemsError) {
+        console.error('Error adding sale items:', itemsError);
+        throw itemsError;
+      }
 
       // Update product stock
       for (const item of saleData.items) {
         const product = products.find(p => p.id === item.productId);
         if (product) {
+          const newStock = product.currentStock - item.quantity;
           await supabase
             .from('products')
-            .update({
-              current_stock: product.currentStock - item.quantity,
-              updated_at: new Date().toISOString()
-            })
+            .update({ current_stock: newStock })
             .eq('id', item.productId);
         }
       }
@@ -545,8 +520,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const addStockTake = async (stockTakeData: Omit<StockTake, 'id' | 'createdAt'>) => {
-    if (!user) return;
-
     try {
       const { error } = await supabase
         .from('stock_takes')
@@ -558,10 +531,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           difference: stockTakeData.difference,
           reason: stockTakeData.reason,
           user_id: stockTakeData.userId,
-          user_name: stockTakeData.userName
+          user_name: stockTakeData.userName,
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error adding stock take:', error);
+        throw error;
+      }
+
+      // Update product stock if there's a difference
+      if (stockTakeData.difference !== 0) {
+        await supabase
+          .from('products')
+          .update({ current_stock: stockTakeData.actualStock })
+          .eq('id', stockTakeData.productId);
+      }
 
       await logActivity('STOCK_TAKE', `Stock take: ${stockTakeData.productName} - Difference: ${stockTakeData.difference}`);
       await refreshData();
@@ -576,7 +560,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     const now = new Date();
 
     products.forEach(product => {
-      // Low stock alert
       if (product.currentStock <= product.minStockLevel) {
         alerts.push({
           id: `low-${product.id}`,
@@ -588,7 +571,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         });
       }
 
-      // Expiry warning (30 days)
       const daysToExpiry = Math.ceil((product.expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       if (daysToExpiry <= 30 && daysToExpiry > 0) {
         alerts.push({
@@ -606,30 +588,31 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const importProducts = async (importedProducts: any[]) => {
-    if (!user) return;
-
     try {
       const productsToInsert = importedProducts.map(item => ({
         name: item.name || '',
         category: item.category || '',
         supplier: item.supplier || '',
-        batch_number: item.batchnumber || '',
-        expiry_date: item.expirydate || new Date().toISOString().split('T')[0],
+        batch_number: item.batchnumber || `BATCH-${Date.now()}`,
+        expiry_date: item.expirydate ? new Date(item.expirydate).toISOString() : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
         cost_price: parseFloat(item.costprice) || 0,
         selling_price: parseFloat(item.sellingprice) || 0,
         current_stock: parseInt(item.currentstock) || 0,
         min_stock_level: parseInt(item.minstocklevel) || 10,
         barcode: item.barcode || `${Date.now()}-${Math.random()}`,
-        invoice_number: item.invoicenumber || ''
+        invoice_number: item.invoicenumber || '',
       }));
 
       const { error } = await supabase
         .from('products')
         .insert(productsToInsert);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error importing products:', error);
+        throw error;
+      }
 
-      await logActivity('IMPORT_PRODUCTS', `Imported ${productsToInsert.length} products`);
+      await logActivity('IMPORT_PRODUCTS', `Imported ${importedProducts.length} products`);
       await refreshData();
     } catch (error) {
       console.error('Error importing products:', error);
@@ -776,25 +759,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   };
 
-  const updateUsers = (users: any[]) => {
-    // This is for compatibility with the Settings component
-    // In Supabase version, user management should be done through Supabase
-    console.log('User management should be done through Supabase');
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading pharmacy data...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <AppContext.Provider value={{
+      user: MOCK_USER,
       products,
       sales,
       stockTakes,
@@ -803,6 +770,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       categories,
       suppliers,
       medicineTemplates: medicineDatabase,
+      loading,
       addProduct,
       updateProduct,
       deleteProduct,
@@ -818,7 +786,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       generateReceipt,
       exportToPDF,
       refreshData,
-      updateUsers,
     }}>
       {children}
     </AppContext.Provider>

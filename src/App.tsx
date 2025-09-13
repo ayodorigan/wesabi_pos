@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
-import Login from './components/Login';
 import Layout from './components/Layout';
+import LoadingScreen from './components/LoadingScreen';
 import Dashboard from './components/Dashboard';
 import Inventory from './components/Inventory';
 import POS from './components/POS';
@@ -11,14 +10,16 @@ import Settings from './components/Settings';
 import StockTake from './components/StockTake';
 import ActivityLogs from './components/ActivityLogs';
 import SalesHistory from './components/SalesHistory';
+import SalesReports from './components/SalesReports';
 import Profile from './components/Profile';
+import { useApp } from './contexts/AppContext';
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated, user } = useAuth();
-  const [activeTab, setActiveTab] = useState(user?.role === 'admin' || user?.role === 'super_admin' ? 'dashboard' : 'pos');
+  const { loading } = useApp();
+  const [activeTab, setActiveTab] = useState('dashboard');
 
-  if (!isAuthenticated) {
-    return <Login />;
+  if (loading) {
+    return <LoadingScreen />;
   }
 
   const renderActiveTab = () => {
@@ -44,7 +45,7 @@ const AppContent: React.FC = () => {
       case 'profile':
         return <Profile />;
       default:
-        return user?.role === 'admin' || user?.role === 'super_admin' ? <Dashboard /> : <POS />;
+        return <Dashboard />;
     }
   };
 
@@ -55,14 +56,12 @@ const AppContent: React.FC = () => {
   );
 };
 
-function App() {
+const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppProvider>
-        <AppContent />
-      </AppProvider>
-    </AuthProvider>
+    <AppProvider>
+      <AppContent />
+    </AppProvider>
   );
-}
+};
 
 export default App;

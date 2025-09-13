@@ -1,0 +1,27 @@
+import React from 'react';
+import { Pill } from 'lucide-react';
+
+const LoadingScreen: React.FC = () => {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="flex items-center justify-center mb-8">
+          <div className="animate-spin">
+            <Pill className="h-16 w-16 text-green-600" />
+          </div>
+        </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">Wesabi Pharmacy</h1>
+        <p className="text-gray-600 mb-8">Loading your pharmacy management system...</p>
+        <div className="flex justify-center">
+          <div className="animate-pulse flex space-x-1">
+            <div className="w-3 h-3 bg-green-600 rounded-full"></div>
+            <div className="w-3 h-3 bg-green-600 rounded-full animation-delay-200"></div>
+            <div className="w-3 h-3 bg-green-600 rounded-full animation-delay-400"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default LoadingScreen;

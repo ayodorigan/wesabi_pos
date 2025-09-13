@@ -14,14 +14,12 @@ import {
   Check,
   Edit
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
 import { Product, SaleItem } from '../types';
 import { formatKES, getMinimumSellingPrice } from '../utils/currency';
 
 const POS: React.FC = () => {
-  const { user } = useAuth();
-  const { products, addSale } = useApp();
+  const { user, products, addSale } = useApp();
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'insurance'>('cash');

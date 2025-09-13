@@ -14,7 +14,6 @@ import {
   X,
   Pill
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -23,9 +22,13 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
-  const { user, logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+
+  const user = {
+    name: 'Administrator',
+    role: 'admin'
+  };
 
   const adminMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -39,24 +42,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
-  const salesMenuItems = [
-    { id: 'pos', label: 'Point of Sale', icon: ShoppingCart },
-    { id: 'inventory', label: 'Inventory', icon: Package },
-    { id: 'drugsaleshistory', label: 'Drug Sales History', icon: BarChart3 },
-  ];
-
-  const inventoryMenuItems = [
-    { id: 'pos', label: 'Point of Sale', icon: ShoppingCart },
-    { id: 'inventory', label: 'Inventory', icon: Package },
-    { id: 'stocktake', label: 'Stock Take', icon: Package },
-    { id: 'drugsaleshistory', label: 'Drug Sales History', icon: BarChart3 },
-  ];
-
-  const menuItems = user?.role === 'admin' || user?.role === 'super_admin'
-    ? adminMenuItems 
-    : user?.role === 'inventory_manager' 
-    ? inventoryMenuItems 
-    : salesMenuItems;
+  const menuItems = adminMenuItems;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -144,12 +130,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                 >
                   <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                     <span className="text-sm font-medium text-green-600">
-                      {user?.name.split(' ').map(n => n[0]).join('')}
+                      {user.name.split(' ').map(n => n[0]).join('')}
                     </span>
                   </div>
                   <div className="hidden sm:block text-left">
-                    <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                    <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+                    <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                    <p className="text-xs text-gray-500 capitalize">{user.role}</p>
                   </div>
                   <ChevronDown className="h-4 w-4 text-gray-400" />
                 </button>
@@ -166,16 +152,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                       >
                         <User className="h-4 w-4 mr-2" />
                         My Profile
-                      </button>
-                      <button
-                        onClick={() => {
-                          logout();
-                          setShowProfileDropdown(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
-                      >
-                        <LogOut className="h-4 w-4 mr-2" />
-                        Logout
                       </button>
                     </div>
                   </div>

@@ -9,13 +9,10 @@ import {
   Phone,
   Shield
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
-import { getItem, setItem } from '../utils/storage';
 
 const Profile: React.FC = () => {
-  const { user } = useAuth();
-  const { updateUsers } = useApp();
+  const { user } = useApp();
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -23,9 +20,8 @@ const Profile: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const [profileData, setProfileData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
+    name: user.name || '',
+    phone: user.phone || '',
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -43,8 +39,7 @@ const Profile: React.FC = () => {
       reader.onload = (e) => {
         const result = e.target?.result as string;
         setProfileImage(result);
-        // Save to localStorage
-        setItem(`profileImage_${user?.id}`, result);
+        localStorage.setItem(`profileImage_${user.id}`, result);
       };
       reader.readAsDataURL(file);
     }
@@ -52,38 +47,13 @@ const Profile: React.FC = () => {
 
   const handleProfileUpdate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
 
-    const savedUsers = getItem<any[]>('users') || [];
-    const updatedUsers = savedUsers.map(u => 
-      u.id === user.id 
-        ? { ...u, name: profileData.name, email: profileData.email, phone: profileData.phone }
-        : u
-    );
-
-    setItem('users', updatedUsers);
-    updateUsers(updatedUsers);
-    
-    // Update current user in auth context
-    const updatedCurrentUser = { ...user, name: profileData.name, email: profileData.email, phone: profileData.phone };
-    setItem('currentUser', updatedCurrentUser);
-    
+    alert('Profile updates are not available in this demo version');
     setIsEditing(false);
-    alert('Profile updated successfully!');
-    
-    // Reload page to reflect changes
-    window.location.reload();
   };
 
   const handlePasswordChange = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
-
-    // Verify current password
-    if (user.password !== passwordData.currentPassword) {
-      alert('Current password is incorrect');
-      return;
-    }
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       alert('New passwords do not match');
@@ -95,23 +65,9 @@ const Profile: React.FC = () => {
       return;
     }
 
-    const savedUsers = getItem<any[]>('users') || [];
-    const updatedUsers = savedUsers.map(u => 
-      u.id === user.id 
-        ? { ...u, password: passwordData.newPassword }
-        : u
-    );
-
-    setItem('users', updatedUsers);
-    updateUsers(updatedUsers);
-    
-    // Update current user password
-    const updatedCurrentUser = { ...user, password: passwordData.newPassword };
-    setItem('currentUser', updatedCurrentUser);
-    
+    alert('Password changes are not available in this demo version');
     setShowPasswordChange(false);
     setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    alert('Password updated successfully!');
   };
 
   const getRoleColor = (role: string) => {
@@ -136,15 +92,11 @@ const Profile: React.FC = () => {
 
   // Load profile image on mount
   React.useEffect(() => {
-    if (user?.id) {
-      const savedImage = getItem<string>(`profileImage_${user.id}`);
-      if (savedImage) {
-        setProfileImage(savedImage);
-      }
+    const savedImage = localStorage.getItem(`profileImage_${user.id}`);
+    if (savedImage) {
+      setProfileImage(savedImage);
     }
-  }, [user?.id]);
-
-  if (!user) return null;
+  }, [user.id]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -222,27 +174,10 @@ const Profile: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address
-                    <span className="text-xs text-gray-500 ml-1">(Admin only)</span>
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                    <input
-                      type="email"
-                      value={profileData.email}
-                      onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                      disabled={user.role !== 'admin' && user.role !== 'super_admin'}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
-                    />
-                  </div>
-                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Phone Number
-                    <span className="text-xs text-gray-500 ml-1">(Admin only)</span>
                   </label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
@@ -250,8 +185,7 @@ const Profile: React.FC = () => {
                       type="tel"
                       value={profileData.phone}
                       onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                      disabled={user.role !== 'admin' && user.role !== 'super_admin'}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
                 </div>
@@ -296,13 +230,13 @@ const Profile: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-500">Email Address</label>
-                  <p className="text-lg text-gray-900">{user.email}</p>
+                  <p className="text-lg text-gray-900">{user.email || 'admin@wesabi.co.ke'}</p>
                 </div>
               </div>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-500">Phone Number</label>
-                  <p className="text-lg text-gray-900">{user.phone}</p>
+                  <p className="text-lg text-gray-900">{user.phone || 'Not provided'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-500">Role</label>

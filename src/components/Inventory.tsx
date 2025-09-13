@@ -10,15 +10,14 @@ import {
   AlertTriangle,
   Package
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
 import { Product } from '../types';
 import { formatKES, calculateSellingPrice } from '../utils/currency';
 import AutocompleteInput from './AutocompleteInput';
 
 const Inventory: React.FC = () => {
-  const { user } = useAuth();
   const { 
+    user,
     products, 
     addProduct, 
     updateProduct, 
@@ -158,6 +157,9 @@ const Inventory: React.FC = () => {
 
   const handleAddProduct = (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('🏥 Form submitted with data:', formData);
     
     const productData = {
       name: formData.name,
@@ -173,13 +175,22 @@ const Inventory: React.FC = () => {
       barcode: formData.barcode || `${Date.now()}`,
     };
 
-    addProduct(productData);
-    setShowAddForm(false);
-    resetForm();
+    console.log('📦 Processed product data:', productData);
+    addProduct(productData)
+      .then(() => {
+        console.log('✅ Product added successfully');
+        setShowAddForm(false);
+        resetForm();
+      })
+      .catch((error) => {
+        console.error('❌ Failed to add product:', error);
+        alert(`Failed to add product: ${error.message}`);
+      });
   };
 
   const handleEditProduct = (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!editingProduct) return;
 
     const totalUnits = parseInt(formData.packSize || '1') * parseInt(formData.numberOfPacks || '1');
