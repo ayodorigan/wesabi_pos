@@ -15,12 +15,8 @@ import Profile from './components/Profile';
 import { useApp } from './contexts/AppContext';
 
 const AppContent: React.FC = () => {
-  const { loading } = useApp();
+  const { } = useApp();
   const [activeTab, setActiveTab] = useState('dashboard');
-
-  if (loading) {
-    return <LoadingScreen />;
-  }
 
   const renderActiveTab = () => {
     switch (activeTab) {

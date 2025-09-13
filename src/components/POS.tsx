@@ -22,7 +22,7 @@ const POS: React.FC = () => {
   const { user, products, addSale } = useApp();
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'insurance'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'insurance'>('mpesa');
   const [customerName, setCustomerName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastReceipt, setLastReceipt] = useState<string | null>(null);
@@ -145,7 +145,7 @@ const POS: React.FC = () => {
       setLastReceipt(receiptNumber);
       setCart([]);
       setCustomerName('');
-      setPaymentMethod('cash');
+      setPaymentMethod('mpesa');
       
       // Show success message
       alert(`Sale completed! Receipt #${receiptNumber} - Wesabi Pharmacy`);
@@ -164,8 +164,8 @@ const POS: React.FC = () => {
   };
 
   const paymentMethods = [
-    { id: 'cash', label: 'Cash', icon: Banknote, color: 'green' },
     { id: 'mpesa', label: 'M-Pesa', icon: Smartphone, color: 'green' },
+    { id: 'cash', label: 'Cash', icon: Banknote, color: 'green' },
     { id: 'card', label: 'Card', icon: CreditCard, color: 'blue' },
     { id: 'insurance', label: 'Insurance', icon: Shield, color: 'purple' },
   ];
@@ -316,47 +316,49 @@ const POS: React.FC = () => {
                         {item.priceAdjusted && <span className="text-orange-500 ml-1">*</span>}
                         <Edit className="h-3 w-3 ml-1" />
                       </button>
-                      {(() => {
-                        const product = products.find(p => p.id === item.productId);
-                        const lastPrice = product?.priceHistory && product.priceHistory.length > 1 
-                          ? product.priceHistory[product.priceHistory.length - 2]?.sellingPrice 
-                          : null;
-                        
-                        return lastPrice && lastPrice !== item.unitPrice ? (
-                          <div className="flex items-center space-x-2 mt-1">
-                            <span className="text-xs text-gray-500">
-                              Last: {formatKES(lastPrice)}
-                            </span>
-                            <label className="flex items-center text-xs">
-                              <input
-                                type="checkbox"
-                                checked={useLastPrice[item.productId] || false}
-                                onChange={() => {
-                                  const newUseLastPrice = !useLastPrice[item.productId];
-                                  setUseLastPrice(prev => ({
-                                    ...prev,
-                                    [item.productId]: newUseLastPrice
-                                  }));
-                                  
-                                  const priceToUse = newUseLastPrice ? lastPrice : product!.sellingPrice;
-                                  setCart(cart.map(cartItem =>
-                                    cartItem.productId === item.productId
-                                      ? { 
-                                          ...cartItem, 
-                                          unitPrice: priceToUse, 
-                                          totalPrice: cartItem.quantity * priceToUse,
-                                          priceAdjusted: priceToUse !== product!.sellingPrice
-                                        }
-                                      : cartItem
-                                  ));
-                                }}
-                                className="mr-1"
-                              />
-                              Use last price
-                            </label>
-                          </div>
-                        ) : null;
-                      })()}
+                      <div className="mt-1">
+                        {(() => {
+                          const product = products.find(p => p.id === item.productId);
+                          const lastPrice = product?.priceHistory && product.priceHistory.length > 1 
+                            ? product.priceHistory[product.priceHistory.length - 2]?.sellingPrice 
+                            : null;
+                          
+                          return lastPrice ? (
+                            <div className="space-y-1">
+                              <div className="text-xs text-gray-500">
+                                Last sold: {formatKES(lastPrice)}
+                              </div>
+                              <label className="flex items-center text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={useLastPrice[item.productId] || false}
+                                  onChange={() => {
+                                    const newUseLastPrice = !useLastPrice[item.productId];
+                                    setUseLastPrice(prev => ({
+                                      ...prev,
+                                      [item.productId]: newUseLastPrice
+                                    }));
+                                    
+                                    const priceToUse = newUseLastPrice ? lastPrice : product!.sellingPrice;
+                                    setCart(cart.map(cartItem =>
+                                      cartItem.productId === item.productId
+                                        ? { 
+                                            ...cartItem, 
+                                            unitPrice: priceToUse, 
+                                            totalPrice: cartItem.quantity * priceToUse,
+                                            priceAdjusted: priceToUse !== product!.sellingPrice
+                                          }
+                                        : cartItem
+                                    ));
+                                  }}
+                                  className="mr-1"
+                                />
+                                Use last price
+                              </label>
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
                     </div>
                   )}
                 </div>

@@ -163,12 +163,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [salesHistory, setSalesHistory] = useState<SalesHistoryItem[]>([]);
   const [categories, setCategories] = useState<string[]>(drugCategories);
   const [suppliers, setSuppliers] = useState<string[]>(commonSuppliers);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // Load data from database
   const refreshData = async () => {
     try {
-      setLoading(true);
+      // Don't show loading screen for data refresh
       
       // Declare variables at function scope
       let formattedProducts: Product[] = [];
@@ -330,7 +330,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
-      setLoading(false);
+      // Loading state managed elsewhere if needed
     }
   };
 

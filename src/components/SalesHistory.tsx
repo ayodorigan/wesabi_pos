@@ -91,8 +91,8 @@ const SalesHistory: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Sales History</h1>
-          <p className="text-gray-600">Wesabi Pharmacy - Detailed Drug Sales Tracking</p>
+          <h1 className="text-3xl font-bold text-gray-900">Drug History</h1>
+          <p className="text-gray-600">Wesabi Pharmacy - Drug Sales Tracking</p>
         </div>
         <button
           onClick={exportReport}
@@ -101,45 +101,6 @@ const SalesHistory: React.FC = () => {
           <Download className="h-4 w-4" />
           <span>Export PDF</span>
         </button>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-              <p className="text-2xl font-bold text-green-600">{formatKES(totalRevenue)}</p>
-            </div>
-            <div className="bg-green-100 p-3 rounded-full">
-              <DollarSign className="h-6 w-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Profit</p>
-              <p className="text-2xl font-bold text-blue-600">{formatKES(totalProfit)}</p>
-            </div>
-            <div className="bg-blue-100 p-3 rounded-full">
-              <TrendingUp className="h-6 w-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Items Sold</p>
-              <p className="text-2xl font-bold text-purple-600">{totalItems}</p>
-            </div>
-            <div className="bg-purple-100 p-3 rounded-full">
-              <Package className="h-6 w-6 text-purple-600" />
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Filters */}
