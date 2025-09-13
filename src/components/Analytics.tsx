@@ -12,7 +12,7 @@ import { useApp } from '../contexts/AppContext';
 import { formatKES } from '../utils/currency';
 
 const Analytics: React.FC = () => {
-  const { sales, products } = useApp();
+  const { sales, products, salesHistory } = useApp();
   const [dateRange, setDateRange] = useState('7days');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -53,8 +53,28 @@ const Analytics: React.FC = () => {
   }, {} as Record<string, number>);
 
   // Top selling products
-  const productStats = filteredSales.reduce((acc, sale) => {
-    sale.items.forEach(item => {
+  const productStats = salesHistory
+    .filter(item => {
+      const now = new Date();
+      const startDate = new Date();
+      
+      switch (dateRange) {
+        case '7days':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case '30days':
+          startDate.setDate(now.getDate() - 30);
+          break;
+        case '90days':
+          startDate.setDate(now.getDate() - 90);
+          break;
+        default:
+          startDate.setFullYear(2020);
+      }
+      
+      return new Date(item.saleDate) >= startDate;
+    })
+    .reduce((acc, item) => {
       if (!acc[item.productId]) {
         acc[item.productId] = {
           name: item.productName,
@@ -64,10 +84,9 @@ const Analytics: React.FC = () => {
         };
       }
       acc[item.productId].quantity += item.quantity;
-      acc[item.productId].revenue += item.totalPrice;
-    });
-    return acc;
-  }, {} as Record<string, { name: string; quantity: number; revenue: number; category: string }>);
+      acc[item.productId].revenue += item.totalRevenue;
+      return acc;
+    }, {} as Record<string, { name: string; quantity: number; revenue: number; category: string }>);
 
   const topProducts = Object.values(productStats)
     .filter(product => selectedCategory === 'all' || product.category === selectedCategory)
@@ -75,21 +94,66 @@ const Analytics: React.FC = () => {
     .slice(0, 10);
 
   // Category performance
-  const categoryStats = Object.values(productStats).reduce((acc, product) => {
-    if (!acc[product.category]) {
-      acc[product.category] = { revenue: 0, quantity: 0 };
-    }
-    acc[product.category].revenue += product.revenue;
-    acc[product.category].quantity += product.quantity;
-    return acc;
-  }, {} as Record<string, { revenue: number; quantity: number }>);
+  const categoryStats = salesHistory
+    .filter(item => {
+      const now = new Date();
+      const startDate = new Date();
+      
+      switch (dateRange) {
+        case '7days':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case '30days':
+          startDate.setDate(now.getDate() - 30);
+          break;
+        case '90days':
+          startDate.setDate(now.getDate() - 90);
+          break;
+        default:
+          startDate.setFullYear(2020);
+      }
+      
+      return new Date(item.saleDate) >= startDate;
+    })
+    .reduce((acc, item) => {
+      const product = products.find(p => p.id === item.productId);
+      const category = product?.category || 'Unknown';
+      
+      if (!acc[category]) {
+        acc[category] = { revenue: 0, quantity: 0 };
+      }
+      acc[category].revenue += item.totalRevenue;
+      acc[category].quantity += item.quantity;
+      return acc;
+    }, {} as Record<string, { revenue: number; quantity: number }>);
 
   // Daily sales trend
-  const dailySales = filteredSales.reduce((acc, sale) => {
-    const date = new Date(sale.createdAt).toDateString();
-    acc[date] = (acc[date] || 0) + sale.totalAmount;
-    return acc;
-  }, {} as Record<string, number>);
+  const dailySales = salesHistory
+    .filter(item => {
+      const now = new Date();
+      const startDate = new Date();
+      
+      switch (dateRange) {
+        case '7days':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case '30days':
+          startDate.setDate(now.getDate() - 30);
+          break;
+        case '90days':
+          startDate.setDate(now.getDate() - 90);
+          break;
+        default:
+          startDate.setFullYear(2020);
+      }
+      
+      return new Date(item.saleDate) >= startDate;
+    })
+    .reduce((acc, item) => {
+      const date = new Date(item.saleDate).toDateString();
+      acc[date] = (acc[date] || 0) + item.totalRevenue;
+      return acc;
+    }, {} as Record<string, number>);
 
   const exportAnalytics = () => {
     const data = {

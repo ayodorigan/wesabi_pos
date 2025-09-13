@@ -173,6 +173,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       // Declare variables at function scope
       let formattedProducts: Product[] = [];
       let formattedSales: Sale[] = [];
+      let formattedStockTakes: StockTake[] = [];
+      let formattedLogs: ActivityLog[] = [];
       
       // Load products
       const { data: productsData, error: productsError } = await supabase
@@ -253,7 +255,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (stockTakesError) {
         console.error('Error loading stock takes:', stockTakesError);
       } else {
-        const formattedStockTakes: StockTake[] = (stockTakesData || []).map(stockTake => ({
+        formattedStockTakes = (stockTakesData || []).map(stockTake => ({
           id: stockTake.id,
           productId: stockTake.product_id,
           productName: stockTake.product_name,
@@ -278,7 +280,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (logsError) {
         console.error('Error loading activity logs:', logsError);
       } else {
-        const formattedLogs: ActivityLog[] = (logsData || []).map(log => ({
+        formattedLogs = (logsData || []).map(log => ({
           id: log.id,
           userId: log.user_id || MOCK_USER.id,
           userName: log.user_name,
@@ -294,16 +296,20 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       formattedSales.forEach(sale => {
         sale.items.forEach(item => {
           const product = formattedProducts.find(p => p.id === item.productId);
+          const costPrice = product?.costPrice || 0;
+          const totalCost = costPrice * item.quantity;
+          const profit = item.totalPrice - totalCost;
+          
           salesHistoryItems.push({
             id: `${sale.id}-${item.productId}`,
             productId: item.productId,
             productName: item.productName,
             quantity: item.quantity,
-            costPrice: product?.costPrice || 0,
+            costPrice: costPrice,
             sellingPrice: item.unitPrice,
-            totalCost: (product?.costPrice || 0) * item.quantity,
+            totalCost: totalCost,
             totalRevenue: item.totalPrice,
-            profit: item.totalPrice - ((product?.costPrice || 0) * item.quantity),
+            profit: profit,
             paymentMethod: sale.paymentMethod,
             customerName: sale.customerName,
             salesPersonName: sale.salesPersonName,
@@ -313,6 +319,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         });
       });
       setSalesHistory(salesHistoryItems);
+
+      // Update categories and suppliers from loaded data
+      const loadedCategories = [...new Set(formattedProducts.map(p => p.category))];
+      const loadedSuppliers = [...new Set(formattedProducts.map(p => p.supplier))];
+      
+      setCategories(prev => [...new Set([...prev, ...loadedCategories])]);
+      setSuppliers(prev => [...new Set([...prev, ...loadedSuppliers])]);
 
     } catch (error) {
       console.error('Error refreshing data:', error);

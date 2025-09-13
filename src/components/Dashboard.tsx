@@ -11,7 +11,7 @@ import { useApp } from '../contexts/AppContext';
 import { formatKES } from '../utils/currency';
 
 const Dashboard: React.FC = () => {
-  const { products, sales, getStockAlerts } = useApp();
+  const { products, sales, getStockAlerts, salesHistory } = useApp();
   const alerts = getStockAlerts();
 
   // Calculate dashboard statistics
@@ -31,18 +31,16 @@ const Dashboard: React.FC = () => {
   const expiryAlerts = alerts.filter(alert => alert.alertType === 'expiry_warning');
 
   // Top selling products
-  const productSales = sales.reduce((acc, sale) => {
-    sale.items.forEach(item => {
-      if (!acc[item.productId]) {
-        acc[item.productId] = {
-          name: item.productName,
-          quantitySold: 0,
-          revenue: 0,
-        };
-      }
-      acc[item.productId].quantitySold += item.quantity;
-      acc[item.productId].revenue += item.totalPrice;
-    });
+  const productSales = salesHistory.reduce((acc, item) => {
+    if (!acc[item.productId]) {
+      acc[item.productId] = {
+        name: item.productName,
+        quantitySold: 0,
+        revenue: 0,
+      };
+    }
+    acc[item.productId].quantitySold += item.quantity;
+    acc[item.productId].revenue += item.totalRevenue;
     return acc;
   }, {} as Record<string, { name: string; quantitySold: number; revenue: number }>);
 

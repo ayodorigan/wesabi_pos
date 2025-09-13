@@ -13,8 +13,7 @@ import { useApp } from '../contexts/AppContext';
 import { formatKES } from '../utils/currency';
 
 const SalesHistory: React.FC = () => {
-  const { getSalesHistory, exportToPDF } = useApp();
-  const salesHistory = getSalesHistory();
+  const { salesHistory, exportToPDF } = useApp();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('7days');
@@ -24,7 +23,7 @@ const SalesHistory: React.FC = () => {
 
   // Filter sales history
   const getFilteredHistory = () => {
-    let filtered = salesHistory;
+    let filtered = [...salesHistory];
 
     // Search filter
     if (searchTerm) {

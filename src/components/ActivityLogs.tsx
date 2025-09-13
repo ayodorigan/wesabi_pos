@@ -15,8 +15,8 @@ const ActivityLogs: React.FC = () => {
   const [userFilter, setUserFilter] = useState('all');
 
   // Get unique actions and users for filters
-  const uniqueActions = Array.from(new Set(activityLogs.map(log => log.action)));
-  const uniqueUsers = Array.from(new Set(activityLogs.map(log => log.userName)));
+  const uniqueActions = Array.from(new Set(activityLogs.map(log => log.action))).sort();
+  const uniqueUsers = Array.from(new Set(activityLogs.map(log => log.userName))).sort();
 
   // Filter logs
   const filteredLogs = activityLogs.filter(log => {

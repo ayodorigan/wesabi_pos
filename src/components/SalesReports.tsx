@@ -12,7 +12,7 @@ import { useApp } from '../contexts/AppContext';
 import { formatKES } from '../utils/currency';
 
 const SalesReports: React.FC = () => {
-  const { sales, products, generateReceipt } = useApp();
+  const { sales, generateReceipt } = useApp();
   const [dateRange, setDateRange] = useState('7days');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -20,7 +20,7 @@ const SalesReports: React.FC = () => {
 
   // Filter sales by date range and product
   const getFilteredSales = () => {
-    let filtered = sales;
+    let filtered = [...sales];
 
     // Date filtering
     if (dateRange === 'custom' && startDate && endDate) {
