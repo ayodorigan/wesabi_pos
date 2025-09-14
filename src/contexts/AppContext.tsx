@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatKES, calculateSellingPrice } from '../utils/currency';
 import { medicineDatabase, drugCategories, commonSuppliers } from '../data/medicineDatabase';
+import { Product, PriceHistory, SaleItem, Sale, StockTake, ActivityLog, StockAlert, SalesHistoryItem } from '../types';
 
 // Mock user for the system
 const MOCK_USER = {
@@ -11,107 +12,6 @@ const MOCK_USER = {
   role: 'admin' as const,
   phone: '+254700000001'
 };
-
-// Frontend types
-interface PriceHistory {
-  id: string;
-  date: Date;
-  costPrice: number;
-  sellingPrice: number;
-  userId: string;
-  userName: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  supplier: string;
-  batchNumber: string;
-  expiryDate: Date;
-  costPrice: number;
-  sellingPrice: number;
-  currentStock: number;
-  minStockLevel: number;
-  barcode: string;
-  invoiceNumber?: string;
-  priceHistory: PriceHistory[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface SaleItem {
-  productId: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  originalPrice?: number;
-  priceAdjusted?: boolean;
-  batchNumber?: string;
-}
-
-interface Sale {
-  id: string;
-  receiptNumber: string;
-  customerName?: string;
-  totalAmount: number;
-  paymentMethod: 'cash' | 'mpesa' | 'card' | 'insurance';
-  salesPersonId: string;
-  salesPersonName: string;
-  items: SaleItem[];
-  createdAt: Date;
-}
-
-interface StockTake {
-  id: string;
-  productId: string;
-  productName: string;
-  expectedStock: number;
-  actualStock: number;
-  difference: number;
-  reason?: string;
-  userId: string;
-  userName: string;
-  createdAt: Date;
-}
-
-interface ActivityLog {
-  id: string;
-  userId: string;
-  userName: string;
-  action: string;
-  details: string;
-  timestamp: Date;
-}
-
-interface StockAlert {
-  id: string;
-  productId: string;
-  productName: string;
-  alertType: 'low_stock' | 'expiry_warning';
-  currentStock?: number;
-  minStockLevel?: number;
-  expiryDate?: Date;
-  daysToExpiry?: number;
-}
-
-interface SalesHistoryItem {
-  id: string;
-  productId: string;
-  productName: string;
-  quantity: number;
-  costPrice: number;
-  sellingPrice: number;
-  totalCost: number;
-  totalRevenue: number;
-  profit: number;
-  paymentMethod: string;
-  customerName?: string;
-  salesPersonName: string;
-  receiptNumber: string;
-  saleDate: Date;
-}
 
 interface AppContextType {
   user: typeof MOCK_USER;
@@ -139,6 +39,7 @@ interface AppContextType {
   generateReceipt: (sale: Sale) => void;
   exportToPDF: (data: any, type: string) => void;
   refreshData: () => Promise<void>;
+  getLastSoldPrice: (productId: string) => Promise<number | null>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -198,10 +99,42 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           minStockLevel: product.min_stock_level || 10,
           barcode: product.barcode,
           invoiceNumber: product.invoice_number,
-          priceHistory: [], // We'll load this separately if needed
+          priceHistory: [],
           createdAt: new Date(product.created_at),
           updatedAt: new Date(product.updated_at),
         }));
+
+        // Load price history for all products
+        const { data: priceHistoryData, error: priceHistoryError } = await supabase
+          .from('price_history')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!priceHistoryError && priceHistoryData) {
+          // Group price history by product_id
+          const priceHistoryByProduct: Record<string, PriceHistory[]> = {};
+          priceHistoryData.forEach(history => {
+            if (!priceHistoryByProduct[history.product_id]) {
+              priceHistoryByProduct[history.product_id] = [];
+            }
+            priceHistoryByProduct[history.product_id].push({
+              id: history.id,
+              productId: history.product_id,
+              date: new Date(history.created_at),
+              costPrice: parseFloat(history.cost_price) || 0,
+              sellingPrice: parseFloat(history.selling_price) || 0,
+              userId: history.user_id || MOCK_USER.id,
+              userName: history.user_name,
+            });
+          });
+
+          // Assign price history to each product
+          formattedProducts = formattedProducts.map(product => ({
+            ...product,
+            priceHistory: priceHistoryByProduct[product.id] || []
+          }));
+        }
+
         setProducts(formattedProducts);
       }
 
@@ -522,6 +455,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         }
       }
 
+      // Add price history entries for all sold items
+      for (const item of saleData.items) {
+        const product = products.find(p => p.id === item.productId);
+        if (product) {
+          await supabase
+            .from('price_history')
+            .insert({
+              product_id: item.productId,
+              cost_price: product.costPrice,
+              selling_price: item.unitPrice,
+              user_id: MOCK_USER.id,
+              user_name: MOCK_USER.name,
+            });
+        }
+      }
       await logActivity('SALE', `Sale completed: ${receiptNumber} - ${formatKES(saleData.totalAmount)}`);
       await refreshData();
       
@@ -771,6 +719,33 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       printWindow.print();
     }
   };
+  const getLastSoldPrice = async (productId: string): Promise<number | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('price_history')
+        .select('selling_price')
+        .eq('product_id', productId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Error fetching last sold price:', error);
+        return null;
+      }
+
+      if (data && data.length > 0) {
+        const lastPrice = parseFloat(data[0].selling_price);
+        console.log(`Last sold price for product ${productId}:`, lastPrice);
+        return lastPrice;
+      }
+      
+      console.log(`No price history found for product ${productId}`);
+      return null;
+    } catch (error) {
+      console.error('Error fetching last sold price:', error);
+      return null;
+    }
+  };
 
   return (
     <AppContext.Provider value={{
@@ -799,6 +774,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       generateReceipt,
       exportToPDF,
       refreshData,
+      getLastSoldPrice,
     }}>
       {children}
     </AppContext.Provider>

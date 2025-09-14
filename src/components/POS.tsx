@@ -19,7 +19,7 @@ import { Product, SaleItem } from '../types';
 import { formatKES, getMinimumSellingPrice } from '../utils/currency';
 
 const POS: React.FC = () => {
-  const { user, products, addSale } = useApp();
+  const { user, products, addSale, getLastSoldPrice } = useApp();
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'insurance'>('mpesa');
@@ -30,6 +30,7 @@ const POS: React.FC = () => {
   const [tempPrice, setTempPrice] = useState('');
   const [showPriceHistory, setShowPriceHistory] = useState<string | null>(null);
   const [useLastPrice, setUseLastPrice] = useState<Record<string, boolean>>({});
+  const [lastSoldPrices, setLastSoldPrices] = useState<Record<string, number | null>>({});
 
   const filteredProducts = products.filter(product => 
     product.currentStock > 0 && (
@@ -46,22 +47,25 @@ const POS: React.FC = () => {
       alert('Product already in cart. Adjust quantity if needed.');
       return;
     } else {
-      const lastPrice = product.priceHistory && product.priceHistory.length > 0 
-        ? product.priceHistory[product.priceHistory.length - 1]?.sellingPrice 
-        : product.sellingPrice;
-      const priceToUse = useLastPrice[product.id] ? lastPrice : product.sellingPrice;
-      
       const newItem: SaleItem = {
         productId: product.id,
         productName: product.name,
         quantity: 1,
-        unitPrice: priceToUse,
-        totalPrice: priceToUse,
+        unitPrice: product.sellingPrice,
+        totalPrice: product.sellingPrice,
         originalPrice: product.sellingPrice,
-        priceAdjusted: priceToUse !== product.sellingPrice,
+        priceAdjusted: false,
         batchNumber: product.batchNumber,
       };
       setCart([...cart, newItem]);
+      
+      // Fetch last sold price when adding to cart
+      getLastSoldPrice(product.id).then(lastPrice => {
+        setLastSoldPrices(prev => ({
+          ...prev,
+          [product.id]: lastPrice
+        }));
+      });
     }
     setSearchTerm('');
   };
@@ -316,49 +320,46 @@ const POS: React.FC = () => {
                         {item.priceAdjusted && <span className="text-orange-500 ml-1">*</span>}
                         <Edit className="h-3 w-3 ml-1" />
                       </button>
-                      <div className="mt-1">
-                        {(() => {
-                          const product = products.find(p => p.id === item.productId);
-                          const lastPrice = product?.priceHistory && product.priceHistory.length > 1 
-                            ? product.priceHistory[product.priceHistory.length - 2]?.sellingPrice 
-                            : null;
-                          
-                          return lastPrice ? (
-                            <div className="space-y-1">
-                              <div className="text-xs text-gray-500">
-                                Last sold: {formatKES(lastPrice)}
-                              </div>
-                              <label className="flex items-center text-xs">
-                                <input
-                                  type="checkbox"
-                                  checked={useLastPrice[item.productId] || false}
-                                  onChange={() => {
-                                    const newUseLastPrice = !useLastPrice[item.productId];
-                                    setUseLastPrice(prev => ({
-                                      ...prev,
-                                      [item.productId]: newUseLastPrice
-                                    }));
-                                    
-                                    const priceToUse = newUseLastPrice ? lastPrice : product!.sellingPrice;
-                                    setCart(cart.map(cartItem =>
-                                      cartItem.productId === item.productId
-                                        ? { 
-                                            ...cartItem, 
-                                            unitPrice: priceToUse, 
-                                            totalPrice: cartItem.quantity * priceToUse,
-                                            priceAdjusted: priceToUse !== product!.sellingPrice
-                                          }
-                                        : cartItem
-                                    ));
-                                  }}
-                                  className="mr-1"
-                                />
-                                Use last price
-                              </label>
-                            </div>
-                          ) : null;
-                        })()}
-                      </div>
+                      {lastSoldPrices[item.productId] && lastSoldPrices[item.productId] !== item.unitPrice && (
+                        <div className="mt-1 space-y-1">
+                          <div className="text-xs text-gray-500">
+                            Last sold: {formatKES(lastSoldPrices[item.productId]!)}
+                          </div>
+                          <label className="flex items-center text-xs">
+                            <input
+                              type="checkbox"
+                              checked={useLastPrice[item.productId] || false}
+                              onChange={() => {
+                                const newUseLastPrice = !useLastPrice[item.productId];
+                                const product = products.find(p => p.id === item.productId);
+                                if (!product) return;
+                                
+                                setUseLastPrice(prev => ({
+                                  ...prev,
+                                  [item.productId]: newUseLastPrice
+                                }));
+                                
+                                const priceToUse = newUseLastPrice 
+                                  ? lastSoldPrices[item.productId]! 
+                                  : product.sellingPrice;
+                                
+                                setCart(cart.map(cartItem =>
+                                  cartItem.productId === item.productId
+                                    ? { 
+                                        ...cartItem, 
+                                        unitPrice: priceToUse, 
+                                        totalPrice: cartItem.quantity * priceToUse,
+                                        priceAdjusted: priceToUse !== product.sellingPrice
+                                      }
+                                    : cartItem
+                                ));
+                              }}
+                              className="mr-1"
+                            />
+                            Use last price
+                          </label>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
