@@ -191,7 +191,7 @@ const StockTake: React.FC = () => {
           actualStock: data.actualStock,
           difference,
           reason: data.reason,
-          userId: user.id,
+          userId: user.user_id,
           userName: user.name,
         });
       }

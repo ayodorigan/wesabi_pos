@@ -574,14 +574,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       // Add price history entries for all sold items
       for (const item of saleData.items) {
         const product = products.find(p => p.id === item.productId);
-        if (product) {
+        // Only add price history if user is not mock user
+        if (product && user && user.user_id !== '00000000-0000-0000-0000-000000000001' && user.user_id !== 'demo-user') {
           await supabase
             .from('price_history')
             .insert({
               product_id: item.productId,
               cost_price: product.costPrice,
               selling_price: item.unitPrice,
-              user_id: user?.user_id || 'demo-user',
+              user_id: user.user_id,
               user_name: user?.name || 'Demo User',
             });
         }
