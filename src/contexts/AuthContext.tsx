@@ -34,8 +34,8 @@ interface AuthContextType {
   deleteUser: (userId: string) => Promise<void>;
   getAllUsers: () => Promise<UserProfile[]>;
   canAccessPage: (page: string) => boolean;
-  canManageUsers: () => boolean;
-  canManagePricing: () => boolean;
+  canManageUsers: boolean;
+  canManagePricing: boolean;
   canDeleteProducts: () => boolean;
   isSupabaseEnabled: boolean;
 }
@@ -72,64 +72,88 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isSupabaseEnabled || !supabase) {
-      // Demo mode - use mock user
-      setUser(MOCK_USER);
-      setLoading(false);
-      return;
-    }
+    let mounted = true;
 
-    // Get initial session with error handling
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        loadUserProfile(session.user);
-      } else {
-        setLoading(false);
-      }
-    }).catch((error) => {
-      console.error('Error getting session:', error);
-      setLoading(false);
-    });
+    const initAuth = async () => {
+      try {
+        if (!isSupabaseEnabled || !supabase) {
+          // Demo mode - use mock user
+          if (mounted) {
+            setUser(MOCK_USER);
+            setLoading(false);
+          }
+          return;
+        }
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+        // Get initial session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          if (mounted) {
+            setUser(null);
+            setLoading(false);
+          }
+          return;
+        }
+
         if (session?.user) {
           await loadUserProfile(session.user);
         } else {
+          if (mounted) {
+            setUser(null);
+            setLoading(false);
+          }
+        }
+
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            if (!mounted) return;
+            
+            if (session?.user) {
+              await loadUserProfile(session.user);
+            } else {
+              setUser(null);
+              setLoading(false);
+            }
+          }
+        );
+
+        return () => {
+          subscription.unsubscribe();
+        };
+
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        if (mounted) {
           setUser(null);
           setLoading(false);
         }
       }
-    );
+    };
 
-    return () => subscription.unsubscribe();
-  }, []);
+    const loadUserProfile = async (supabaseUser: SupabaseUser) => {
+      if (!mounted) return;
+      
+      try {
+        if (!supabase) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
 
-  const loadUserProfile = async (supabaseUser: SupabaseUser) => {
-    setLoading(true);
-    try {
-      if (!supabase) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
+        const { data: profile, error } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('user_id', supabaseUser.id)
+          .single();
 
-      const { data: profile, error } = await supabase!
-        .from('user_profiles')
-        .select('*')
-        .eq('user_id', supabaseUser.id)
-        .single();
-
-      if (error) {
-        console.error('Error loading user profile:', error);
-        
-        // If table doesn't exist or user profile not found, create a temporary profile
-        if (error.code === 'PGRST116' || error.code === 'PGRST205' || error.message.includes('Could not find')) {
-          console.warn('User profiles table not found or user profile missing. Using temporary profile.');
+        if (error) {
+          console.error('Error loading user profile:', error);
           
-          // Create a temporary user profile for demo purposes
-          const tempUser: AuthUser = {
+          // Create a fallback user profile
+          const fallbackUser: AuthUser = {
             id: supabaseUser.id,
             user_id: supabaseUser.id,
             email: supabaseUser.email || '',
@@ -141,37 +165,58 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             updated_at: new Date().toISOString(),
           };
           
-          setUser(tempUser);
+          if (mounted) {
+            setUser(fallbackUser);
+            setLoading(false);
+          }
         } else {
-          setUser(null);
+          if (mounted) {
+            setUser({
+              ...profile,
+              email: supabaseUser.email || '',
+            });
+            setLoading(false);
+          }
         }
-      } else {
-        setUser({
-          ...profile,
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+        
+        // Fallback to a basic user profile
+        const fallbackUser: AuthUser = {
+          id: supabaseUser.id,
+          user_id: supabaseUser.id,
           email: supabaseUser.email || '',
-        });
+          name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
+          role: 'super_admin',
+          phone: supabaseUser.user_metadata?.phone || '',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        
+        if (mounted) {
+          setUser(fallbackUser);
+          setLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-      
-      // Fallback to a basic user profile
-      const fallbackUser: AuthUser = {
-        id: supabaseUser.id,
-        user_id: supabaseUser.id,
-        email: supabaseUser.email || '',
-        name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
-        role: 'super_admin',
-        phone: supabaseUser.user_metadata?.phone || '',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      
-      setUser(fallbackUser);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    // Set a timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('Auth initialization timeout - falling back to demo mode');
+        setUser(MOCK_USER);
+        setLoading(false);
+      }
+    }, 10000); // 10 second timeout
+
+    initAuth();
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+    };
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     if (!isSupabaseEnabled || !supabase) {
@@ -348,13 +393,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const canManageUsers = (): boolean => {
-    return user?.role === 'super_admin' || user?.role === 'admin';
-  };
-
-  const canManagePricing = (): boolean => {
-    return user?.role === 'super_admin' || user?.role === 'admin';
-  };
+  const canManageUsers = user?.role === 'super_admin' || user?.role === 'admin';
+  const canManagePricing = user?.role === 'super_admin' || user?.role === 'admin';
 
   const canDeleteProducts = (): boolean => {
     return user?.role === 'super_admin' || user?.role === 'admin';
