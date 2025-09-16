@@ -343,31 +343,43 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error('User creation not available in demo mode');
     }
 
-    // Create auth user first
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: userData.email,
-      password: userData.password,
-      email_confirm: true,
-      user_metadata: {
+    // Get current session for authorization
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('Not authenticated');
+    }
+
+    // Call the create-user edge function
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: userData.email,
+        password: userData.password,
         name: userData.name,
         phone: userData.phone,
         role: userData.role,
-      }
+      }),
     });
 
-    if (authError) {
-      throw authError;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to create user');
     }
 
-    if (!authData.user) {
-      throw new Error('Failed to create user');
+    const { userId } = await response.json();
+    if (!userId) {
+      throw new Error('Failed to get user ID from response');
     }
 
     // Create user profile
     const { error: profileError } = await supabase
       .from('user_profiles')
       .insert({
-        user_id: authData.user.id,
+        user_id: userId,
         name: userData.name,
         phone: userData.phone,
         role: userData.role,
@@ -375,8 +387,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
 
     if (profileError) {
-      // If profile creation fails, clean up the auth user
-      await supabase.auth.admin.deleteUser(authData.user.id);
+      // If profile creation fails, clean up the auth user via edge function
+      try {
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: userId,
+          }),
+        });
+      } catch (cleanupError) {
+        console.error('Failed to cleanup auth user after profile creation failure:', cleanupError);
+      }
       throw profileError;
     }
   };
@@ -401,6 +426,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error('User deletion not available in demo mode');
     }
 
+    // Get current session for authorization
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('Not authenticated');
+    }
+
+    // First delete the user profile
     const { error } = await supabase
       .from('user_profiles')
       .delete()
@@ -408,6 +440,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     if (error) {
       throw error;
+    }
+
+    // Then delete the auth user via edge function
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId: userId,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete auth user');
     }
   };
 
