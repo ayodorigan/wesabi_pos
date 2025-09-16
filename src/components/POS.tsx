@@ -156,7 +156,7 @@ const POS: React.FC = () => {
         totalAmount: getTotalAmount(),
         paymentMethod,
         customerName: customerName || undefined,
-        salesPersonId: user.id,
+        salesPersonId: user.user_id,
         salesPersonName: user.name,
       });
 
