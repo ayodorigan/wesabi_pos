@@ -2,19 +2,10 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase, isSupabaseEnabled } from '../lib/supabase';
 import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 import { medicineDatabase, drugCategories, commonSuppliers } from '../data/medicineDatabase';
+import { useAuth } from './AuthContext';
 import { Product, PriceHistory, SaleItem, Sale, StockTake, ActivityLog, StockAlert, SalesHistoryItem } from '../types';
 
-// Mock user for the system
-const MOCK_USER = {
-  id: '00000000-0000-0000-0000-000000000001',
-  email: 'admin@wesabi.co.ke',
-  name: 'Administrator',
-  role: 'admin' as const,
-  phone: '+254700000001'
-};
-
 interface AppContextType {
-  user: typeof MOCK_USER;
   products: Product[];
   sales: Sale[];
   stockTakes: StockTake[];
@@ -64,6 +55,7 @@ interface AppProviderProps {
 }
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
+  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [stockTakes, setStockTakes] = useState<StockTake[]>([]);
@@ -142,7 +134,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
               date: new Date(history.created_at),
               costPrice: parseFloat(history.cost_price) || 0,
               sellingPrice: parseFloat(history.selling_price) || 0,
-              userId: history.user_id || MOCK_USER.id,
+              userId: history.user_id || 'demo-user',
               userName: history.user_name,
             });
           });
@@ -183,7 +175,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           customerName: sale.customer_name,
           totalAmount: parseFloat(sale.total_amount) || 0,
           paymentMethod: sale.payment_method,
-          salesPersonId: sale.sales_person_id || MOCK_USER.id,
+          salesPersonId: sale.sales_person_id || 'demo-user',
           salesPersonName: sale.sales_person_name,
           items: (sale.sale_items || []).map((item: any) => ({
             productId: item.product_id,
@@ -215,7 +207,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           actualStock: stockTake.actual_stock,
           difference: stockTake.difference,
           reason: stockTake.reason,
-          userId: stockTake.user_id || MOCK_USER.id,
+          userId: stockTake.user_id || 'demo-user',
           userName: stockTake.user_name,
           createdAt: new Date(stockTake.created_at),
         }));
@@ -234,7 +226,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       } else {
         formattedLogs = (logsData || []).map(log => ({
           id: log.id,
-          userId: log.user_id || MOCK_USER.id,
+          userId: log.user_id || 'demo-user',
           userName: log.user_name,
           action: log.action,
           details: log.details,
@@ -255,7 +247,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         const formattedSessions = (sessionsData || []).map(session => ({
           id: session.id,
           name: session.name,
-          userId: session.user_id || MOCK_USER.id,
+          userId: session.user_id || 'demo-user',
           userName: session.user_name,
           status: session.status,
           createdAt: new Date(session.created_at),
@@ -336,8 +328,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       const { error } = await supabase
         .from('activity_logs')
         .insert({
-          user_id: MOCK_USER.id,
-          user_name: MOCK_USER.name,
+          user_id: user?.user_id || 'demo-user',
+          user_name: user?.name || 'Demo User',
           action,
           details,
         });
@@ -355,7 +347,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         if (logsData) {
           const formattedLogs: ActivityLog[] = logsData.map(log => ({
             id: log.id,
-            userId: log.user_id || MOCK_USER.id,
+            userId: log.user_id || 'demo-user',
             userName: log.user_name,
             action: log.action,
             details: log.details,
@@ -552,8 +544,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
               product_id: item.productId,
               cost_price: product.costPrice,
               selling_price: item.unitPrice,
-              user_id: MOCK_USER.id,
-              user_name: MOCK_USER.name,
+              user_id: user?.user_id || 'demo-user',
+              user_name: user?.name || 'Demo User',
             });
         }
       }
@@ -613,8 +605,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         .from('stock_take_sessions')
         .insert({
           name: name.trim(),
-          user_id: MOCK_USER.id,
-          user_name: MOCK_USER.name,
+          user_id: user?.user_id || 'demo-user',
+          user_name: user?.name || 'Demo User',
           status: 'active'
         })
         .select()
@@ -1002,7 +994,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   return (
     <AppContext.Provider value={{
-      user: MOCK_USER,
       products,
       sales,
       stockTakes,

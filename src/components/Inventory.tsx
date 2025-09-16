@@ -17,7 +17,6 @@ import AutocompleteInput from './AutocompleteInput';
 
 const Inventory: React.FC = () => {
   const { 
-    user,
     products, 
     addProduct, 
     updateProduct, 
@@ -31,6 +30,7 @@ const Inventory: React.FC = () => {
     addSupplier,
     getMedicineByName
   } = useApp();
+  const { user, canManagePricing, canDeleteProducts } = useAuth();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -316,8 +316,7 @@ const Inventory: React.FC = () => {
     });
   };
 
-  const canManagePricing = user?.role === 'admin';
-  const canManageInventory = user?.role === 'admin' || user?.role === 'inventory_manager';
+  const canManageInventory = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'sales' || user?.role === 'inventory';
 
   return (
     <div className="space-y-6">
@@ -473,7 +472,7 @@ const Inventory: React.FC = () => {
                           >
                             <Edit className="h-4 w-4" />
                           </button>
-                          {user?.role === 'admin' && (
+                          {canDeleteProducts() && (
                           <button
                             onClick={() => deleteProduct(product.id)}
                             className="text-red-600 hover:text-red-900"

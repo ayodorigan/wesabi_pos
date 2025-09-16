@@ -13,7 +13,8 @@ interface StockTakeSession {
 }
 
 const StockTake: React.FC = () => {
-  const { user, products, stockTakes, addStockTake, isSupabaseEnabled, stockTakeSessions } = useApp();
+  const { products, stockTakes, addStockTake, isSupabaseEnabled, stockTakeSessions } = useApp();
+  const { user } = useAuth();
   const [currentView, setCurrentView] = useState<'history' | 'active'>('history');
   const [activeSession, setActiveSession] = useState<StockTakeSession | null>(null);
   const [sessions, setSessions] = useState<StockTakeSession[]>([]);

@@ -14,6 +14,7 @@ import {
   X,
   Pill
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -22,15 +23,13 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
+  const { user, signOut, canAccessPage } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
-  const user = {
-    name: 'Administrator',
-    role: 'admin'
-  };
+  if (!user) return null;
 
-  const adminMenuItems = [
+  const allMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'pos', label: 'Point of Sale', icon: ShoppingCart },
     { id: 'inventory', label: 'Inventory', icon: Package },
@@ -42,7 +41,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
-  const menuItems = adminMenuItems;
+  // Filter menu items based on user permissions
+  const menuItems = allMenuItems.filter(item => canAccessPage(item.id));
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -146,6 +154,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                         <User className="h-4 w-4 mr-2" />
                         My Profile
                       </button>
+                     <button
+                       onClick={handleSignOut}
+                       className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                     >
+                       <LogOut className="h-4 w-4 mr-2" />
+                       Sign Out
+                     </button>
                     </div>
                   </div>
                 )}

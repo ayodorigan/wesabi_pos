@@ -9,10 +9,10 @@ import {
   Phone,
   Shield
 } from 'lucide-react';
-import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const Profile: React.FC = () => {
-  const { user } = useApp();
+  const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -32,6 +32,8 @@ const Profile: React.FC = () => {
 
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
+  if (!user) return null;
+
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -48,7 +50,7 @@ const Profile: React.FC = () => {
   const handleProfileUpdate = (e: React.FormEvent) => {
     e.preventDefault();
 
-    alert('Profile updates are not available in this demo version');
+    alert('Profile updates will be implemented in a future version');
     setIsEditing(false);
   };
 
@@ -65,7 +67,7 @@ const Profile: React.FC = () => {
       return;
     }
 
-    alert('Password changes are not available in this demo version');
+    alert('Password changes must be done by an administrator');
     setShowPasswordChange(false);
     setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
   };
@@ -84,8 +86,9 @@ const Profile: React.FC = () => {
     switch (role) {
       case 'super_admin': return 'Super Administrator';
       case 'admin': return 'Administrator';
-      case 'inventory_manager': return 'Inventory Manager';
+      case 'inventory': return 'Inventory Manager';
       case 'sales': return 'Sales Person';
+      case 'stock_take': return 'Stock Take';
       default: return role;
     }
   };
@@ -230,7 +233,7 @@ const Profile: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-500">Email Address</label>
-                  <p className="text-lg text-gray-900">{user.email || 'admin@wesabi.co.ke'}</p>
+                  <p className="text-lg text-gray-900">{user.email || 'Not provided'}</p>
                 </div>
               </div>
               <div className="space-y-4">

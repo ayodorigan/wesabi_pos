@@ -19,7 +19,8 @@ import { Product, SaleItem } from '../types';
 import { formatKES, getMinimumSellingPrice, validateSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 
 const POS: React.FC = () => {
-  const { user, products, addSale, getLastSoldPrice } = useApp();
+  const { products, addSale, getLastSoldPrice } = useApp();
+  const { user } = useAuth();
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'insurance'>('mpesa');
