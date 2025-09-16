@@ -69,6 +69,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // Load data from database
   const refreshData = async () => {
+    setLoading(true);
     try {
       // Skip database operations if Supabase is not enabled
       if (!isSupabaseEnabled) {
@@ -96,6 +97,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
       if (productsError) {
         console.error('Error loading products:', productsError);
+        return; // Exit early on error
       } else {
         formattedProducts = (productsData || []).map(product => ({
           id: product.id,
@@ -168,6 +170,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
       if (salesError) {
         console.error('Error loading sales:', salesError);
+        return; // Exit early on error
       } else {
         formattedSales = (salesData || []).map(sale => ({
           id: sale.id,
@@ -198,6 +201,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
       if (stockTakesError) {
         console.error('Error loading stock takes:', stockTakesError);
+        return; // Exit early on error
       } else {
         formattedStockTakes = (stockTakesData || []).map(stockTake => ({
           id: stockTake.id,
@@ -223,6 +227,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
       if (logsError) {
         console.error('Error loading activity logs:', logsError);
+        return; // Exit early on error
       } else {
         formattedLogs = (logsData || []).map(log => ({
           id: log.id,
@@ -243,6 +248,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
       if (sessionsError) {
         console.error('Error loading stock take sessions:', sessionsError);
+        return; // Exit early on error
       } else {
         const formattedSessions = (sessionsData || []).map(session => ({
           id: session.id,
@@ -310,6 +316,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       
       // For other errors, log but don't crash the app
       console.warn('Database error occurred, continuing in demo mode:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
