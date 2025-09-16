@@ -21,6 +21,32 @@ const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
 
+  // Set default landing page based on user role
+  useEffect(() => {
+    if (user) {
+      let defaultTab = 'dashboard';
+      
+      switch (user.role) {
+        case 'sales':
+          defaultTab = 'pos';
+          break;
+        case 'inventory':
+          defaultTab = 'inventory';
+          break;
+        case 'stock_take':
+          defaultTab = 'stocktake';
+          break;
+        case 'super_admin':
+        case 'admin':
+        default:
+          defaultTab = 'dashboard';
+          break;
+      }
+      
+      setActiveTab(defaultTab);
+    }
+  }, [user]);
+
   // Prevent app reload on focus
   useEffect(() => {
     const handleFocus = (e: FocusEvent) => {
@@ -49,6 +75,32 @@ const AppContent: React.FC = () => {
   }
 
   const renderActiveTab = () => {
+    // If user doesn't have access to current tab, redirect to appropriate page
+    const { canAccessPage } = useAuth();
+    if (user && !canAccessPage(activeTab)) {
+      let fallbackTab = 'pos'; // Default fallback
+      
+      switch (user.role) {
+        case 'sales':
+          fallbackTab = 'pos';
+          break;
+        case 'inventory':
+          fallbackTab = 'inventory';
+          break;
+        case 'stock_take':
+          fallbackTab = 'stocktake';
+          break;
+        case 'super_admin':
+        case 'admin':
+        default:
+          fallbackTab = 'dashboard';
+          break;
+      }
+      
+      setActiveTab(fallbackTab);
+      return null; // Will re-render with correct tab
+    }
+
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard />;
