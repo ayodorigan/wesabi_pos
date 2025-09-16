@@ -336,24 +336,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     name: string;
     phone?: string;
     role: UserProfile['role'];
+    email: string;
+    password: string;
   }) => {
     if (!isSupabaseEnabled || !supabase) {
       throw new Error('User creation not available in demo mode');
     }
 
-    // Create profile directly for all users (no auth accounts needed)
-    const { error } = await supabase
+    // Create auth user first
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: userData.email,
+      password: userData.password,
+      email_confirm: true,
+      user_metadata: {
+        name: userData.name,
+        phone: userData.phone,
+        role: userData.role,
+      }
+    });
+
+    if (authError) {
+      throw authError;
+    }
+
+    if (!authData.user) {
+      throw new Error('Failed to create user');
+    }
+
+    // Create user profile
+    const { error: profileError } = await supabase
       .from('user_profiles')
       .insert({
-        user_id: crypto.randomUUID(),
+        user_id: authData.user.id,
         name: userData.name,
         phone: userData.phone,
         role: userData.role,
         is_active: true,
       });
 
-    if (error) {
-      throw error;
+    if (profileError) {
+      // If profile creation fails, clean up the auth user
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      throw profileError;
     }
   };
 
