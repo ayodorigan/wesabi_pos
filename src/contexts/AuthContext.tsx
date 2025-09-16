@@ -143,11 +143,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return;
         }
 
-        const { data: profile, error } = await supabase
+        const { data: profiles, error } = await supabase
           .from('user_profiles')
           .select('*')
-          .eq('user_id', supabaseUser.id)
-          .single();
+          .eq('user_id', supabaseUser.id);
 
         if (error) {
           console.error('Error loading user profile:', error);
@@ -169,7 +168,69 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setUser(fallbackUser);
             setLoading(false);
           }
+          return;
+        }
+
+        // Check if profile exists
+        if (!profiles || profiles.length === 0) {
+          // No profile found, create one
+          console.log('No profile found for user, creating new profile...');
+          
+          // Check if this is the first user (should be super admin)
+          const { data: allProfiles } = await supabase
+            .from('user_profiles')
+            .select('id');
+          
+          const isFirstUser = !allProfiles || allProfiles.length === 0;
+          
+          const newProfile = {
+            user_id: supabaseUser.id,
+            name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
+            phone: supabaseUser.user_metadata?.phone || null,
+            role: isFirstUser ? 'super_admin' : (supabaseUser.user_metadata?.role || 'sales'),
+            is_active: true,
+          };
+          
+          const { data: createdProfile, error: createError } = await supabase
+            .from('user_profiles')
+            .insert(newProfile)
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('Error creating user profile:', createError);
+            
+            // Fallback to a basic user profile
+            const fallbackUser: AuthUser = {
+              id: supabaseUser.id,
+              user_id: supabaseUser.id,
+              email: supabaseUser.email || '',
+              name: newProfile.name,
+              role: newProfile.role as UserProfile['role'],
+              phone: newProfile.phone || '',
+              is_active: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            
+            if (mounted) {
+              setUser(fallbackUser);
+              setLoading(false);
+            }
+            return;
+          }
+          
+          // Use the created profile
+          if (mounted) {
+            setUser({
+              ...createdProfile,
+              email: supabaseUser.email || '',
+            });
+            setLoading(false);
+          }
         } else {
+          // Profile exists, use it
+          const profile = profiles[0];
           if (mounted) {
             setUser({
               ...profile,
