@@ -19,6 +19,7 @@ import { useApp } from './contexts/AppContext';
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
+  const { canAccessPage } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
 
   // Set default landing page based on user role
@@ -76,7 +77,6 @@ const AppContent: React.FC = () => {
 
   const renderActiveTab = () => {
     // If user doesn't have access to current tab, redirect to appropriate page
-    const { canAccessPage } = useAuth();
     if (user && !canAccessPage(activeTab)) {
       let fallbackTab = 'pos'; // Default fallback
       
