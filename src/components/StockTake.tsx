@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useEffect } from 'react';
 import { Package, Save, AlertTriangle, CheckCircle, History, Calendar, Download, Edit, Trash2, Plus, ArrowLeft } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 import { formatKES } from '../utils/currency';
 
 interface StockTakeSession {
