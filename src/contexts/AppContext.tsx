@@ -324,11 +324,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       return;
     }
 
+    // Check if user is mock user (demo mode) - prevent database writes
+    if (!user || user.user_id === '00000000-0000-0000-0000-000000000001' || user.user_id === 'demo-user') {
+      console.log('Demo mode: Activity logged -', action, details);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('activity_logs')
         .insert({
-          user_id: user?.user_id || 'demo-user',
+          user_id: user.user_id,
           user_name: user?.name || 'Demo User',
           action,
           details,
