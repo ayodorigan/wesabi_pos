@@ -484,7 +484,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     switch (page) {
       case 'dashboard':
-        return ['super_admin', 'admin', 'sales', 'inventory', 'stock_take'].includes(role);
+        return ['super_admin', 'admin'].includes(role);
       case 'pos':
         return ['super_admin', 'admin', 'sales'].includes(role);
       case 'inventory':

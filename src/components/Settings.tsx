@@ -298,13 +298,14 @@ const Settings: React.FC = () => {
                           >
                             <Edit className="h-4 w-4" />
                           </button>
-                          {user?.role === 'super_admin' && (
+                          {(user?.role === 'super_admin' || user?.role === 'admin') && userItem.role !== 'super_admin' && (
                             <button
                               onClick={() => {
                                 setPasswordUser(userItem);
                                 setShowPasswordModal(true);
                               }}
                               className="text-blue-600 hover:text-blue-900"
+                              title="Reset Password"
                             >
                               <Key className="h-4 w-4" />
                             </button>
@@ -313,6 +314,7 @@ const Settings: React.FC = () => {
                             onClick={() => toggleUserStatus(userItem.user_id)}
                             className={userItem.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}
                           >
+                            title={userItem.is_active ? 'Deactivate User' : 'Activate User'}
                             {userItem.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </button>
                           {canManageAdmins && userItem.user_id !== user?.user_id && (
@@ -485,7 +487,10 @@ const Settings: React.FC = () => {
           <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-4">Reset Password - {passwordUser.name}</h3>
             <p className="text-sm text-gray-600 mb-4">
-              This will send a password reset email to the user's registered email address.
+              {user?.role === 'super_admin' 
+                ? "This will send a password reset email to the user's registered email address."
+                : "As an admin, you can reset passwords for non-super admin users."
+              }
             </p>
             <form onSubmit={handlePasswordChange} className="space-y-4">
               <div className="flex justify-end space-x-2 pt-4">
