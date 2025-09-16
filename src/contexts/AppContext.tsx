@@ -367,10 +367,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       throw new Error('Database not configured. Please set up Supabase environment variables.');
     }
 
+    console.log('🔄 Starting product addition process...');
+    console.log('Product data to insert:', productData);
+
     // Enforce minimum selling price
     const enforcedSellingPrice = enforceMinimumSellingPrice(productData.sellingPrice, productData.costPrice);
     
     try {
+      console.log('📡 Inserting product into database...');
       const { data, error } = await supabase
         .from('products')
         .insert({
@@ -390,14 +394,41 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         .single();
 
       if (error) {
-        console.error('Error adding product:', error);
+        console.error('❌ Database error adding product:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error details:', error.details);
         throw error;
       }
 
+      console.log('✅ Product inserted successfully:', data);
+
+      // Add price history entry
+      console.log('📊 Adding price history entry...');
+      const { error: priceHistoryError } = await supabase
+        .from('price_history')
+        .insert({
+          product_id: data.id,
+          cost_price: productData.costPrice,
+          selling_price: enforcedSellingPrice,
+          user_id: user?.user_id || 'demo-user',
+          user_name: user?.name || 'Demo User',
+        });
+
+      if (priceHistoryError) {
+        console.warn('⚠️ Warning: Could not add price history:', priceHistoryError);
+        // Don't throw error for price history failure
+      }
+
+      console.log('📝 Logging activity...');
       await logActivity('ADD_PRODUCT', `Added product: ${productData.name}`);
+      
+      console.log('🔄 Refreshing data...');
       await refreshData();
+      
+      console.log('🎉 Product addition completed successfully!');
     } catch (error) {
-      console.error('Error adding product:', error);
+      console.error('💥 Fatal error adding product:', error);
       throw error;
     }
   };

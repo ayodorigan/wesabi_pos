@@ -213,9 +213,29 @@ const Inventory: React.FC = () => {
 
   const handleAddProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     
     console.log('🏥 Form submitted with data:', formData);
+    
+    // Validate required fields
+    if (!formData.name.trim()) {
+      alert('Product name is required');
+      return;
+    }
+    
+    if (!formData.category.trim()) {
+      alert('Category is required');
+      return;
+    }
+    
+    if (!formData.invoiceNumber.trim()) {
+      alert('Invoice number is required');
+      return;
+    }
+    
+    if (!formData.currentStock.trim()) {
+      alert('Quantity is required');
+      return;
+    }
     
     // Check for duplicate product names (case insensitive)
     const existingProduct = products.find(p => 
@@ -239,7 +259,7 @@ const Inventory: React.FC = () => {
     
     const productData = {
       name: formData.name,
-      category: formData.category,
+      category: formData.category || 'General',
       supplier: formData.supplier || 'Unknown Supplier',
       batchNumber: formData.batchNumber || '',
       expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now if not specified
@@ -261,6 +281,7 @@ const Inventory: React.FC = () => {
       .catch((error) => {
         console.error('❌ Failed to add product:', error);
         alert(`Failed to add product: ${error.message}`);
+        console.log('Error details:', error);
       });
   };
 
