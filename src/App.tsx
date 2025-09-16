@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
+import Login from './components/Login';
 import Layout from './components/Layout';
 import LoadingScreen from './components/LoadingScreen';
 import Dashboard from './components/Dashboard';
@@ -16,7 +18,7 @@ import Profile from './components/Profile';
 import { useApp } from './contexts/AppContext';
 
 const AppContent: React.FC = () => {
-  const { } = useApp();
+  const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
 
   // Prevent app reload on focus
@@ -37,6 +39,14 @@ const AppContent: React.FC = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!user) {
+    return <Login />;
+  }
 
   const renderActiveTab = () => {
     switch (activeTab) {
@@ -74,9 +84,11 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <AppContent />
+      </AppProvider>
+    </AuthProvider>
   );
 };
 
