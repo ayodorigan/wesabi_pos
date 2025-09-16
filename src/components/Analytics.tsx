@@ -157,76 +157,80 @@ const Analytics: React.FC = () => {
 
   const exportAnalytics = () => {
     try {
-      const content = `
-        <html>
-          <head>
-            <title>Analytics Report - ${new Date().toLocaleDateString('en-KE')}</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
-              table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-              th, td { padding: 12px 8px; text-align: left; border: 1px solid #333; }
-              th { background-color: #f0f0f0; font-weight: bold; }
-              h1 { color: #333; text-align: center; margin-bottom: 30px; }
-              h2 { color: #333; margin-top: 30px; margin-bottom: 15px; }
-              .summary { margin-bottom: 20px; }
-              @media print { 
-                body { margin: 0; } 
-                .no-print { display: none; }
-              }
-            </style>
-          </head>
-          <body>
-            <h1>WESABI PHARMACY - ANALYTICS REPORT</h1>
-            <div class="summary">
-              <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
-              <p><strong>Date Range:</strong> ${dateRange}</p>
-            </div>
-            
-            <h2>Summary Statistics</h2>
-            <table>
-              <tr><th>Metric</th><th>Value</th></tr>
-              <tr><td>Total Revenue</td><td>${formatKES(totalRevenue)}</td></tr>
-              <tr><td>Total Transactions</td><td>${totalTransactions}</td></tr>
-              <tr><td>Average Transaction</td><td>${formatKES(averageTransaction)}</td></tr>
-            </table>
-            
-            <h2>Top Selling Products</h2>
-            <table>
-              <tr><th>Product</th><th>Quantity Sold</th><th>Revenue</th></tr>
-              ${topProducts.map(product => `
-                <tr>
-                  <td>${product.name}</td>
-                  <td>${product.quantity}</td>
-                  <td>${formatKES(product.revenue)}</td>
-                </tr>
-              `).join('')}
-            </table>
-            
-            <h2>Category Performance</h2>
-            <table>
-              <tr><th>Category</th><th>Quantity</th><th>Revenue</th></tr>
-              ${Object.entries(categoryStats).map(([category, stats]) => `
-                <tr>
-                  <td>${category}</td>
-                  <td>${stats.quantity}</td>
-                  <td>${formatKES(stats.revenue)}</td>
-                </tr>
-              `).join('')}
-            </table>
-            
-            <h2>Payment Methods</h2>
-            <table>
-              <tr><th>Payment Method</th><th>Amount</th></tr>
-              ${Object.entries(paymentMethodStats).map(([method, amount]) => `
-                <tr>
-                  <td>${method.toUpperCase()}</td>
-                  <td>${formatKES(amount)}</td>
-                </tr>
-              `).join('')}
-            </table>
-          </body>
-        </html>
-      `;
+      if (filteredSales.length === 0) {
+        alert('No analytics data to export');
+        return;
+      }
+
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Analytics Report - ${new Date().toLocaleDateString('en-KE')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 12px 8px; text-align: left; border: 1px solid #333; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    h2 { color: #333; margin-top: 30px; margin-bottom: 15px; }
+    .summary { margin-bottom: 20px; }
+    @media print { 
+      body { margin: 0; } 
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - ANALYTICS REPORT</h1>
+  <div class="summary">
+    <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+    <p><strong>Date Range:</strong> ${dateRange}</p>
+  </div>
+  
+  <h2>Summary Statistics</h2>
+  <table>
+    <tr><th>Metric</th><th>Value</th></tr>
+    <tr><td>Total Revenue</td><td>${formatKES(totalRevenue)}</td></tr>
+    <tr><td>Total Transactions</td><td>${totalTransactions}</td></tr>
+    <tr><td>Average Transaction</td><td>${formatKES(averageTransaction)}</td></tr>
+  </table>
+  
+  <h2>Top Selling Products</h2>
+  <table>
+    <tr><th>Product</th><th>Quantity Sold</th><th>Revenue</th></tr>
+    ${topProducts.map(product => `
+    <tr>
+      <td>${product.name}</td>
+      <td>${product.quantity}</td>
+      <td>${formatKES(product.revenue)}</td>
+    </tr>
+    `).join('')}
+  </table>
+  
+  <h2>Category Performance</h2>
+  <table>
+    <tr><th>Category</th><th>Quantity</th><th>Revenue</th></tr>
+    ${Object.entries(categoryStats).map(([category, stats]) => `
+    <tr>
+      <td>${category}</td>
+      <td>${stats.quantity}</td>
+      <td>${formatKES(stats.revenue)}</td>
+    </tr>
+    `).join('')}
+  </table>
+  
+  <h2>Payment Methods</h2>
+  <table>
+    <tr><th>Payment Method</th><th>Amount</th></tr>
+    ${Object.entries(paymentMethodStats).map(([method, amount]) => `
+    <tr>
+      <td>${method.toUpperCase()}</td>
+      <td>${formatKES(amount)}</td>
+    </tr>
+    `).join('')}
+  </table>
+</body>
+</html>`;
       
       const printWindow = window.open('', '_blank', 'width=800,height=600');
       if (printWindow) {

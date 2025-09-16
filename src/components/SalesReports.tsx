@@ -77,65 +77,69 @@ const SalesReports: React.FC = () => {
 
   const exportReport = () => {
     try {
-      const content = `
-        <html>
-          <head>
-            <title>Sales Report - ${new Date().toLocaleDateString('en-KE')}</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
-              table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-              th, td { padding: 10px 6px; text-align: left; border: 1px solid #333; font-size: 12px; }
-              th { background-color: #f0f0f0; font-weight: bold; }
-              h1 { color: #333; text-align: center; margin-bottom: 30px; }
-              h2 { color: #333; margin-top: 30px; margin-bottom: 15px; }
-              .summary { margin-bottom: 20px; }
-              @media print { 
-                body { margin: 0; } 
-                .no-print { display: none; }
-              }
-            </style>
-          </head>
-          <body>
-            <h1>WESABI PHARMACY - SALES REPORT</h1>
-            <div class="summary">
-              <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
-              <p><strong>Date Range:</strong> ${dateRange}</p>
-            </div>
-            
-            <h2>Summary Statistics</h2>
-            <table>
-              <tr><th>Metric</th><th>Value</th></tr>
-              <tr><td>Total Revenue</td><td>${formatKES(totalRevenue)}</td></tr>
-              <tr><td>Total Transactions</td><td>${totalTransactions}</td></tr>
-              <tr><td>Average Transaction</td><td>${formatKES(averageTransaction)}</td></tr>
-            </table>
-            
-            <h2>Sales Transactions</h2>
-            <table>
-              <tr>
-                <th>Date</th>
-                <th>Receipt</th>
-                <th>Customer</th>
-                <th>Items</th>
-                <th>Payment</th>
-                <th>Total</th>
-                <th>Sales Person</th>
-              </tr>
-              ${filteredSales.map(sale => `
-                <tr>
-                  <td>${sale.createdAt.toLocaleDateString('en-KE')}</td>
-                  <td>${sale.receiptNumber}</td>
-                  <td>${sale.customerName || 'Walk-in Customer'}</td>
-                  <td>${sale.items.length} items</td>
-                  <td>${sale.paymentMethod.toUpperCase()}</td>
-                  <td>${formatKES(sale.totalAmount)}</td>
-                  <td>${sale.salesPersonName}</td>
-                </tr>
-              `).join('')}
-            </table>
-          </body>
-        </html>
-      `;
+      if (filteredSales.length === 0) {
+        alert('No sales data to export');
+        return;
+      }
+
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Sales Report - ${new Date().toLocaleDateString('en-KE')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 10px 6px; text-align: left; border: 1px solid #333; font-size: 12px; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    h2 { color: #333; margin-top: 30px; margin-bottom: 15px; }
+    .summary { margin-bottom: 20px; }
+    @media print { 
+      body { margin: 0; } 
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - SALES REPORT</h1>
+  <div class="summary">
+    <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+    <p><strong>Date Range:</strong> ${dateRange}</p>
+  </div>
+  
+  <h2>Summary Statistics</h2>
+  <table>
+    <tr><th>Metric</th><th>Value</th></tr>
+    <tr><td>Total Revenue</td><td>${formatKES(totalRevenue)}</td></tr>
+    <tr><td>Total Transactions</td><td>${totalTransactions}</td></tr>
+    <tr><td>Average Transaction</td><td>${formatKES(averageTransaction)}</td></tr>
+  </table>
+  
+  <h2>Sales Transactions</h2>
+  <table>
+    <tr>
+      <th>Date</th>
+      <th>Receipt</th>
+      <th>Customer</th>
+      <th>Items</th>
+      <th>Payment</th>
+      <th>Total</th>
+      <th>Sales Person</th>
+    </tr>
+    ${filteredSales.map(sale => `
+    <tr>
+      <td>${sale.createdAt.toLocaleDateString('en-KE')}</td>
+      <td>${sale.receiptNumber}</td>
+      <td>${sale.customerName || 'Walk-in Customer'}</td>
+      <td>${sale.items.length} items</td>
+      <td>${sale.paymentMethod.toUpperCase()}</td>
+      <td>${formatKES(sale.totalAmount)}</td>
+      <td>${sale.salesPersonName}</td>
+    </tr>
+    `).join('')}
+  </table>
+</body>
+</html>`;
       
       const printWindow = window.open('', '_blank', 'width=800,height=600');
       if (printWindow) {
@@ -281,13 +285,12 @@ const SalesReports: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sales Person</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredSales.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                     No sales transactions found
                   </td>
                 </tr>
@@ -325,15 +328,6 @@ const SalesReports: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {sale.salesPersonName}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => generateReceipt(sale)}
-                        className="text-blue-600 hover:text-blue-900"
-                        title="Print Receipt"
-                      >
-                        <Receipt className="h-4 w-4" />
-                      </button>
                     </td>
                   </tr>
                 ))

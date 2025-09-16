@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { Product } from '../types';
-import { formatKES, calculateSellingPrice } from '../utils/currency';
+import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 import AutocompleteInput from './AutocompleteInput';
 
 const Inventory: React.FC = () => {
@@ -63,61 +63,65 @@ const Inventory: React.FC = () => {
 
   const exportToCSV = () => {
     try {
-      const content = `
-        <html>
-          <head>
-            <title>Inventory Report - ${new Date().toLocaleDateString('en-KE')}</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
-              table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-              th, td { padding: 8px 4px; text-align: left; border: 1px solid #333; font-size: 11px; }
-              th { background-color: #f0f0f0; font-weight: bold; }
-              h1 { color: #333; text-align: center; margin-bottom: 30px; }
-              .summary { margin-bottom: 20px; }
-              @media print { 
-                body { margin: 0; } 
-                .no-print { display: none; }
-              }
-            </style>
-          </head>
-          <body>
-            <h1>WESABI PHARMACY - INVENTORY REPORT</h1>
-            <div class="summary">
-              <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
-              <p><strong>Total Products:</strong> ${filteredProducts.length}</p>
-            </div>
-            
-            <table>
-              <tr>
-                <th>Product</th>
-                <th>Category</th>
-                <th>Supplier</th>
-                <th>Batch Number</th>
-                <th>Expiry Date</th>
-                <th>Cost Price</th>
-                <th>Selling Price</th>
-                <th>Stock</th>
-                <th>Min Stock</th>
-                <th>Barcode</th>
-              </tr>
-              ${filteredProducts.map(product => `
-                <tr>
-                  <td>${product.name}</td>
-                  <td>${product.category}</td>
-                  <td>${product.supplier}</td>
-                  <td>${product.batchNumber || '-'}</td>
-                  <td>${product.expiryDate.toLocaleDateString('en-KE')}</td>
-                  <td>${formatKES(product.costPrice)}</td>
-                  <td>${formatKES(product.sellingPrice)}</td>
-                  <td>${product.currentStock}</td>
-                  <td>${product.minStockLevel}</td>
-                  <td>${product.barcode}</td>
-                </tr>
-              `).join('')}
-            </table>
-          </body>
-        </html>
-      `;
+      if (filteredProducts.length === 0) {
+        alert('No products to export');
+        return;
+      }
+
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Inventory Report - ${new Date().toLocaleDateString('en-KE')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 8px 4px; text-align: left; border: 1px solid #333; font-size: 11px; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    .summary { margin-bottom: 20px; }
+    @media print { 
+      body { margin: 0; } 
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - INVENTORY REPORT</h1>
+  <div class="summary">
+    <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+    <p><strong>Total Products:</strong> ${filteredProducts.length}</p>
+  </div>
+  
+  <table>
+    <tr>
+      <th>Product</th>
+      <th>Category</th>
+      <th>Supplier</th>
+      <th>Batch Number</th>
+      <th>Expiry Date</th>
+      <th>Cost Price</th>
+      <th>Selling Price</th>
+      <th>Stock</th>
+      <th>Min Stock</th>
+      <th>Barcode</th>
+    </tr>
+    ${filteredProducts.map(product => `
+    <tr>
+      <td>${product.name}</td>
+      <td>${product.category}</td>
+      <td>${product.supplier}</td>
+      <td>${product.batchNumber || '-'}</td>
+      <td>${product.expiryDate.toLocaleDateString('en-KE')}</td>
+      <td>${formatKES(product.costPrice)}</td>
+      <td>${formatKES(product.sellingPrice)}</td>
+      <td>${product.currentStock}</td>
+      <td>${product.minStockLevel}</td>
+      <td>${product.barcode}</td>
+    </tr>
+    `).join('')}
+  </table>
+</body>
+</html>`;
       
       const printWindow = window.open('', '_blank', 'width=800,height=600');
       if (printWindow) {
@@ -221,6 +225,16 @@ const Inventory: React.FC = () => {
       alert(`Product "${formData.name}" already exists in inventory. Please use a different name or update the existing product.`);
       return;
     }
+
+    // Validate selling price against minimum
+    const costPrice = parseFloat(formData.costPrice) || 0;
+    const sellingPrice = parseFloat(formData.sellingPrice) || 0;
+    const minSellingPrice = getMinimumSellingPrice(costPrice);
+    
+    if (sellingPrice < minSellingPrice) {
+      alert(`Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × cost price)`);
+      return;
+    }
     
     const productData = {
       name: formData.name,
@@ -230,7 +244,7 @@ const Inventory: React.FC = () => {
       expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now if not specified
       invoiceNumber: formData.invoiceNumber,
       costPrice: parseFloat(formData.costPrice) || 0,
-      sellingPrice: parseFloat(formData.sellingPrice) || calculateSellingPrice(parseFloat(formData.costPrice) || 0),
+      sellingPrice: enforceMinimumSellingPrice(parseFloat(formData.sellingPrice) || 0, parseFloat(formData.costPrice) || 0),
       currentStock: parseInt(formData.currentStock) || 0,
       minStockLevel: parseInt(formData.minStockLevel) || 10,
       barcode: formData.barcode || `${Date.now()}`,
@@ -254,6 +268,16 @@ const Inventory: React.FC = () => {
     e.stopPropagation();
     if (!editingProduct) return;
 
+    // Validate selling price against minimum
+    const costPrice = parseFloat(formData.costPrice) || 0;
+    const sellingPrice = parseFloat(formData.sellingPrice) || 0;
+    const minSellingPrice = getMinimumSellingPrice(costPrice);
+    
+    if (sellingPrice < minSellingPrice) {
+      alert(`Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × cost price)`);
+      return;
+    }
+
     const totalUnits = parseInt(formData.packSize || '1') * parseInt(formData.numberOfPacks || '1');
 
     const updates = {
@@ -264,7 +288,7 @@ const Inventory: React.FC = () => {
       expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : editingProduct.expiryDate,
       invoiceNumber: formData.invoiceNumber || editingProduct.invoiceNumber,
       costPrice: parseFloat(formData.costPrice) || 0,
-      sellingPrice: parseFloat(formData.sellingPrice) || calculateSellingPrice(parseFloat(formData.costPrice) || 0),
+      sellingPrice: enforceMinimumSellingPrice(parseFloat(formData.sellingPrice) || 0, parseFloat(formData.costPrice) || 0),
       currentStock: totalUnits,
       minStockLevel: parseInt(formData.minStockLevel) || 10,
       barcode: formData.barcode || editingProduct.barcode,
@@ -508,7 +532,7 @@ const Inventory: React.FC = () => {
                 />
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Batch Number <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Batch Number</label>
                   <input
                     type="text"
                     value={formData.batchNumber}
@@ -561,11 +585,29 @@ const Inventory: React.FC = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (KES)</label>
                       <input
-                        type="text"
+                        type="number"
+                        step="0.01"
+                        min={formData.costPrice ? getMinimumSellingPrice(parseFloat(formData.costPrice)).toString() : "0"}
                         value={formData.sellingPrice}
-                        readOnly
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          const costPrice = parseFloat(formData.costPrice) || 0;
+                          const minPrice = getMinimumSellingPrice(costPrice);
+                          
+                          if (value < minPrice && costPrice > 0) {
+                            alert(`Selling price cannot be less than ${formatKES(minPrice)} (1.33 × cost price)`);
+                            return;
+                          }
+                          
+                          setFormData({ ...formData, sellingPrice: e.target.value });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
+                      {formData.costPrice && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Minimum: {formatKES(getMinimumSellingPrice(parseFloat(formData.costPrice)))}
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
@@ -706,10 +748,27 @@ const Inventory: React.FC = () => {
                       <input
                         type="number"
                         step="0.1"
+                        min={formData.costPrice ? getMinimumSellingPrice(parseFloat(formData.costPrice)).toString() : "0"}
                         value={formData.sellingPrice}
-                        onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          const costPrice = parseFloat(formData.costPrice) || 0;
+                          const minPrice = getMinimumSellingPrice(costPrice);
+                          
+                          if (value < minPrice && costPrice > 0) {
+                            alert(`Selling price cannot be less than ${formatKES(minPrice)} (1.33 × cost price)`);
+                            return;
+                          }
+                          
+                          setFormData({ ...formData, sellingPrice: e.target.value });
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
+                      {formData.costPrice && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Minimum: {formatKES(getMinimumSellingPrice(parseFloat(formData.costPrice)))}
+                        </p>
+                      )}
                     </div>
                   </>
                 )}

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase, isSupabaseEnabled } from '../lib/supabase';
-import { formatKES, calculateSellingPrice } from '../utils/currency';
+import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 import { medicineDatabase, drugCategories, commonSuppliers } from '../data/medicineDatabase';
 import { Product, PriceHistory, SaleItem, Sale, StockTake, ActivityLog, StockAlert, SalesHistoryItem } from '../types';
 
@@ -24,11 +24,16 @@ interface AppContextType {
   suppliers: string[];
   medicineTemplates: typeof medicineDatabase;
   loading: boolean;
+  stockTakeSessions: any[];
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceHistory'>) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   addSale: (sale: Omit<Sale, 'id' | 'createdAt' | 'receiptNumber'>) => Promise<string>;
   addStockTake: (stockTake: Omit<StockTake, 'id' | 'createdAt'>) => Promise<void>;
+  createStockTakeSession: (name: string) => Promise<string>;
+  updateStockTakeSession: (id: string, updates: any) => Promise<void>;
+  deleteStockTakeSession: (id: string) => Promise<void>;
+  completeStockTakeSession: (sessionId: string, stockTakes: any[]) => Promise<void>;
   logActivity: (action: string, details: string) => Promise<void>;
   getStockAlerts: () => StockAlert[];
   importProducts: (products: any[]) => Promise<void>;
@@ -41,6 +46,7 @@ interface AppContextType {
   exportToPDF: (data: any, type: string) => void;
   refreshData: () => Promise<void>;
   getLastSoldPrice: (productId: string) => Promise<number | null>;
+  isSupabaseEnabled: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -67,6 +73,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [suppliers, setSuppliers] = useState<string[]>(commonSuppliers);
   const [medicineTemplates, setMedicineTemplates] = useState(medicineDatabase);
   const [loading, setLoading] = useState(false);
+  const [stockTakeSessions, setStockTakeSessions] = useState<any[]>([]);
 
   // Load data from database
   const refreshData = async () => {
@@ -236,6 +243,27 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         setActivityLogs(formattedLogs);
       }
 
+      // Load stock take sessions
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from('stock_take_sessions')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (sessionsError) {
+        console.error('Error loading stock take sessions:', sessionsError);
+      } else {
+        const formattedSessions = (sessionsData || []).map(session => ({
+          id: session.id,
+          name: session.name,
+          userId: session.user_id || MOCK_USER.id,
+          userName: session.user_name,
+          status: session.status,
+          createdAt: new Date(session.created_at),
+          completedAt: session.completed_at ? new Date(session.completed_at) : null,
+        }));
+        setStockTakeSessions(formattedSessions);
+      }
+
       // Generate sales history from sales data
       const salesHistoryItems: SalesHistoryItem[] = [];
       formattedSales.forEach(sale => {
@@ -277,11 +305,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       
       // Check if it's a network/fetch error
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        console.error('Network error detected. Please check:');
-        console.error('1. Supabase URL and API key are correct');
-        console.error('2. Internet connection is stable');
-        console.error('3. CORS settings in Supabase dashboard');
-        console.error('4. No firewall/ad blocker blocking requests');
+        console.warn('Network error detected. Please check:');
+        console.warn('1. Supabase URL and API key are correct in .env file');
+        console.warn('2. Internet connection is stable');
+        console.warn('3. CORS settings in Supabase dashboard allow localhost:5173');
+        console.warn('4. No firewall/ad blocker blocking requests to *.supabase.co');
         
         // Don't throw the error, just log it and continue in demo mode
         console.warn('Continuing in demo mode due to network error');
@@ -290,8 +318,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       
       // For other errors, log but don't crash the app
       console.warn('Database error occurred, continuing in demo mode:', error);
-    } finally {
-      // Loading state managed elsewhere if needed
     }
   };
 
@@ -349,6 +375,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       throw new Error('Database not configured. Please set up Supabase environment variables.');
     }
 
+    // Enforce minimum selling price
+    const enforcedSellingPrice = enforceMinimumSellingPrice(productData.sellingPrice, productData.costPrice);
+    
     try {
       const { data, error } = await supabase
         .from('products')
@@ -359,7 +388,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           batch_number: productData.batchNumber,
           expiry_date: productData.expiryDate.toISOString(),
           cost_price: productData.costPrice,
-          selling_price: productData.sellingPrice,
+          selling_price: enforcedSellingPrice,
           current_stock: productData.currentStock,
           min_stock_level: productData.minStockLevel,
           barcode: productData.barcode,
@@ -396,7 +425,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (updates.batchNumber) updateData.batch_number = updates.batchNumber;
       if (updates.expiryDate) updateData.expiry_date = updates.expiryDate.toISOString();
       if (updates.costPrice !== undefined) updateData.cost_price = updates.costPrice;
-      if (updates.sellingPrice !== undefined) updateData.selling_price = updates.sellingPrice;
+      if (updates.sellingPrice !== undefined) {
+        // Enforce minimum selling price
+        const costPrice = updates.costPrice !== undefined ? updates.costPrice : 
+          products.find(p => p.id === id)?.costPrice || 0;
+        updateData.selling_price = enforceMinimumSellingPrice(updates.sellingPrice, costPrice);
+      }
       if (updates.currentStock !== undefined) updateData.current_stock = updates.currentStock;
       if (updates.minStockLevel !== undefined) updateData.min_stock_level = updates.minStockLevel;
       if (updates.barcode) updateData.barcode = updates.barcode;
@@ -535,12 +569,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const addStockTake = async (stockTakeData: Omit<StockTake, 'id' | 'createdAt'>) => {
     if (!isSupabaseEnabled || !supabase) {
-      console.log('Demo mode: Cannot perform stock take without Supabase configuration');
       throw new Error('Database not configured. Please set up Supabase environment variables.');
     }
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('stock_takes')
         .insert({
           product_id: stockTakeData.productId,
@@ -551,25 +584,151 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           reason: stockTakeData.reason,
           user_id: stockTakeData.userId,
           user_name: stockTakeData.userName,
-        });
+        })
+        .select()
+        .single();
 
       if (error) {
         console.error('Error adding stock take:', error);
         throw error;
       }
 
-      // Update product stock if there's a difference
-      if (stockTakeData.difference !== 0) {
-        await supabase
-          .from('products')
-          .update({ current_stock: stockTakeData.actualStock })
-          .eq('id', stockTakeData.productId);
-      }
+      console.log('Stock take saved to database:', data);
 
       await logActivity('STOCK_TAKE', `Stock take: ${stockTakeData.productName} - Difference: ${stockTakeData.difference}`);
       await refreshData();
     } catch (error) {
       console.error('Error adding stock take:', error);
+      throw error;
+    }
+  };
+
+  const createStockTakeSession = async (name: string): Promise<string> => {
+    if (!isSupabaseEnabled || !supabase) {
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('stock_take_sessions')
+        .insert({
+          name: name.trim(),
+          user_id: MOCK_USER.id,
+          user_name: MOCK_USER.name,
+          status: 'active'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating stock take session:', error);
+        throw error;
+      }
+
+      await logActivity('CREATE_STOCK_TAKE_SESSION', `Created stock take session: ${name}`);
+      await refreshData();
+      
+      return data.id;
+    } catch (error) {
+      console.error('Error creating stock take session:', error);
+      throw error;
+    }
+  };
+
+  const updateStockTakeSession = async (id: string, updates: any) => {
+    if (!isSupabaseEnabled || !supabase) {
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('stock_take_sessions')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error updating stock take session:', error);
+        throw error;
+      }
+
+      await logActivity('UPDATE_STOCK_TAKE_SESSION', `Updated stock take session: ${id}`);
+      await refreshData();
+    } catch (error) {
+      console.error('Error updating stock take session:', error);
+      throw error;
+    }
+  };
+
+  const deleteStockTakeSession = async (id: string) => {
+    if (!isSupabaseEnabled || !supabase) {
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('stock_take_sessions')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting stock take session:', error);
+        throw error;
+      }
+
+      await logActivity('DELETE_STOCK_TAKE_SESSION', `Deleted stock take session: ${id}`);
+      await refreshData();
+    } catch (error) {
+      console.error('Error deleting stock take session:', error);
+      throw error;
+    }
+  };
+
+  const completeStockTakeSession = async (sessionId: string, stockTakeEntries: any[]) => {
+    if (!isSupabaseEnabled || !supabase) {
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
+    try {
+      // Insert all stock take entries with session reference
+      const stockTakeInserts = stockTakeEntries.map(entry => ({
+        session_id: sessionId,
+        product_id: entry.productId,
+        product_name: entry.productName,
+        expected_stock: entry.expectedStock,
+        actual_stock: entry.actualStock,
+        difference: entry.difference,
+        reason: entry.reason,
+        user_id: entry.userId,
+        user_name: entry.userName,
+      }));
+
+      const { error: stockTakeError } = await supabase
+        .from('stock_takes')
+        .insert(stockTakeInserts);
+
+      if (stockTakeError) {
+        console.error('Error inserting stock takes:', stockTakeError);
+        throw stockTakeError;
+      }
+
+      // Mark session as completed
+      const { error: sessionError } = await supabase
+        .from('stock_take_sessions')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', sessionId);
+
+      if (sessionError) {
+        console.error('Error completing session:', sessionError);
+        throw sessionError;
+      }
+
+      await logActivity('COMPLETE_STOCK_TAKE_SESSION', `Completed stock take session: ${sessionId}`);
+      await refreshData();
+    } catch (error) {
+      console.error('Error completing stock take session:', error);
       throw error;
     }
   };
@@ -847,6 +1006,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       products,
       sales,
       stockTakes,
+      stockTakeSessions,
       activityLogs,
       salesHistory,
       categories,
@@ -858,6 +1018,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       deleteProduct,
       addSale,
       addStockTake,
+      createStockTakeSession,
+      updateStockTakeSession,
+      deleteStockTakeSession,
+      completeStockTakeSession,
       logActivity,
       getStockAlerts,
       importProducts,
@@ -870,6 +1034,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       exportToPDF,
       refreshData,
       getLastSoldPrice,
+      isSupabaseEnabled,
     }}>
       {children}
     </AppContext.Provider>

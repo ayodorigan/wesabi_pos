@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { Product, SaleItem } from '../types';
-import { formatKES, getMinimumSellingPrice } from '../utils/currency';
+import { formatKES, getMinimumSellingPrice, validateSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 
 const POS: React.FC = () => {
   const { user, products, addSale, getLastSoldPrice } = useApp();
@@ -57,7 +57,7 @@ const POS: React.FC = () => {
         priceAdjusted: false,
         batchNumber: product.batchNumber,
       };
-      setCart([...cart, newItem]);
+      setCart(prev => [newItem, ...prev]);
       
       // Fetch last sold price when adding to cart
       getLastSoldPrice(product.id).then(lastPrice => {
@@ -138,7 +138,7 @@ const POS: React.FC = () => {
     for (const item of cart) {
       const product = products.find(p => p.id === item.productId);
       if (product) {
-        const minPrice = calculateSellingPrice(product.costPrice);
+        const minPrice = getMinimumSellingPrice(product.costPrice);
         if (item.unitPrice < minPrice) {
           alert(`Price for ${item.productName} cannot be less than minimum selling price: ${formatKES(minPrice)}`);
           return;
@@ -149,7 +149,7 @@ const POS: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      const receiptNumber = addSale({
+      const receiptNumber = await addSale({
         items: cart,
         totalAmount: getTotalAmount(),
         paymentMethod,
@@ -362,9 +362,16 @@ const POS: React.FC = () => {
                                   [item.productId]: newUseLastPrice
                                 }));
                                 
-                                const priceToUse = newUseLastPrice 
+                                let priceToUse = newUseLastPrice 
                                   ? lastSoldPrices[item.productId]! 
                                   : product.sellingPrice;
+                                
+                                // Enforce minimum selling price
+                                const minPrice = getMinimumSellingPrice(product.costPrice);
+                                if (priceToUse < minPrice) {
+                                  priceToUse = minPrice;
+                                  alert(`Price adjusted to minimum selling price: ${formatKES(minPrice)}`);
+                                }
                                 
                                 setCart(cart.map(cartItem =>
                                   cartItem.productId === item.productId

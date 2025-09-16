@@ -45,49 +45,53 @@ const ActivityLogs: React.FC = () => {
 
   const exportLogs = () => {
     try {
-      const content = `
-        <html>
-          <head>
-            <title>Activity Logs - ${new Date().toLocaleDateString('en-KE')}</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
-              table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-              th, td { padding: 10px 6px; text-align: left; border: 1px solid #333; font-size: 12px; }
-              th { background-color: #f0f0f0; font-weight: bold; }
-              h1 { color: #333; text-align: center; margin-bottom: 30px; }
-              .summary { margin-bottom: 20px; }
-              @media print { 
-                body { margin: 0; } 
-                .no-print { display: none; }
-              }
-            </style>
-          </head>
-          <body>
-            <h1>WESABI PHARMACY - ACTIVITY LOGS</h1>
-            <div class="summary">
-              <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
-              <p><strong>Total Activities:</strong> ${filteredLogs.length}</p>
-            </div>
-            
-            <table>
-              <tr>
-                <th>Timestamp</th>
-                <th>User</th>
-                <th>Action</th>
-                <th>Details</th>
-              </tr>
-              ${filteredLogs.map(log => `
-                <tr>
-                  <td>${log.timestamp.toLocaleDateString('en-KE')} ${log.timestamp.toLocaleTimeString('en-KE')}</td>
-                  <td>${log.userName}</td>
-                  <td>${getActionLabel(log.action)}</td>
-                  <td>${log.details}</td>
-                </tr>
-              `).join('')}
-            </table>
-          </body>
-        </html>
-      `;
+      if (filteredLogs.length === 0) {
+        alert('No activity logs to export');
+        return;
+      }
+
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Activity Logs - ${new Date().toLocaleDateString('en-KE')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 10px 6px; text-align: left; border: 1px solid #333; font-size: 12px; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    .summary { margin-bottom: 20px; }
+    @media print { 
+      body { margin: 0; } 
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - ACTIVITY LOGS</h1>
+  <div class="summary">
+    <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+    <p><strong>Total Activities:</strong> ${filteredLogs.length}</p>
+  </div>
+  
+  <table>
+    <tr>
+      <th>Timestamp</th>
+      <th>User</th>
+      <th>Action</th>
+      <th>Details</th>
+    </tr>
+    ${filteredLogs.map(log => `
+    <tr>
+      <td>${log.timestamp.toLocaleDateString('en-KE')} ${log.timestamp.toLocaleTimeString('en-KE')}</td>
+      <td>${log.userName}</td>
+      <td>${getActionLabel(log.action)}</td>
+      <td>${log.details}</td>
+    </tr>
+    `).join('')}
+  </table>
+</body>
+</html>`;
       
       const printWindow = window.open('', '_blank', 'width=800,height=600');
       if (printWindow) {

@@ -9,13 +9,19 @@ const isSupabaseConfigured = Boolean(
   supabaseAnonKey && 
   supabaseUrl !== 'https://placeholder.supabase.co' && 
   supabaseAnonKey !== 'placeholder-key' &&
+  supabaseUrl !== 'your-supabase-url' &&
+  supabaseAnonKey !== 'your-supabase-anon-key' &&
   supabaseUrl.startsWith('https://') &&
   supabaseUrl.includes('.supabase.co')
 );
 
 if (!isSupabaseConfigured) {
-  console.warn('Supabase environment variables not properly configured. Running in demo mode with mock data.');
-  console.warn('Please check your .env file and ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set correctly.');
+  console.warn('⚠️  Supabase not configured - Running in demo mode');
+  console.warn('To enable database features:');
+  console.warn('1. Create a .env file in the project root');
+  console.warn('2. Add: VITE_SUPABASE_URL=https://your-project.supabase.co');
+  console.warn('3. Add: VITE_SUPABASE_ANON_KEY=your-anon-key');
+  console.warn('4. Restart the development server');
 }
 
 // Create Supabase client only if properly configured

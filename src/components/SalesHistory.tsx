@@ -83,63 +83,67 @@ const SalesHistory: React.FC = () => {
 
   const exportReport = () => {
     try {
-      const content = `
-        <html>
-          <head>
-            <title>Drug Sales History - ${new Date().toLocaleDateString('en-KE')}</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
-              table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-              th, td { padding: 8px 4px; text-align: left; border: 1px solid #333; font-size: 10px; }
-              th { background-color: #f0f0f0; font-weight: bold; }
-              h1 { color: #333; text-align: center; margin-bottom: 30px; }
-              .summary { margin-bottom: 20px; }
-              @media print { 
-                body { margin: 0; } 
-                .no-print { display: none; }
-              }
-            </style>
-          </head>
-          <body>
-            <h1>WESABI PHARMACY - DRUG SALES HISTORY</h1>
-            <div class="summary">
-              <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
-              <p><strong>Total Records:</strong> ${filteredHistory.length}</p>
-              <p><strong>Total Revenue:</strong> ${formatKES(totalRevenue)}</p>
-              <p><strong>Total Profit:</strong> ${formatKES(totalProfit)}</p>
-            </div>
-            
-            <table>
-              <tr>
-                <th>Date</th>
-                <th>Product</th>
-                <th>Qty</th>
-                <th>Cost Price</th>
-                <th>Selling Price</th>
-                <th>Revenue</th>
-                <th>Profit</th>
-                <th>Payment</th>
-                <th>Receipt</th>
-                <th>Sales Person</th>
-              </tr>
-              ${filteredHistory.map(item => `
-                <tr>
-                  <td>${item.saleDate.toLocaleDateString('en-KE')}</td>
-                  <td>${item.productName}</td>
-                  <td>${item.quantity}</td>
-                  <td>${formatKES(item.costPrice)}</td>
-                  <td>${formatKES(item.sellingPrice)}</td>
-                  <td>${formatKES(item.totalRevenue)}</td>
-                  <td>${formatKES(item.profit)}</td>
-                  <td>${item.paymentMethod.toUpperCase()}</td>
-                  <td>${item.receiptNumber}</td>
-                  <td>${item.salesPersonName}</td>
-                </tr>
-              `).join('')}
-            </table>
-          </body>
-        </html>
-      `;
+      if (filteredHistory.length === 0) {
+        alert('No sales history to export');
+        return;
+      }
+
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Drug Sales History - ${new Date().toLocaleDateString('en-KE')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 8px 4px; text-align: left; border: 1px solid #333; font-size: 10px; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    .summary { margin-bottom: 20px; }
+    @media print { 
+      body { margin: 0; } 
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - DRUG SALES HISTORY</h1>
+  <div class="summary">
+    <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+    <p><strong>Total Records:</strong> ${filteredHistory.length}</p>
+    <p><strong>Total Revenue:</strong> ${formatKES(totalRevenue)}</p>
+    <p><strong>Total Profit:</strong> ${formatKES(totalProfit)}</p>
+  </div>
+  
+  <table>
+    <tr>
+      <th>Date</th>
+      <th>Product</th>
+      <th>Qty</th>
+      <th>Cost Price</th>
+      <th>Selling Price</th>
+      <th>Revenue</th>
+      <th>Profit</th>
+      <th>Payment</th>
+      <th>Receipt</th>
+      <th>Sales Person</th>
+    </tr>
+    ${filteredHistory.map(item => `
+    <tr>
+      <td>${item.saleDate.toLocaleDateString('en-KE')}</td>
+      <td>${item.productName}</td>
+      <td>${item.quantity}</td>
+      <td>${formatKES(item.costPrice)}</td>
+      <td>${formatKES(item.sellingPrice)}</td>
+      <td>${formatKES(item.totalRevenue)}</td>
+      <td>${formatKES(item.profit)}</td>
+      <td>${item.paymentMethod.toUpperCase()}</td>
+      <td>${item.receiptNumber}</td>
+      <td>${item.salesPersonName}</td>
+    </tr>
+    `).join('')}
+  </table>
+</body>
+</html>`;
       
       const printWindow = window.open('', '_blank', 'width=800,height=600');
       if (printWindow) {
