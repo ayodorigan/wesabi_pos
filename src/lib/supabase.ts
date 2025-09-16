@@ -29,9 +29,6 @@ export const supabase = isSupabaseConfigured ? createClient(
   supabaseUrl!,
   supabaseAnonKey!,
   {
-    auth: {
-      storage: null
-    }
   }
 ) : null;
 
