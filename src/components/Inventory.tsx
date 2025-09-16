@@ -24,6 +24,7 @@ const Inventory: React.FC = () => {
     deleteProduct, 
     importProducts,
     medicineTemplates,
+    addMedicine,
     categories,
     suppliers,
     addCategory,
@@ -61,31 +62,81 @@ const Inventory: React.FC = () => {
   });
 
   const exportToCSV = () => {
-    const headers = ['Name', 'Category', 'Supplier', 'Batch Number', 'Expiry Date', 'Invoice Number', 'Cost Price', 'Selling Price', 'Current Stock', 'Min Stock Level', 'Barcode'];
-    const csvContent = [
-      headers.join(','),
-      ...filteredProducts.map(product => [
-        product.name,
-        product.category,
-        product.supplier,
-        product.batchNumber,
-        product.expiryDate.toISOString().split('T')[0],
-        product.invoiceNumber || '',
-        product.costPrice,
-        product.sellingPrice,
-        product.currentStock,
-        product.minStockLevel,
-        product.barcode
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'wesabi-pharmacy-inventory.csv';
-    a.click();
-    window.URL.revokeObjectURL(url);
+    try {
+      const content = `
+        <html>
+          <head>
+            <title>Inventory Report - ${new Date().toLocaleDateString('en-KE')}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+              table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+              th, td { padding: 8px 4px; text-align: left; border: 1px solid #333; font-size: 11px; }
+              th { background-color: #f0f0f0; font-weight: bold; }
+              h1 { color: #333; text-align: center; margin-bottom: 30px; }
+              .summary { margin-bottom: 20px; }
+              @media print { 
+                body { margin: 0; } 
+                .no-print { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            <h1>WESABI PHARMACY - INVENTORY REPORT</h1>
+            <div class="summary">
+              <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+              <p><strong>Total Products:</strong> ${filteredProducts.length}</p>
+            </div>
+            
+            <table>
+              <tr>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Supplier</th>
+                <th>Batch Number</th>
+                <th>Expiry Date</th>
+                <th>Cost Price</th>
+                <th>Selling Price</th>
+                <th>Stock</th>
+                <th>Min Stock</th>
+                <th>Barcode</th>
+              </tr>
+              ${filteredProducts.map(product => `
+                <tr>
+                  <td>${product.name}</td>
+                  <td>${product.category}</td>
+                  <td>${product.supplier}</td>
+                  <td>${product.batchNumber || '-'}</td>
+                  <td>${product.expiryDate.toLocaleDateString('en-KE')}</td>
+                  <td>${formatKES(product.costPrice)}</td>
+                  <td>${formatKES(product.sellingPrice)}</td>
+                  <td>${product.currentStock}</td>
+                  <td>${product.minStockLevel}</td>
+                  <td>${product.barcode}</td>
+                </tr>
+              `).join('')}
+            </table>
+          </body>
+        </html>
+      `;
+      
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(content);
+        printWindow.document.close();
+        
+        // Wait for content to load then trigger print
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      } else {
+        alert('Please allow popups to export PDF reports');
+      }
+    } catch (error) {
+      console.error('Error exporting inventory report:', error);
+      alert('Error generating PDF report. Please try again.');
+    }
   };
 
   const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,11 +212,21 @@ const Inventory: React.FC = () => {
     
     console.log('🏥 Form submitted with data:', formData);
     
+    // Check for duplicate product names (case insensitive)
+    const existingProduct = products.find(p => 
+      p.name.toLowerCase() === formData.name.toLowerCase()
+    );
+    
+    if (existingProduct) {
+      alert(`Product "${formData.name}" already exists in inventory. Please use a different name or update the existing product.`);
+      return;
+    }
+    
     const productData = {
       name: formData.name,
       category: formData.category,
       supplier: formData.supplier || 'Unknown Supplier',
-      batchNumber: formData.batchNumber || `BATCH-${Date.now()}`,
+      batchNumber: formData.batchNumber || '',
       expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now if not specified
       invoiceNumber: formData.invoiceNumber,
       costPrice: parseFloat(formData.costPrice) || 0,
@@ -420,6 +481,8 @@ const Inventory: React.FC = () => {
                   options={medicineNames}
                   placeholder="Start typing medicine name..."
                   label="Product Name"
+                  allowAddNew
+                  onAddNew={addMedicine}
                   required
                 />
                 
@@ -445,12 +508,12 @@ const Inventory: React.FC = () => {
                 />
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Batch Number</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Batch Number <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     value={formData.batchNumber}
                     onChange={(e) => setFormData({ ...formData, batchNumber: e.target.value })}
-                    placeholder="Auto-generated if empty"
+                    placeholder="Enter batch number"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
@@ -482,34 +545,45 @@ const Inventory: React.FC = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price (KES)</label>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9.]*"
                         step="0.1"
                         value={formData.costPrice}
-                        onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9.]/g, '');
+                          setFormData({ ...formData, costPrice: value });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none"
+                        style={{ MozAppearance: 'textfield' }}
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (KES)</label>
                       <input
-                        type="number"
-                        step="0.1"
+                        type="text"
                         value={formData.sellingPrice}
-                        onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
                       />
                     </div>
                   </>
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity <span className="text-red-500">*</span></label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     required
                     value={formData.currentStock}
-                    onChange={(e) => setFormData({ ...formData, currentStock: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setFormData({ ...formData, currentStock: value });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none"
+                    style={{ MozAppearance: 'textfield' }}
                   />
                 </div>
 

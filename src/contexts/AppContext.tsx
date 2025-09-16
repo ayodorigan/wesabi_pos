@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseEnabled } from '../lib/supabase';
 import { formatKES, calculateSellingPrice } from '../utils/currency';
 import { medicineDatabase, drugCategories, commonSuppliers } from '../data/medicineDatabase';
 import { Product, PriceHistory, SaleItem, Sale, StockTake, ActivityLog, StockAlert, SalesHistoryItem } from '../types';
@@ -34,6 +34,7 @@ interface AppContextType {
   importProducts: (products: any[]) => Promise<void>;
   addCategory: (category: string) => void;
   addSupplier: (supplier: string) => void;
+  addMedicine: (medicine: string) => void;
   getMedicineByName: (name: string) => typeof medicineDatabase[0] | undefined;
   getSalesHistory: () => SalesHistoryItem[];
   generateReceipt: (sale: Sale) => void;
@@ -64,12 +65,23 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [salesHistory, setSalesHistory] = useState<SalesHistoryItem[]>([]);
   const [categories, setCategories] = useState<string[]>(drugCategories);
   const [suppliers, setSuppliers] = useState<string[]>(commonSuppliers);
+  const [medicineTemplates, setMedicineTemplates] = useState(medicineDatabase);
   const [loading, setLoading] = useState(false);
 
   // Load data from database
   const refreshData = async () => {
     try {
-      // Don't show loading screen for data refresh
+      // Skip database operations if Supabase is not enabled
+      if (!isSupabaseEnabled) {
+        console.log('Supabase not configured - running in demo mode with mock data only');
+        return;
+      }
+
+      // Additional safety check for supabase client
+      if (!supabase) {
+        console.warn('Supabase client not initialized - running in demo mode');
+        return;
+      }
       
       // Declare variables at function scope
       let formattedProducts: Product[] = [];
@@ -262,6 +274,22 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     } catch (error) {
       console.error('Error refreshing data:', error);
+      
+      // Check if it's a network/fetch error
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        console.error('Network error detected. Please check:');
+        console.error('1. Supabase URL and API key are correct');
+        console.error('2. Internet connection is stable');
+        console.error('3. CORS settings in Supabase dashboard');
+        console.error('4. No firewall/ad blocker blocking requests');
+        
+        // Don't throw the error, just log it and continue in demo mode
+        console.warn('Continuing in demo mode due to network error');
+        return;
+      }
+      
+      // For other errors, log but don't crash the app
+      console.warn('Database error occurred, continuing in demo mode:', error);
     } finally {
       // Loading state managed elsewhere if needed
     }
@@ -273,6 +301,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }, []);
 
   const logActivity = async (action: string, details: string) => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Activity logged -', action, details);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('activity_logs')
@@ -311,6 +344,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const addProduct = async (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceHistory'>) => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Cannot add products without Supabase configuration');
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
     try {
       const { data, error } = await supabase
         .from('products')
@@ -344,6 +382,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const updateProduct = async (id: string, updates: Partial<Product>) => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Cannot update products without Supabase configuration');
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
     try {
       const updateData: any = {};
       
@@ -378,6 +421,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const deleteProduct = async (id: string) => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Cannot delete products without Supabase configuration');
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
     try {
       const product = products.find(p => p.id === id);
       
@@ -400,6 +448,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const addSale = async (saleData: Omit<Sale, 'id' | 'createdAt' | 'receiptNumber'>): Promise<string> => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Cannot process sales without Supabase configuration');
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
     try {
       // Generate receipt number
       const receiptNumber = `WSB${String(sales.length + 1).padStart(4, '0')}`;
@@ -481,6 +534,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const addStockTake = async (stockTakeData: Omit<StockTake, 'id' | 'createdAt'>) => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Cannot perform stock take without Supabase configuration');
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
     try {
       const { error } = await supabase
         .from('stock_takes')
@@ -593,8 +651,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   };
 
+  const addMedicine = (medicine: string) => {
+    const newMedicine = {
+      name: medicine,
+      category: 'Other',
+      commonDosages: ['As prescribed'],
+      description: 'User-added medicine'
+    };
+    setMedicineTemplates(prev => [...prev, newMedicine]);
+  };
+
   const getMedicineByName = (name: string) => {
-    return medicineDatabase.find(med => 
+    return medicineTemplates.find(med => 
       med.name.toLowerCase() === name.toLowerCase()
     );
   };
@@ -604,56 +672,77 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const generateReceipt = (sale: Sale) => {
-    const receiptContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Receipt - ${sale.receiptNumber}</title>
-        <style>
-          body { font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; padding: 20px; }
-          .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-          .item { display: flex; justify-content: space-between; margin: 5px 0; }
-          .total { border-top: 1px solid #000; padding-top: 10px; font-weight: bold; }
-          @media print { body { margin: 0; } }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h2>WESABI PHARMACY</h2>
-          <p>Receipt #${sale.receiptNumber}</p>
-          <p>${sale.createdAt.toLocaleDateString('en-KE')} ${sale.createdAt.toLocaleTimeString('en-KE')}</p>
-        </div>
-        <div class="items">
-          ${sale.items.map(item => `
-            <div class="item">
-              <span>${item.productName} x${item.quantity}</span>
-              <span>${formatKES(item.totalPrice)}</span>
+    try {
+      const receiptContent = `
+        <html>
+          <head>
+            <title>Receipt - ${sale.receiptNumber}</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; padding: 20px; line-height: 1.4; }
+              .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+              .item { display: flex; justify-content: space-between; margin: 8px 0; padding: 2px 0; }
+              .total { border-top: 2px solid #000; padding-top: 10px; font-weight: bold; margin-top: 15px; }
+              .footer { text-align: center; margin-top: 20px; border-top: 1px solid #ccc; padding-top: 15px; }
+              h2 { margin: 0 0 10px 0; font-size: 18px; }
+              @media print { 
+                body { margin: 0; padding: 10px; } 
+                .no-print { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h2>WESABI PHARMACY</h2>
+              <p><strong>Receipt #${sale.receiptNumber}</strong></p>
+              <p>${sale.createdAt.toLocaleDateString('en-KE')} ${sale.createdAt.toLocaleTimeString('en-KE')}</p>
+              ${sale.customerName ? `<p>Customer: ${sale.customerName}</p>` : ''}
             </div>
-          `).join('')}
-        </div>
-        <div class="total">
-          <div class="item">
-            <span>TOTAL:</span>
-            <span>${formatKES(sale.totalAmount)}</span>
-          </div>
-          <div class="item">
-            <span>Payment:</span>
-            <span>${sale.paymentMethod.toUpperCase()}</span>
-          </div>
-        </div>
-        <div style="text-align: center; margin-top: 20px;">
-          <p>Thank you for your business!</p>
-          <p>Served by: ${sale.salesPersonName}</p>
-        </div>
-      </body>
-      </html>
-    `;
-    
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(receiptContent);
-      printWindow.document.close();
-      printWindow.print();
+            
+            <div class="items">
+              ${sale.items.map(item => `
+                <div class="item">
+                  <span>${item.productName} x${item.quantity}</span>
+                  <span>${formatKES(item.totalPrice)}</span>
+                </div>
+              `).join('')}
+            </div>
+            
+            <div class="total">
+              <div class="item">
+                <span>TOTAL:</span>
+                <span>${formatKES(sale.totalAmount)}</span>
+              </div>
+              <div class="item">
+                <span>Payment Method:</span>
+                <span>${sale.paymentMethod.toUpperCase()}</span>
+              </div>
+            </div>
+            
+            <div class="footer">
+              <p>Thank you for your business!</p>
+              <p>Served by: ${sale.salesPersonName}</p>
+            </div>
+          </body>
+        </html>
+      `;
+      
+      const printWindow = window.open('', '_blank', 'width=400,height=600');
+      if (printWindow) {
+        printWindow.document.write(receiptContent);
+        printWindow.document.close();
+        
+        // Wait for content to load then trigger print
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      } else {
+        alert('Please allow popups to print receipts');
+      }
+    } catch (error) {
+      console.error('Error generating receipt:', error);
+      alert('Error generating receipt. Please try again.');
     }
   };
 
@@ -720,6 +809,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   };
   const getLastSoldPrice = async (productId: string): Promise<number | null> => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Cannot fetch price history without Supabase configuration');
+      return null;
+    }
+
     try {
       const { data, error } = await supabase
         .from('price_history')
@@ -757,7 +851,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       salesHistory,
       categories,
       suppliers,
-      medicineTemplates: medicineDatabase,
+      medicineTemplates,
       loading,
       addProduct,
       updateProduct,
@@ -769,6 +863,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       importProducts,
       addCategory,
       addSupplier,
+      addMedicine,
       getMedicineByName,
       getSalesHistory,
       generateReceipt,

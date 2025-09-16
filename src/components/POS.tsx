@@ -134,6 +134,18 @@ const POS: React.FC = () => {
   const processSale = async () => {
     if (cart.length === 0 || !user) return;
 
+    // Validate all prices against minimum selling price (cost * 1.33)
+    for (const item of cart) {
+      const product = products.find(p => p.id === item.productId);
+      if (product) {
+        const minPrice = calculateSellingPrice(product.costPrice);
+        if (item.unitPrice < minPrice) {
+          alert(`Price for ${item.productName} cannot be less than minimum selling price: ${formatKES(minPrice)}`);
+          return;
+        }
+      }
+    }
+
     setIsProcessing(true);
 
     try {
@@ -270,7 +282,7 @@ const POS: React.FC = () => {
       </div>
 
       {/* Cart and Checkout */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border h-fit">
+      <div className="bg-white p-6 rounded-lg shadow-sm border h-fit w-96">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900 flex items-center">
             <ShoppingCart className="h-5 w-5 mr-2" />
@@ -291,11 +303,22 @@ const POS: React.FC = () => {
                   {editingPrice === item.productId ? (
                     <div className="flex items-center space-x-1">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9.]*"
                         step="0.01"
                         value={tempPrice}
-                        onChange={(e) => setTempPrice(e.target.value)}
-                        className="w-24 px-2 py-1 text-xs border rounded"
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9.]/g, '');
+                          setTempPrice(value);
+                        }}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            savePriceEdit(item.productId);
+                          }
+                        }}
+                        className="w-24 px-2 py-1 text-xs border rounded appearance-none"
+                        style={{ MozAppearance: 'textfield' }}
                       />
                       <button
                         onClick={() => savePriceEdit(item.productId)}
@@ -371,7 +394,24 @@ const POS: React.FC = () => {
                 >
                   <Minus className="h-4 w-4" />
                 </button>
-                <span className="w-8 text-center font-medium">{item.quantity}</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  min="1"
+                  max={products.find(p => p.id === item.productId)?.currentStock || 999}
+                  value={item.quantity}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    const newQty = parseInt(value) || 1;
+                    const product = products.find(p => p.id === item.productId);
+                    if (product && newQty <= product.currentStock) {
+                      updateQuantity(item.productId, newQty);
+                    }
+                  }}
+                  className="w-12 text-center font-medium border rounded px-1 appearance-none"
+                  style={{ MozAppearance: 'textfield' }}
+                />
                 <button
                   onClick={() => updateQuantity(item.productId, item.quantity + 1)}
                   className="p-1 text-gray-400 hover:text-gray-600"
@@ -406,6 +446,12 @@ const POS: React.FC = () => {
               </label>
               <input
                 type="text"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9.]/g, '');
+                  setTempPrice(value);
+                }}
+                inputMode="numeric"
+                pattern="[0-9.]*"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 placeholder="Enter customer name"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider } from './contexts/AppContext';
 import Layout from './components/Layout';
 import LoadingScreen from './components/LoadingScreen';
@@ -8,6 +8,7 @@ import POS from './components/POS';
 import Analytics from './components/Analytics';
 import Settings from './components/Settings';
 import StockTake from './components/StockTake';
+import StockTakeHistory from './components/StockTakeHistory';
 import ActivityLogs from './components/ActivityLogs';
 import SalesHistory from './components/SalesHistory';
 import SalesReports from './components/SalesReports';
@@ -17,6 +18,25 @@ import { useApp } from './contexts/AppContext';
 const AppContent: React.FC = () => {
   const { } = useApp();
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  // Prevent app reload on focus
+  useEffect(() => {
+    const handleFocus = (e: FocusEvent) => {
+      e.preventDefault();
+    };
+    
+    const handleVisibilityChange = () => {
+      // Do nothing - prevent any reload behavior
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   const renderActiveTab = () => {
     switch (activeTab) {
