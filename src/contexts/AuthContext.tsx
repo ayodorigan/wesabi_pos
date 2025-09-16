@@ -286,6 +286,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error('Authentication not available in demo mode');
     }
 
+    // Validate inputs
+    if (!email?.trim() || !password?.trim()) {
+      throw new Error('Email and password are required');
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
