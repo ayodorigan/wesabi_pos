@@ -46,9 +46,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
 
   const handleSignOut = async () => {
     try {
+       console.log('Sign out clicked');
       await signOut();
+       console.log('Sign out completed');
     } catch (error) {
       console.error('Error signing out:', error);
+       alert('Error signing out. Please try again.');
     }
   };
 
@@ -156,7 +159,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                       </button>
                      <button
                        onClick={handleSignOut}
-                       className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                       className="w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-red-50 flex items-center"
                      >
                        <LogOut className="h-4 w-4 mr-2" />
                        Sign Out

@@ -313,8 +313,8 @@ const Settings: React.FC = () => {
                           <button
                             onClick={() => toggleUserStatus(userItem.user_id)}
                             className={userItem.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}
-                          >
                             title={userItem.is_active ? 'Deactivate User' : 'Activate User'}
+                          >
                             {userItem.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </button>
                           {canManageAdmins && userItem.user_id !== user?.user_id && (
