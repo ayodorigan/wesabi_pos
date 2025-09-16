@@ -15,6 +15,7 @@ import {
   Edit
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Product, SaleItem } from '../types';
 import { formatKES, getMinimumSellingPrice, validateSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 
