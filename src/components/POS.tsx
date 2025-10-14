@@ -26,8 +26,10 @@ const POS: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'insurance'>('mpesa');
   const [customerName, setCustomerName] = useState('');
+  const [mpesaPhone, setMpesaPhone] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastReceipt, setLastReceipt] = useState<string | null>(null);
+  const [showMpesaModal, setShowMpesaModal] = useState(false);
   const [editingPrice, setEditingPrice] = useState<string | null>(null);
   const [tempPrice, setTempPrice] = useState('');
   const [showPriceHistory, setShowPriceHistory] = useState<string | null>(null);
@@ -148,6 +150,17 @@ const POS: React.FC = () => {
       }
     }
 
+    if (paymentMethod === 'mpesa') {
+      setShowMpesaModal(true);
+      return;
+    }
+
+    await completeSale();
+  };
+
+  const completeSale = async () => {
+    if (cart.length === 0 || !user) return;
+
     setIsProcessing(true);
 
     try {
@@ -163,12 +176,54 @@ const POS: React.FC = () => {
       setLastReceipt(receiptNumber);
       setCart([]);
       setCustomerName('');
+      setMpesaPhone('');
       setPaymentMethod('mpesa');
-      
-      // Show success message
+      setShowMpesaModal(false);
+
       alert(`Sale completed! Receipt #${receiptNumber} - Wesabi Pharmacy`);
     } catch (error) {
       alert('Error processing sale. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleMpesaPayment = async () => {
+    if (!mpesaPhone.trim()) {
+      alert('Please enter M-Pesa phone number');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-stkpush`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phoneNumber: mpesaPhone,
+          amount: getTotalAmount(),
+          accountReference: `SALE-${Date.now()}`,
+          transactionDesc: 'Wesabi Pharmacy Payment',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initiate M-Pesa payment');
+      }
+
+      alert('M-Pesa prompt sent! Please check your phone and enter your PIN.');
+
+      await completeSale();
+    } catch (error: any) {
+      console.error('M-Pesa payment error:', error);
+      alert(error.message || 'Failed to process M-Pesa payment. You can still complete the sale manually.');
     } finally {
       setIsProcessing(false);
     }
@@ -508,6 +563,67 @@ const POS: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* M-Pesa Payment Modal */}
+      {showMpesaModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">M-Pesa Payment</h3>
+
+            <div className="mb-4 p-4 bg-green-50 rounded-lg">
+              <p className="text-sm text-gray-600 mb-1">Total Amount</p>
+              <p className="text-2xl font-bold text-green-600">{formatKES(getTotalAmount())}</p>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Customer Phone Number
+              </label>
+              <input
+                type="tel"
+                value={mpesaPhone}
+                onChange={(e) => setMpesaPhone(e.target.value)}
+                placeholder="0712345678 or 254712345678"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Enter the phone number registered with M-Pesa
+              </p>
+            </div>
+
+            <div className="flex space-x-2">
+              <button
+                onClick={() => {
+                  setShowMpesaModal(false);
+                  setMpesaPhone('');
+                }}
+                disabled={isProcessing}
+                className="flex-1 px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMpesaPayment}
+                disabled={isProcessing || !mpesaPhone.trim()}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isProcessing ? 'Processing...' : 'Send STK Push'}
+              </button>
+              <button
+                onClick={completeSale}
+                disabled={isProcessing}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isProcessing ? 'Processing...' : 'Complete Manually'}
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500 mt-3 text-center">
+              Customer will receive a prompt on their phone to enter M-Pesa PIN
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Price History Modal */}
       {showPriceHistory && (
