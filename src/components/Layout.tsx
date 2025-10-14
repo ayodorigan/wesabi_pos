@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  Package, 
-  ShoppingCart, 
-  BarChart3, 
+import {
+  LayoutDashboard,
+  Package,
+  ShoppingCart,
+  BarChart3,
   TrendingUp,
   FileText,
   User,
   ChevronDown,
-  Settings, 
+  Settings,
   LogOut,
   Menu,
   X,
-  Pill
+  Pill,
+  FileInput,
+  FileMinus
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -32,7 +34,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   const allMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'pos', label: 'Point of Sale', icon: ShoppingCart },
+    { id: 'invoices', label: 'Invoices', icon: FileInput },
     { id: 'inventory', label: 'Inventory', icon: Package },
+    { id: 'creditnotes', label: 'Credit Notes', icon: FileMinus },
     { id: 'stocktake', label: 'Stock Take', icon: Package },
     { id: 'drugsaleshistory', label: 'Drug History', icon: FileText },
     { id: 'saleshistory', label: 'Sales History', icon: BarChart3 },

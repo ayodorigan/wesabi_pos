@@ -10,11 +10,12 @@ import POS from './components/POS';
 import Analytics from './components/Analytics';
 import Settings from './components/Settings';
 import StockTake from './components/StockTake';
-import StockTakeHistory from './components/StockTakeHistory';
 import ActivityLogs from './components/ActivityLogs';
 import SalesHistory from './components/SalesHistory';
 import SalesReports from './components/SalesReports';
 import Profile from './components/Profile';
+import InvoiceManagement from './components/InvoiceManagement';
+import CreditNotes from './components/CreditNotes';
 import { useApp } from './contexts/AppContext';
 
 const AppContent: React.FC = () => {
@@ -108,6 +109,10 @@ const AppContent: React.FC = () => {
         return <Inventory />;
       case 'pos':
         return <POS />;
+      case 'invoices':
+        return <InvoiceManagement />;
+      case 'creditnotes':
+        return <CreditNotes />;
       case 'analytics':
         return <Analytics />;
       case 'settings':

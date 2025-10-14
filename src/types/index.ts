@@ -99,3 +99,57 @@ export interface SalesHistoryItem {
   receiptNumber: string;
   saleDate: Date;
 }
+
+export interface InvoiceItem {
+  id?: string;
+  productName: string;
+  category: string;
+  batchNumber: string;
+  expiryDate: Date;
+  quantity: number;
+  costPrice: number;
+  sellingPrice: number;
+  totalCost: number;
+  barcode: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  supplier: string;
+  invoiceDate: Date;
+  totalAmount: number;
+  notes?: string;
+  userId: string;
+  userName: string;
+  items: InvoiceItem[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreditNoteItem {
+  id?: string;
+  productId: string;
+  productName: string;
+  batchNumber: string;
+  quantity: number;
+  costPrice: number;
+  totalCredit: number;
+  reason?: string;
+}
+
+export interface CreditNote {
+  id: string;
+  creditNoteNumber: string;
+  invoiceId?: string;
+  invoiceNumber: string;
+  supplier: string;
+  returnDate: Date;
+  totalAmount: number;
+  reason: string;
+  userId: string;
+  userName: string;
+  items: CreditNoteItem[];
+  createdAt: Date;
+  updatedAt: Date;
+}

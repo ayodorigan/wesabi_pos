@@ -429,7 +429,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return ['super_admin', 'admin'].includes(role);
       case 'pos':
         return ['super_admin', 'admin', 'sales'].includes(role);
+      case 'invoices':
+        return ['super_admin', 'admin', 'sales', 'inventory'].includes(role);
       case 'inventory':
+        return ['super_admin', 'admin', 'sales', 'inventory'].includes(role);
+      case 'creditnotes':
         return ['super_admin', 'admin', 'sales', 'inventory'].includes(role);
       case 'stocktake':
         return ['super_admin', 'admin', 'stock_take'].includes(role);
