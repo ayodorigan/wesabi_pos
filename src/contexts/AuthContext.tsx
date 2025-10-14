@@ -50,19 +50,6 @@ export const useAuth = () => {
   return context;
 };
 
-// Mock user for demo mode
-const MOCK_USER: AuthUser = {
-  id: '00000000-0000-0000-0000-000000000001',
-  user_id: '00000000-0000-0000-0000-000000000001',
-  email: 'admin@wesabi.co.ke',
-  name: 'Administrator',
-  role: 'super_admin',
-  phone: '+254700000001',
-  is_active: true,
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
 interface AuthProviderProps {
   children: React.ReactNode;
 }
@@ -77,9 +64,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const initAuth = async () => {
       try {
         if (!isSupabaseEnabled || !supabase) {
-          // Demo mode - use mock user
+          // No Supabase - require proper login
           if (mounted) {
-            setUser(MOCK_USER);
+            setUser(null);
             setLoading(false);
           }
           return;
@@ -87,7 +74,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         // Get initial session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+
         if (sessionError) {
           console.error('Session error:', sessionError);
           if (mounted) {
@@ -110,9 +97,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, session) => {
             if (!mounted) return;
-            
+
             console.log('Auth state changed:', event, session?.user?.id);
-            
+
             if (session?.user) {
               await loadUserProfile(session.user);
             } else {
@@ -137,7 +124,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const loadUserProfile = async (supabaseUser: SupabaseUser) => {
       if (!mounted) return;
-      
+
       try {
         if (!supabase) {
           setUser(null);
@@ -152,22 +139,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         if (error) {
           console.error('Error loading user profile:', error);
-          
-          // Create a fallback user profile
-          const fallbackUser: AuthUser = {
-            id: supabaseUser.id,
-            user_id: supabaseUser.id,
-            email: supabaseUser.email || '',
-            name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
-            role: 'super_admin', // First user gets super admin
-            phone: supabaseUser.user_metadata?.phone || '',
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          
           if (mounted) {
-            setUser(fallbackUser);
+            setUser(null);
             setLoading(false);
           }
           return;
@@ -177,14 +150,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (!profiles || profiles.length === 0) {
           // No profile found, create one
           console.log('No profile found for user, creating new profile...');
-          
+
           // Check if this is the first user (should be super admin)
           const { data: allProfiles } = await supabase
             .from('user_profiles')
             .select('id');
-          
+
           const isFirstUser = !allProfiles || allProfiles.length === 0;
-          
+
           const newProfile = {
             user_id: supabaseUser.id,
             name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
@@ -192,36 +165,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             role: isFirstUser ? 'super_admin' : (supabaseUser.user_metadata?.role || 'sales'),
             is_active: true,
           };
-          
+
           const { data: createdProfile, error: createError } = await supabase
             .from('user_profiles')
             .insert(newProfile)
             .select()
             .single();
-          
+
           if (createError) {
             console.error('Error creating user profile:', createError);
-            
-            // Fallback to a basic user profile
-            const fallbackUser: AuthUser = {
-              id: supabaseUser.id,
-              user_id: supabaseUser.id,
-              email: supabaseUser.email || '',
-              name: newProfile.name,
-              role: newProfile.role as UserProfile['role'],
-              phone: newProfile.phone || '',
-              is_active: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            };
-            
             if (mounted) {
-              setUser(fallbackUser);
+              setUser(null);
               setLoading(false);
             }
             return;
           }
-          
+
           // Use the created profile
           if (mounted) {
             setUser({
@@ -243,41 +202,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       } catch (error) {
         console.error('Error loading user profile:', error);
-        
-        // Fallback to a basic user profile
-        const fallbackUser: AuthUser = {
-          id: supabaseUser.id,
-          user_id: supabaseUser.id,
-          email: supabaseUser.email || '',
-          name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
-          role: 'super_admin',
-          phone: supabaseUser.user_metadata?.phone || '',
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        
         if (mounted) {
-          setUser(fallbackUser);
+          setUser(null);
           setLoading(false);
         }
       }
     };
 
-    // Set a timeout to prevent infinite loading
-    const timeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn('Auth initialization timeout - falling back to demo mode');
-        setUser(MOCK_USER);
-        setLoading(false);
-      }
-    }, 10000); // 10 second timeout
-
     initAuth();
 
     return () => {
       mounted = false;
-      clearTimeout(timeout);
     };
   }, []);
 

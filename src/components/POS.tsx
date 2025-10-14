@@ -455,12 +455,6 @@ const POS: React.FC = () => {
               </label>
               <input
                 type="text"
-                onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9.]/g, '');
-                  setTempPrice(value);
-                }}
-                inputMode="numeric"
-                pattern="[0-9.]*"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 placeholder="Enter customer name"
