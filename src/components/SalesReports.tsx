@@ -260,12 +260,33 @@ const SalesReports: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Average Transaction</p>
-              <p className="text-2xl font-bold text-purple-600">{formatKES(averageTransaction)}</p>
+              <p className="text-2xl font-bold text-gray-600">{formatKES(averageTransaction)}</p>
             </div>
-            <div className="bg-purple-100 p-3 rounded-full">
-              <TrendingUp className="h-6 w-6 text-purple-600" />
+            <div className="bg-gray-100 p-3 rounded-full">
+              <TrendingUp className="h-6 w-6 text-gray-600" />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Payment Method Breakdown */}
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Payment Method Breakdown</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {Object.entries(paymentMethods).map(([method, amount]) => (
+            <div key={method} className="bg-gray-50 p-4 rounded-lg">
+              <p className="text-sm font-medium text-gray-600 uppercase">{method}</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">{formatKES(amount)}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {((amount / totalRevenue) * 100).toFixed(1)}% of total
+              </p>
+            </div>
+          ))}
+          {Object.keys(paymentMethods).length === 0 && (
+            <div className="col-span-4 text-center text-gray-500 py-4">
+              No payment data available
+            </div>
+          )}
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { 
-  TrendingUp, 
+import {
+  TrendingUp,
   Download,
   Calendar,
   Filter,
@@ -10,11 +10,13 @@ import {
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { formatKES } from '../utils/currency';
+import SalesChart from './SalesChart';
 
 const Analytics: React.FC = () => {
   const { sales, products, salesHistory } = useApp();
   const [dateRange, setDateRange] = useState('7days');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [salesPeriod, setSalesPeriod] = useState<'day' | 'week' | 'month' | 'year'>('week');
 
   // Filter sales by date range
   const getFilteredSales = () => {
@@ -154,6 +156,98 @@ const Analytics: React.FC = () => {
       acc[date] = (acc[date] || 0) + item.totalRevenue;
       return acc;
     }, {} as Record<string, number>);
+
+  // Generate sales chart data based on selected period
+  const getSalesChartData = () => {
+    const now = new Date();
+    const data: { label: string; value: number }[] = [];
+
+    switch (salesPeriod) {
+      case 'day': {
+        for (let i = 6; i >= 0; i--) {
+          const date = new Date(now);
+          date.setDate(date.getDate() - i);
+          date.setHours(0, 0, 0, 0);
+          const nextDay = new Date(date);
+          nextDay.setDate(nextDay.getDate() + 1);
+
+          const daySales = filteredSales.filter(sale => {
+            const saleDate = new Date(sale.createdAt);
+            return saleDate >= date && saleDate < nextDay;
+          });
+
+          const total = daySales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+          data.push({
+            label: date.toLocaleDateString('en-KE', { weekday: 'short' }),
+            value: total
+          });
+        }
+        break;
+      }
+      case 'week': {
+        for (let i = 3; i >= 0; i--) {
+          const weekStart = new Date(now);
+          weekStart.setDate(weekStart.getDate() - (i * 7 + 6));
+          weekStart.setHours(0, 0, 0, 0);
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekEnd.getDate() + 7);
+
+          const weekSales = filteredSales.filter(sale => {
+            const saleDate = new Date(sale.createdAt);
+            return saleDate >= weekStart && saleDate < weekEnd;
+          });
+
+          const total = weekSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+          data.push({
+            label: `Week ${4 - i}`,
+            value: total
+          });
+        }
+        break;
+      }
+      case 'month': {
+        for (let i = 5; i >= 0; i--) {
+          const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+
+          const monthSales = filteredSales.filter(sale => {
+            const saleDate = new Date(sale.createdAt);
+            return saleDate >= monthStart && saleDate < monthEnd;
+          });
+
+          const total = monthSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+          data.push({
+            label: monthStart.toLocaleDateString('en-KE', { month: 'short' }),
+            value: total
+          });
+        }
+        break;
+      }
+      case 'year': {
+        for (let i = 4; i >= 0; i--) {
+          const year = now.getFullYear() - i;
+          const yearStart = new Date(year, 0, 1);
+          const yearEnd = new Date(year + 1, 0, 1);
+
+          const yearSales = filteredSales.filter(sale => {
+            const saleDate = new Date(sale.createdAt);
+            return saleDate >= yearStart && saleDate < yearEnd;
+          });
+
+          const total = yearSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+          data.push({
+            label: year.toString(),
+            value: total
+          });
+        }
+        break;
+      }
+    }
+
+    return data;
+  };
+
+  const salesChartData = getSalesChartData();
 
   const exportAnalytics = () => {
     try {
@@ -298,6 +392,32 @@ const Analytics: React.FC = () => {
             </select>
           </div>
         </div>
+      </div>
+
+      {/* Sales Graph */}
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-semibold text-gray-900">Sales Trends</h2>
+          <div className="flex space-x-2">
+            {(['day', 'week', 'month', 'year'] as const).map((period) => (
+              <button
+                key={period}
+                onClick={() => setSalesPeriod(period)}
+                className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                  salesPeriod === period
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {period.charAt(0).toUpperCase() + period.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <SalesChart
+          data={salesChartData}
+          title={`Sales by ${salesPeriod.charAt(0).toUpperCase() + salesPeriod.slice(1)}`}
+        />
       </div>
 
       {/* Summary Cards */}
