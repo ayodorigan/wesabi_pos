@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, FileText, Trash2, Eye, Package } from 'lucide-react';
+import { Plus, Search, FileText, Trash2, Eye, Package, Edit, Upload } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Invoice, InvoiceItem } from '../types';
@@ -9,9 +9,11 @@ import { useApp } from '../contexts/AppContext';
 
 const InvoiceManagement: React.FC = () => {
   const { user } = useAuth();
-  const { categories, suppliers, addCategory, addSupplier, medicineTemplates, getMedicineByName } = useApp();
+  const { categories, suppliers, addCategory, addSupplier, medicineTemplates, getMedicineByName, refreshData } = useApp();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -19,7 +21,6 @@ const InvoiceManagement: React.FC = () => {
     invoiceNumber: '',
     supplier: '',
     invoiceDate: new Date().toISOString().split('T')[0],
-    notes: '',
   });
 
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
@@ -187,7 +188,6 @@ const InvoiceManagement: React.FC = () => {
           supplier: invoiceData.supplier,
           invoice_date: invoiceData.invoiceDate,
           total_amount: totalAmount,
-          notes: invoiceData.notes,
           user_id: user.user_id,
           user_name: user.name,
         })
@@ -202,7 +202,7 @@ const InvoiceManagement: React.FC = () => {
           .select('*')
           .eq('name', item.productName)
           .eq('batch_number', item.batchNumber)
-          .single();
+          .maybeSingle();
 
         let productId = existingProduct?.id;
 
@@ -260,10 +260,11 @@ const InvoiceManagement: React.FC = () => {
         if (itemError) throw itemError;
       }
 
+      await refreshData();
       await loadInvoices();
       setShowAddForm(false);
       resetForm();
-      alert('Invoice saved successfully!');
+      alert('Invoice saved successfully! Inventory updated.');
     } catch (error: any) {
       console.error('Error saving invoice:', error);
       alert(`Failed to save invoice: ${error.message}`);
@@ -272,12 +273,99 @@ const InvoiceManagement: React.FC = () => {
     }
   };
 
+  const deleteInvoice = async (invoiceId: string) => {
+    if (!confirm('Are you sure you want to delete this invoice? This will NOT reverse inventory changes.')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (!supabase) return;
+
+      const { error } = await supabase
+        .from('invoices')
+        .delete()
+        .eq('id', invoiceId);
+
+      if (error) throw error;
+
+      await loadInvoices();
+      alert('Invoice deleted successfully');
+    } catch (error: any) {
+      console.error('Error deleting invoice:', error);
+      alert(`Failed to delete invoice: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const viewInvoice = (invoice: Invoice) => {
+    setSelectedInvoice(invoice);
+    setShowViewModal(true);
+  };
+
+  const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const csvText = e.target?.result as string;
+      const lines = csvText.split('\n').filter(line => line.trim());
+
+      if (lines.length < 2) {
+        alert('CSV file is empty or invalid');
+        return;
+      }
+
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+
+      const requiredHeaders = ['productname', 'category', 'batchnumber', 'expirydate', 'quantity', 'costprice', 'sellingprice'];
+      const hasAllHeaders = requiredHeaders.every(h => headers.includes(h));
+
+      if (!hasAllHeaders) {
+        alert('CSV must have columns: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice, SellingPrice');
+        return;
+      }
+
+      const items: InvoiceItem[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim());
+        const row: any = {};
+
+        headers.forEach((header, index) => {
+          row[header] = values[index] || '';
+        });
+
+        if (!row.productname || !row.quantity || !row.costprice) continue;
+
+        items.push({
+          productName: row.productname,
+          category: row.category || 'General',
+          batchNumber: row.batchnumber || '',
+          expiryDate: row.expirydate ? new Date(row.expirydate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          quantity: parseInt(row.quantity) || 0,
+          costPrice: parseFloat(row.costprice) || 0,
+          sellingPrice: parseFloat(row.sellingprice) || calculateSellingPrice(parseFloat(row.costprice) || 0),
+          totalCost: (parseInt(row.quantity) || 0) * (parseFloat(row.costprice) || 0),
+          barcode: row.barcode || `${Date.now()}-${i}`,
+        });
+      }
+
+      setInvoiceItems(items);
+      alert(`Imported ${items.length} items from CSV`);
+    };
+
+    reader.readAsText(file);
+    event.target.value = '';
+  };
+
   const resetForm = () => {
     setInvoiceData({
       invoiceNumber: '',
       supplier: '',
       invoiceDate: new Date().toISOString().split('T')[0],
-      notes: '',
     });
     setInvoiceItems([]);
     setCurrentItem({
@@ -337,6 +425,7 @@ const InvoiceManagement: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Added By</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -358,11 +447,29 @@ const InvoiceManagement: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap font-medium">{formatKES(invoice.totalAmount)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{invoice.userName}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => viewInvoice(invoice)}
+                        className="text-blue-600 hover:text-blue-800"
+                        title="View"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => deleteInvoice(invoice.id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {filteredInvoices.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                     No invoices found
                   </td>
                 </tr>
@@ -372,6 +479,77 @@ const InvoiceManagement: React.FC = () => {
         </div>
       </div>
 
+      {/* View Invoice Modal */}
+      {showViewModal && selectedInvoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Invoice Details</h3>
+
+              <div className="grid grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="text-sm text-gray-600">Invoice Number</p>
+                  <p className="font-semibold">{selectedInvoice.invoiceNumber}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Supplier</p>
+                  <p className="font-semibold">{selectedInvoice.supplier}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Date</p>
+                  <p className="font-semibold">{selectedInvoice.invoiceDate.toLocaleDateString('en-KE')}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Amount</p>
+                  <p className="font-semibold text-green-600">{formatKES(selectedInvoice.totalAmount)}</p>
+                </div>
+              </div>
+
+              <h4 className="font-semibold mb-2">Items ({selectedInvoice.items.length})</h4>
+              <div className="border rounded-lg overflow-hidden mb-4">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {selectedInvoice.items.map((item, index) => (
+                      <tr key={index}>
+                        <td className="px-3 py-2 text-sm">{item.productName}</td>
+                        <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
+                        <td className="px-3 py-2 text-sm">{item.quantity}</td>
+                        <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
+                        <td className="px-3 py-2 text-sm">{formatKES(item.sellingPrice)}</td>
+                        <td className="px-3 py-2 text-sm font-medium">{formatKES(item.totalCost)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setSelectedInvoice(null);
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Invoice Modal */}
       {showAddForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
@@ -414,14 +592,20 @@ const InvoiceManagement: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea
-                  value={invoiceData.notes}
-                  onChange={(e) => setInvoiceData({ ...invoiceData, notes: e.target.value })}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Upload className="h-4 w-4 inline mr-2" />
+                  Import Items from CSV
+                </label>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleImportCSV}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  CSV format: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice, SellingPrice
+                </p>
               </div>
 
               <div className="border-t pt-4 mb-4">

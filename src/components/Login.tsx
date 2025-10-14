@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Pill, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -15,6 +15,33 @@ const Login: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [showSignUpOption, setShowSignUpOption] = useState(false);
+
+  useEffect(() => {
+    checkIfUsersExist();
+  }, []);
+
+  const checkIfUsersExist = async () => {
+    try {
+      if (!supabase) return;
+
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking users:', error);
+        setShowSignUpOption(false);
+        return;
+      }
+
+      setShowSignUpOption(!data || data.length === 0);
+    } catch (error) {
+      console.error('Error checking users:', error);
+      setShowSignUpOption(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,18 +222,20 @@ const Login: React.FC = () => {
           </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setError('');
-              setSuccess('');
-            }}
-            className="text-sm text-green-600 hover:text-green-700"
-          >
-            {isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
-          </button>
-        </div>
+        {showSignUpOption && (
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError('');
+                setSuccess('');
+              }}
+              className="text-sm text-green-600 hover:text-green-700"
+            >
+              {isSignUp ? 'Already have an account? Sign in' : 'No users exist. Create first admin account'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
