@@ -1,10 +1,10 @@
-# M-Pesa Integration Setup Guide
+# M-Pesa Integration Setup Guide for Till Numbers
 
-This guide will help you set up M-Pesa STK Push payments for Wesabi Pharmacy POS system.
+This guide will help you set up M-Pesa STK Push payments for Wesabi Pharmacy POS system using a **Till Number**.
 
 ## Prerequisites
 
-1. A Safaricom M-Pesa Paybill or Till Number
+1. A Safaricom M-Pesa **Till Number** (Not Paybill)
 2. Access to Safaricom Daraja API Portal (https://developer.safaricom.co.ke)
 3. Supabase account with your project set up
 
@@ -29,94 +29,157 @@ This guide will help you set up M-Pesa STK Push payments for Wesabi Pharmacy POS
    - **Consumer Key**
    - **Consumer Secret**
 
-## Step 3: Get Your M-Pesa Credentials
+## Step 3: Understanding Till Number Setup
 
-### For Sandbox Testing (Development)
+### IMPORTANT: Till Number in Daraja Portal
 
-1. In Daraja portal, go to your app
-2. Under "Test Credentials", you'll find:
-   - **Consumer Key** (Sandbox)
-   - **Consumer Secret** (Sandbox)
-   - **Test Shortcode**: 174379
-   - **Passkey**: Available in Lipa Na M-Pesa Online documentation
+When you check your app in the Daraja portal, you'll see **"Shortcode: N/A"**. This is **NORMAL** for Till Numbers!
 
-### For Production (Live)
+**Your Till Number IS your Shortcode.**
 
-1. Apply for Go-Live approval in Daraja portal
-2. Once approved, you'll receive production credentials
-3. You'll use your actual **Paybill Number** or **Till Number** as the shortcode
-4. You'll receive a production **Passkey** from Safaricom
+For example:
+- If your Till Number is **987654**, then use **987654** as your `MPESA_SHORTCODE`
+
+### Getting Your Credentials
+
+You need 4 things for Till Number setup:
+
+1. ✅ **Consumer Key** - From your Daraja app (Step 2)
+2. ✅ **Consumer Secret** - From your Daraja app (Step 2)
+3. ✅ **Shortcode** - This is your Till Number (e.g., 987654)
+4. ❓ **PassKey** - See below
+
+### Getting the PassKey for Till Number
+
+The PassKey is NOT shown in the Daraja portal. Here are 3 ways to get it:
+
+#### Option 1: Use the Standard Till PassKey (Recommended - Try This First)
+
+Most Till Numbers use this standard PassKey:
+```
+bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919
+```
+
+This is the same PassKey used for sandbox testing and works for most production Till Numbers.
+
+#### Option 2: Contact Safaricom Support
+
+If Option 1 doesn't work, contact Safaricom:
+- **Email**: apisupport@safaricom.co.ke
+- **Phone**: 0711 051 000
+- **Request**: "I need the Lipa Na M-Pesa PassKey for my Till Number [YOUR_TILL_NUMBER] to integrate with Daraja API"
+
+#### Option 3: Check M-Pesa Business Portal
+
+1. Log in to https://org.ke.m-pesa.com
+2. Go to "Organization Settings" → "API Settings"
+3. Look for "Lipa Na M-Pesa PassKey"
 
 ## Step 4: Set Up Environment Variables in Supabase
 
 1. Go to your Supabase project dashboard
-2. Navigate to **Project Settings** → **Edge Functions** → **Secrets**
-3. Add the following secrets:
+2. Navigate to **Project Settings** → **Edge Functions** (or **Functions**)
+3. Click on **Secrets** (or **Environment Variables**)
+4. Add the following secrets one by one:
 
-### Required Secrets:
+### Required Secrets for Till Number:
 
 ```
-MPESA_CONSUMER_KEY=your_consumer_key_here
-MPESA_CONSUMER_SECRET=your_consumer_secret_here
-MPESA_SHORTCODE=your_paybill_or_till_number
-MPESA_PASSKEY=your_passkey_here
-MPESA_CALLBACK_URL=https://your-project.supabase.co/functions/v1/mpesa-callback
-MPESA_ENVIRONMENT=sandbox
+Secret Name: MPESA_CONSUMER_KEY
+Value: [Your Consumer Key from Daraja - Production Credentials]
+
+Secret Name: MPESA_CONSUMER_SECRET
+Value: [Your Consumer Secret from Daraja - Production Credentials]
+
+Secret Name: MPESA_SHORTCODE
+Value: [Your Till Number, e.g., 987654]
+
+Secret Name: MPESA_PASSKEY
+Value: bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919
+
+Secret Name: MPESA_CALLBACK_URL
+Value: https://[your-project-ref].supabase.co/functions/v1/mpesa-callback
+
+Secret Name: MPESA_ENVIRONMENT
+Value: production
 ```
 
-### For Paybill Setup:
-- Use your Paybill Business Number as `MPESA_SHORTCODE`
-- TransactionType is already set to `CustomerPayBillOnline`
+**Note**: Replace `[your-project-ref]` in the callback URL with your actual Supabase project reference. You can find this in your Supabase project URL.
 
-### For Till Number Setup:
-- Use your Till Number as `MPESA_SHORTCODE`
-- TransactionType is already set to `CustomerPayBillOnline` (works for both)
+## Step 5: Understanding the Callback URL
 
-### Environment Setting:
-- Use `sandbox` for testing
-- Use `production` for live transactions
+### What is a Callback URL?
 
-## Step 5: Test the Integration
+A callback URL is where M-Pesa sends a confirmation after processing a payment. Think of it as:
+- You send a payment request to M-Pesa
+- Customer enters PIN on their phone
+- M-Pesa processes the payment
+- M-Pesa sends the result back to your callback URL
 
-### Sandbox Testing
+### Setting Up the Callback URL
 
-1. Set `MPESA_ENVIRONMENT=sandbox`
-2. Use Safaricom's test credentials
-3. Test phone numbers (provided by Safaricom):
-   - 254708374149
-   - 254729876543
-4. Test transactions in the POS system
+The callback URL is **already handled automatically** by your Supabase Edge Function. You don't need to create it yourself!
 
-### Production Testing
+Your callback URL format:
+```
+https://[your-project-ref].supabase.co/functions/v1/mpesa-callback
+```
 
-1. Set `MPESA_ENVIRONMENT=production`
-2. Use your production credentials
-3. Test with a real phone number and small amount (e.g., KES 1)
-4. Verify the payment is received in your Paybill/Till
+**Example**:
+If your Supabase project URL is `https://abc123xyz.supabase.co`, then your callback URL is:
+```
+https://abc123xyz.supabase.co/functions/v1/mpesa-callback
+```
+
+### What the Callback Does
+
+When M-Pesa sends payment confirmation to your callback URL:
+1. The system receives the payment details
+2. Records customer phone number
+3. Records transaction reference
+4. Updates payment status
+5. Records transaction in database
+
+**Note**: You'll need to create the `mpesa-callback` edge function to handle these confirmations (see below).
+
+## Step 6: Test the Integration
+
+### Testing with Real Till Number
+
+1. Make sure all secrets are set in Supabase (Step 4)
+2. Set `MPESA_ENVIRONMENT=production`
+3. In your POS system, try a small transaction (e.g., KES 10)
+4. Enter your own phone number
+5. You should receive an STK Push prompt on your phone
+6. Enter your M-Pesa PIN
+7. Payment should be completed and received in your Till
+
+### Testing Tips
+
+- Start with very small amounts (KES 10)
+- Use your own phone number first
+- Check your Till balance to confirm payment received
+- Check Supabase logs for any errors
+
+## Step 7: Recording Customer Details from M-Pesa
+
+To record customer details (phone number, name, etc.) from M-Pesa payments, you need to create a callback handler:
+
+### Create M-Pesa Callback Edge Function
+
+The callback function will automatically receive:
+- Customer phone number
+- Transaction amount
+- M-Pesa receipt number
+- Transaction timestamp
+
+These details are automatically saved when the payment is completed.
 
 ## Important Notes
 
-### Callback URL
-The callback URL is where M-Pesa will send payment confirmation. The edge function is already deployed at:
-```
-https://your-project-ref.supabase.co/functions/v1/mpesa-callback
-```
-
-Replace `your-project-ref` with your actual Supabase project reference.
-
-### Security
-- Never commit M-Pesa credentials to version control
-- Use Supabase Secrets for all credentials
-- Credentials are automatically available to Edge Functions
-
-### Transaction Limits
-- **Sandbox**: No real money is transferred
-- **Production Paybill**:
-  - Minimum: KES 10
-  - Maximum: KES 150,000
-- **Production Till**:
-  - Minimum: KES 10
-  - Maximum: KES 70,000
+### Transaction Limits for Till Number
+- **Minimum**: KES 10
+- **Maximum**: KES 70,000 per transaction
 
 ### Phone Number Format
 The system automatically formats phone numbers:
@@ -124,32 +187,84 @@ The system automatically formats phone numbers:
 - `712345678` → `254712345678`
 - `254712345678` → `254712345678`
 
+### Security
+- Never share your Consumer Key, Consumer Secret, or PassKey
+- Never commit credentials to code
+- All credentials are stored securely in Supabase Secrets
+- Credentials are automatically available to your Edge Functions
+
 ## Troubleshooting
 
 ### "M-Pesa credentials not configured"
-- Check that all required secrets are set in Supabase
-- Verify secret names match exactly (case-sensitive)
+**Solution**:
+- Go to Supabase → Project Settings → Edge Functions → Secrets
+- Verify all 6 secrets are added (MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_SHORTCODE, MPESA_PASSKEY, MPESA_CALLBACK_URL, MPESA_ENVIRONMENT)
+- Make sure there are no extra spaces in the values
 
 ### "Failed to get M-Pesa access token"
-- Verify Consumer Key and Secret are correct
-- Check that the app has STK Push API enabled
-- Ensure you're using the correct environment (sandbox/production)
-
-### "Invalid Access Token"
-- Consumer Key/Secret might be incorrect
+**Solution**:
+- Verify your Consumer Key and Consumer Secret are correct
+- Make sure you're using **Production Credentials**, not Test Credentials
+- Check that your Daraja app has "Lipa Na M-Pesa Online" API enabled
 - Try regenerating credentials in Daraja portal
 
-### "The service request is processed successfully"
-- Payment initiated successfully
-- User should check their phone for M-Pesa prompt
-- If no prompt appears, verify phone number is correct
+### "Invalid Shortcode"
+**Solution**:
+- Use your Till Number directly (e.g., 987654)
+- Don't add any prefixes or spaces
+- Verify your Till Number is correct by checking your M-Pesa statement
+
+### No STK Push received on phone
+**Solution**:
+- Verify phone number format is correct (254XXXXXXXXX)
+- Make sure the phone number is registered for M-Pesa
+- Check that the phone has network coverage
+- Verify amount is between KES 10 and KES 70,000
+
+### "Invalid Passkey"
+**Solution**:
+- First try the standard PassKey: `bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919`
+- If that doesn't work, contact Safaricom support for your specific Till PassKey
+
+## Quick Reference
+
+### For Sandbox Testing (Development)
+```
+MPESA_CONSUMER_KEY=[From Daraja Test Credentials]
+MPESA_CONSUMER_SECRET=[From Daraja Test Credentials]
+MPESA_SHORTCODE=174379
+MPESA_PASSKEY=bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919
+MPESA_CALLBACK_URL=https://[project-ref].supabase.co/functions/v1/mpesa-callback
+MPESA_ENVIRONMENT=sandbox
+```
+
+### For Production with Till Number
+```
+MPESA_CONSUMER_KEY=[From Daraja Production Credentials]
+MPESA_CONSUMER_SECRET=[From Daraja Production Credentials]
+MPESA_SHORTCODE=[Your Till Number]
+MPESA_PASSKEY=bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919
+MPESA_CALLBACK_URL=https://[project-ref].supabase.co/functions/v1/mpesa-callback
+MPESA_ENVIRONMENT=production
+```
 
 ## Support
 
-For M-Pesa specific issues:
-- Safaricom Daraja Support: https://developer.safaricom.co.ke/support
-- Email: apisupport@safaricom.co.ke
+### For M-Pesa Setup Issues:
+- **Daraja Support**: https://developer.safaricom.co.ke/support
+- **Email**: apisupport@safaricom.co.ke
+- **Phone**: 0711 051 000
 
-For application issues:
-- Check Supabase Edge Function logs
+### For Application Issues:
+- Check Supabase Edge Function logs in your project dashboard
 - Verify all environment variables are set correctly
+- Test with sandbox environment first before going live
+
+## Next Steps
+
+After successful setup:
+1. Test thoroughly with small amounts
+2. Train staff on handling M-Pesa payments
+3. Monitor transactions in your Till statement
+4. Keep your credentials secure
+5. Regularly check Supabase logs for any errors
