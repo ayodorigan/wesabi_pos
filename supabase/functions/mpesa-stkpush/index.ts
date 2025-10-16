@@ -38,7 +38,8 @@ Deno.serve(async (req: Request) => {
     const MPESA_CONSUMER_SECRET = Deno.env.get('MPESA_CONSUMER_SECRET');
     const MPESA_SHORTCODE = Deno.env.get('MPESA_SHORTCODE');
     const MPESA_PASSKEY = Deno.env.get('MPESA_PASSKEY');
-    const MPESA_CALLBACK_URL = Deno.env.get('MPESA_CALLBACK_URL') || 'https://your-domain.com/mpesa/callback';
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const MPESA_CALLBACK_URL = Deno.env.get('MPESA_CALLBACK_URL') || `${supabaseUrl}/functions/v1/mpesa-callback`;
     const MPESA_ENVIRONMENT = Deno.env.get('MPESA_ENVIRONMENT') || 'sandbox';
 
     if (!MPESA_CONSUMER_KEY || !MPESA_CONSUMER_SECRET || !MPESA_SHORTCODE || !MPESA_PASSKEY) {
