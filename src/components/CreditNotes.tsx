@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, FileText, Trash2 } from 'lucide-react';
+import { Plus, Search, FileText, Trash2, Download, Eye, Edit } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { CreditNote, CreditNoteItem, Product } from '../types';
@@ -12,6 +12,9 @@ const CreditNotes: React.FC = () => {
   const { suppliers, products, refreshData } = useApp();
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedCreditNote, setSelectedCreditNote] = useState<CreditNote | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -218,10 +221,11 @@ const CreditNotes: React.FC = () => {
         if (itemError) throw itemError;
       }
 
+      setLoading(false);
       await loadCreditNotes();
       await refreshData();
-      setShowAddForm(false);
       resetForm();
+      setShowAddForm(false);
       alert('Credit note saved successfully!');
     } catch (error: any) {
       console.error('Error saving credit note:', error);
@@ -246,6 +250,110 @@ const CreditNotes: React.FC = () => {
       costPrice: '',
       reason: '',
     });
+    setIsEditing(false);
+    setSelectedCreditNote(null);
+  };
+
+  const viewCreditNote = (creditNote: CreditNote) => {
+    setSelectedCreditNote(creditNote);
+    setShowViewModal(true);
+  };
+
+  const deleteCreditNote = async (creditNoteId: string) => {
+    if (!confirm('Are you sure you want to delete this credit note? This will NOT reverse inventory changes.')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (!supabase) return;
+
+      const { error } = await supabase
+        .from('credit_notes')
+        .delete()
+        .eq('id', creditNoteId);
+
+      if (error) throw error;
+
+      await refreshData();
+      await loadCreditNotes();
+      alert('Credit note deleted successfully');
+    } catch (error: any) {
+      console.error('Error deleting credit note:', error);
+      alert(`Failed to delete credit note: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportCreditNotesToPDF = () => {
+    try {
+      if (filteredCreditNotes.length === 0) {
+        alert('No credit notes to export');
+        return;
+      }
+
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Credit Notes Report - ${new Date().toLocaleDateString('en-KE')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 10px 6px; text-align: left; border: 1px solid #333; font-size: 12px; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    .summary { margin-bottom: 20px; }
+    @media print { body { margin: 0; } .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - CREDIT NOTES REPORT</h1>
+  <div class="summary">
+    <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+    <p><strong>Total Credit Notes:</strong> ${filteredCreditNotes.length}</p>
+    <p><strong>Total Credit Amount:</strong> ${formatKES(filteredCreditNotes.reduce((sum, cn) => sum + cn.totalAmount, 0))}</p>
+  </div>
+
+  <table>
+    <tr>
+      <th>Credit Note #</th>
+      <th>Invoice #</th>
+      <th>Supplier</th>
+      <th>Return Date</th>
+      <th>Items</th>
+      <th>Total Credit</th>
+    </tr>
+    ${filteredCreditNotes.map(cn => `
+    <tr>
+      <td>${cn.creditNoteNumber}</td>
+      <td>${cn.invoiceNumber}</td>
+      <td>${cn.supplier}</td>
+      <td>${cn.returnDate.toLocaleDateString('en-KE')}</td>
+      <td>${cn.items.length} items</td>
+      <td>${formatKES(cn.totalAmount)}</td>
+    </tr>
+    `).join('')}
+  </table>
+</body>
+</html>`;
+
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(content);
+        printWindow.document.close();
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      } else {
+        alert('Please allow popups to export PDF reports');
+      }
+    } catch (error) {
+      console.error('Error exporting credit notes:', error);
+      alert('Error generating PDF report. Please try again.');
+    }
   };
 
   const filteredCreditNotes = creditNotes.filter(creditNote =>
@@ -263,13 +371,22 @@ const CreditNotes: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900">Credit Notes</h1>
           <p className="text-gray-600">Manage drug returns and credit notes</p>
         </div>
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-        >
-          <Plus className="h-4 w-4" />
-          <span>New Credit Note</span>
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={exportCreditNotesToPDF}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <Download className="h-4 w-4" />
+            <span>Export</span>
+          </button>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            <Plus className="h-4 w-4" />
+            <span>New Credit Note</span>
+          </button>
+        </div>
       </div>
 
       <div className="bg-white p-4 rounded-lg shadow-sm border">
@@ -296,7 +413,7 @@ const CreditNotes: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Return Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Credit</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -313,7 +430,24 @@ const CreditNotes: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">{creditNote.returnDate.toLocaleDateString('en-KE')}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{creditNote.items.length} items</td>
                   <td className="px-6 py-4 whitespace-nowrap font-medium text-red-600">{formatKES(creditNote.totalAmount)}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{creditNote.reason}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => viewCreditNote(creditNote)}
+                        className="text-blue-600 hover:text-blue-800"
+                        title="View"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => deleteCreditNote(creditNote.id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {filteredCreditNotes.length === 0 && (
@@ -506,6 +640,91 @@ const CreditNotes: React.FC = () => {
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                 >
                   {loading ? 'Saving...' : 'Save Credit Note'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Credit Note Modal */}
+      {showViewModal && selectedCreditNote && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Credit Note Details</h3>
+
+              <div className="grid grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="text-sm text-gray-600">Credit Note Number</p>
+                  <p className="font-semibold">{selectedCreditNote.creditNoteNumber}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Invoice Number</p>
+                  <p className="font-semibold">{selectedCreditNote.invoiceNumber}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Supplier</p>
+                  <p className="font-semibold">{selectedCreditNote.supplier}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Return Date</p>
+                  <p className="font-semibold">{selectedCreditNote.returnDate.toLocaleDateString('en-KE')}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Credit</p>
+                  <p className="font-semibold text-red-600">{formatKES(selectedCreditNote.totalAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Created By</p>
+                  <p className="font-semibold">{selectedCreditNote.userName}</p>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <h4 className="font-semibold mb-2">Items Returned</h4>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total Credit</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {selectedCreditNote.items.map((item, index) => (
+                        <tr key={index}>
+                          <td className="px-3 py-2 text-sm">{item.productName}</td>
+                          <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
+                          <td className="px-3 py-2 text-sm">{item.quantity}</td>
+                          <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
+                          <td className="px-3 py-2 text-sm font-medium text-red-600">{formatKES(item.totalCredit)}</td>
+                          <td className="px-3 py-2 text-sm">{item.reason || '-'}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-gray-50 font-semibold">
+                        <td colSpan={4} className="px-3 py-2 text-right">Total:</td>
+                        <td className="px-3 py-2 text-red-600">{formatKES(selectedCreditNote.totalAmount)}</td>
+                        <td></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setSelectedCreditNote(null);
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                  Close
                 </button>
               </div>
             </div>

@@ -146,7 +146,7 @@ const InvoiceManagement: React.FC = () => {
       barcode: currentItem.barcode || `${Date.now()}`,
     };
 
-    setInvoiceItems([...invoiceItems, newItem]);
+    setInvoiceItems([newItem, ...invoiceItems]);
 
     setCurrentItem({
       productName: '',
@@ -260,10 +260,11 @@ const InvoiceManagement: React.FC = () => {
         if (itemError) throw itemError;
       }
 
+      setLoading(false);
       await refreshData();
       await loadInvoices();
-      setShowAddForm(false);
       resetForm();
+      setShowAddForm(false);
       alert('Invoice saved successfully! Inventory updated.');
     } catch (error: any) {
       console.error('Error saving invoice:', error);
