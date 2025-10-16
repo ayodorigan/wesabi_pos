@@ -70,36 +70,41 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Load data from database
   const refreshData = async () => {
     setLoading(true);
+    let hasError = false;
+
     try {
       // Skip database operations if Supabase is not enabled
       if (!isSupabaseEnabled) {
         console.log('Supabase not configured - running in demo mode with mock data only');
+        setLoading(false);
         return;
       }
 
       // Additional safety check for supabase client
       if (!supabase) {
         console.warn('Supabase client not initialized - running in demo mode');
+        setLoading(false);
         return;
       }
-      
+
       // Declare variables at function scope
       let formattedProducts: Product[] = [];
       let formattedSales: Sale[] = [];
       let formattedStockTakes: StockTake[] = [];
       let formattedLogs: ActivityLog[] = [];
-      
-      // Load products
-      const { data: productsData, error: productsError } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
 
-      if (productsError) {
-        console.error('Error loading products:', productsError);
-        return; // Exit early on error
-      } else {
-        formattedProducts = (productsData || []).map(product => ({
+      // Load products - don't exit early on error, just log it
+      try {
+        const { data: productsData, error: productsError } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (productsError) {
+          console.error('Error loading products:', productsError);
+          hasError = true;
+        } else {
+          formattedProducts = (productsData || []).map(product => ({
           id: product.id,
           name: product.name,
           category: product.category,
@@ -148,31 +153,36 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           }));
         }
 
-        setProducts(formattedProducts);
+          setProducts(formattedProducts);
+        }
+      } catch (error) {
+        console.error('Error in products loading block:', error);
+        hasError = true;
       }
 
-      // Load sales
-      const { data: salesData, error: salesError } = await supabase
-        .from('sales')
-        .select(`
-          *,
-          sale_items (
-            id,
-            product_id,
-            product_name,
-            quantity,
-            unit_price,
-            total_price,
-            batch_number
-          )
-        `)
-        .order('created_at', { ascending: false });
+      // Load sales - don't exit early on error
+      try {
+        const { data: salesData, error: salesError } = await supabase
+          .from('sales')
+          .select(`
+            *,
+            sale_items (
+              id,
+              product_id,
+              product_name,
+              quantity,
+              unit_price,
+              total_price,
+              batch_number
+            )
+          `)
+          .order('created_at', { ascending: false });
 
-      if (salesError) {
-        console.error('Error loading sales:', salesError);
-        return; // Exit early on error
-      } else {
-        formattedSales = (salesData || []).map(sale => ({
+        if (salesError) {
+          console.error('Error loading sales:', salesError);
+          hasError = true;
+        } else {
+          formattedSales = (salesData || []).map(sale => ({
           id: sale.id,
           receiptNumber: sale.receipt_number,
           customerName: sale.customer_name,
@@ -190,19 +200,24 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           })),
           createdAt: new Date(sale.created_at),
         }));
-        setSales(formattedSales);
+          setSales(formattedSales);
+        }
+      } catch (error) {
+        console.error('Error in sales loading block:', error);
+        hasError = true;
       }
 
       // Load stock takes
-      const { data: stockTakesData, error: stockTakesError } = await supabase
-        .from('stock_takes')
-        .select('*')
-        .order('created_at', { ascending: false });
+      try {
+        const { data: stockTakesData, error: stockTakesError } = await supabase
+          .from('stock_takes')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      if (stockTakesError) {
-        console.error('Error loading stock takes:', stockTakesError);
-        return; // Exit early on error
-      } else {
+        if (stockTakesError) {
+          console.error('Error loading stock takes:', stockTakesError);
+          hasError = true;
+        } else {
         formattedStockTakes = (stockTakesData || []).map(stockTake => ({
           id: stockTake.id,
           productId: stockTake.product_id,
@@ -215,20 +230,25 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           userName: stockTake.user_name,
           createdAt: new Date(stockTake.created_at),
         }));
-        setStockTakes(formattedStockTakes);
+          setStockTakes(formattedStockTakes);
+        }
+      } catch (error) {
+        console.error('Error in stock takes loading block:', error);
+        hasError = true;
       }
 
       // Load activity logs
-      const { data: logsData, error: logsError } = await supabase
-        .from('activity_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
+      try {
+        const { data: logsData, error: logsError } = await supabase
+          .from('activity_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(100);
 
-      if (logsError) {
-        console.error('Error loading activity logs:', logsError);
-        return; // Exit early on error
-      } else {
+        if (logsError) {
+          console.error('Error loading activity logs:', logsError);
+          hasError = true;
+        } else {
         formattedLogs = (logsData || []).map(log => ({
           id: log.id,
           userId: log.user_id || 'demo-user',
@@ -237,19 +257,24 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           details: log.details,
           timestamp: new Date(log.created_at),
         }));
-        setActivityLogs(formattedLogs);
+          setActivityLogs(formattedLogs);
+        }
+      } catch (error) {
+        console.error('Error in activity logs loading block:', error);
+        hasError = true;
       }
 
       // Load stock take sessions
-      const { data: sessionsData, error: sessionsError } = await supabase
-        .from('stock_take_sessions')
-        .select('*')
-        .order('created_at', { ascending: false });
+      try {
+        const { data: sessionsData, error: sessionsError } = await supabase
+          .from('stock_take_sessions')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      if (sessionsError) {
-        console.error('Error loading stock take sessions:', sessionsError);
-        return; // Exit early on error
-      } else {
+        if (sessionsError) {
+          console.error('Error loading stock take sessions:', sessionsError);
+          hasError = true;
+        } else {
         const formattedSessions = (sessionsData || []).map(session => ({
           id: session.id,
           name: session.name,
@@ -259,7 +284,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           createdAt: new Date(session.created_at),
           completedAt: session.completed_at ? new Date(session.completed_at) : null,
         }));
-        setStockTakeSessions(formattedSessions);
+          setStockTakeSessions(formattedSessions);
+        }
+      } catch (error) {
+        console.error('Error in stock take sessions loading block:', error);
+        hasError = true;
       }
 
       // Generate sales history from sales data

@@ -6,6 +6,7 @@ import { CreditNote, CreditNoteItem, Product } from '../types';
 import { formatKES } from '../utils/currency';
 import AutocompleteInput from './AutocompleteInput';
 import { useApp } from '../contexts/AppContext';
+import ShareButton from './ShareButton';
 
 const CreditNotes: React.FC = () => {
   const { user } = useAuth();
@@ -354,6 +355,120 @@ const CreditNotes: React.FC = () => {
       console.error('Error exporting credit notes:', error);
       alert('Error generating PDF report. Please try again.');
     }
+  };
+
+  const exportSingleCreditNote = (creditNote: CreditNote) => {
+    try {
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Credit Note ${creditNote.creditNoteNumber}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 10px 6px; text-align: left; border: 1px solid #333; font-size: 12px; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    .info { margin-bottom: 20px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .info-item { padding: 8px; background: #f9f9f9; }
+    .info-label { font-weight: bold; font-size: 12px; color: #666; }
+    .info-value { font-size: 14px; color: #333; margin-top: 4px; }
+    @media print { body { margin: 0; } }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - CREDIT NOTE</h1>
+  <div class="info-grid">
+    <div class="info-item">
+      <div class="info-label">Credit Note #</div>
+      <div class="info-value">${creditNote.creditNoteNumber}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Invoice #</div>
+      <div class="info-value">${creditNote.invoiceNumber}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Supplier</div>
+      <div class="info-value">${creditNote.supplier}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Return Date</div>
+      <div class="info-value">${creditNote.returnDate.toLocaleDateString('en-KE')}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Created By</div>
+      <div class="info-value">${creditNote.userName}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Total Credit</div>
+      <div class="info-value" style="color: #dc2626; font-weight: bold;">${formatKES(creditNote.totalAmount)}</div>
+    </div>
+  </div>
+
+  <h3>Items Returned</h3>
+  <table>
+    <tr>
+      <th>Product</th>
+      <th>Batch</th>
+      <th>Quantity</th>
+      <th>Cost Price</th>
+      <th>Total Credit</th>
+      <th>Reason</th>
+    </tr>
+    ${creditNote.items.map(item => `
+    <tr>
+      <td>${item.productName}</td>
+      <td>${item.batchNumber}</td>
+      <td>${item.quantity}</td>
+      <td>${formatKES(item.costPrice)}</td>
+      <td style="font-weight: bold; color: #dc2626;">${formatKES(item.totalCredit)}</td>
+      <td>${item.reason || '-'}</td>
+    </tr>
+    `).join('')}
+    <tr style="background: #f9f9f9; font-weight: bold;">
+      <td colspan="4" style="text-align: right;">Total:</td>
+      <td style="color: #dc2626;">${formatKES(creditNote.totalAmount)}</td>
+      <td></td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(content);
+        printWindow.document.close();
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      } else {
+        alert('Please allow popups to export PDF reports');
+      }
+    } catch (error) {
+      console.error('Error exporting credit note:', error);
+      alert('Error generating PDF report. Please try again.');
+    }
+  };
+
+  const getCreditNoteShareText = (creditNote: CreditNote): string => {
+    let text = `WESABI PHARMACY - CREDIT NOTE\n\n`;
+    text += `Credit Note #: ${creditNote.creditNoteNumber}\n`;
+    text += `Invoice #: ${creditNote.invoiceNumber}\n`;
+    text += `Supplier: ${creditNote.supplier}\n`;
+    text += `Return Date: ${creditNote.returnDate.toLocaleDateString('en-KE')}\n`;
+    text += `Created By: ${creditNote.userName}\n\n`;
+    text += `Items Returned:\n`;
+    creditNote.items.forEach((item, index) => {
+      text += `${index + 1}. ${item.productName}\n`;
+      text += `   Batch: ${item.batchNumber}, Qty: ${item.quantity}\n`;
+      text += `   Cost: ${formatKES(item.costPrice)}, Credit: ${formatKES(item.totalCredit)}\n`;
+      text += `   Reason: ${item.reason || '-'}\n`;
+    });
+    text += `\nTotal Credit Amount: ${formatKES(creditNote.totalAmount)}`;
+    return text;
   };
 
   const filteredCreditNotes = creditNotes.filter(creditNote =>
@@ -726,6 +841,11 @@ const CreditNotes: React.FC = () => {
                 >
                   Close
                 </button>
+                <ShareButton
+                  data={getCreditNoteShareText(selectedCreditNote)}
+                  title={`Credit Note ${selectedCreditNote.creditNoteNumber}`}
+                  onExport={() => exportSingleCreditNote(selectedCreditNote)}
+                />
               </div>
             </div>
           </div>
