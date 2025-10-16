@@ -58,7 +58,6 @@ Deno.serve(async (req: Request) => {
       ShortCode: MPESA_SHORTCODE,
       ResponseType: 'Completed',
       ConfirmationURL: `${supabaseUrl}/functions/v1/mpesa-c2b-confirmation`,
-      ValidationURL: `${supabaseUrl}/functions/v1/mpesa-c2b-validation`,
     };
 
     console.log('Registering C2B URLs:', registerPayload);
@@ -94,7 +93,6 @@ Deno.serve(async (req: Request) => {
         data: registerData,
         urls: {
           confirmation: `${supabaseUrl}/functions/v1/mpesa-c2b-confirmation`,
-          validation: `${supabaseUrl}/functions/v1/mpesa-c2b-validation`,
         },
       }),
       {

@@ -46,25 +46,18 @@ https://[project-ref].supabase.co/functions/v1/mpesa-c2b-confirmation
 ```
 Auto-completes sales when customer sends money directly
 
-### C2B Validation
-```
-https://[project-ref].supabase.co/functions/v1/mpesa-c2b-validation
-```
-Validates incoming payments
-
 ## 3. Deploy Edge Functions
 
-Deploy these 5 functions to Supabase:
+Deploy these 4 functions to Supabase:
 
 ```
 1. mpesa-stkpush          (Push payment to customer phone)
 2. mpesa-callback         (Receive STK push confirmation)
 3. mpesa-c2b-confirmation (Receive direct payments)
-4. mpesa-c2b-validation   (Validate payments)
-5. mpesa-c2b-register     (Register C2B URLs - run once)
+4. mpesa-c2b-register     (Register C2B URL - run once)
 ```
 
-## 4. Register C2B URLs (One-time setup)
+## 4. Register C2B URL (One-time setup)
 
 After deploying functions, run this once:
 
@@ -125,7 +118,6 @@ Your callback URLs will be:
 ```
 https://abcxyz123.supabase.co/functions/v1/mpesa-callback
 https://abcxyz123.supabase.co/functions/v1/mpesa-c2b-confirmation
-https://abcxyz123.supabase.co/functions/v1/mpesa-c2b-validation
 ```
 
 ## 8. Database Migration
