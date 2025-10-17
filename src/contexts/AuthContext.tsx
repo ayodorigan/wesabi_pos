@@ -436,11 +436,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       case 'creditnotes':
         return ['super_admin', 'admin', 'sales', 'inventory'].includes(role);
       case 'stocktake':
-        return ['super_admin', 'admin', 'stock_take'].includes(role);
+        return ['super_admin', 'admin', 'sales', 'stock_take'].includes(role);
       case 'drugsaleshistory':
         return ['super_admin', 'admin', 'sales'].includes(role);
       case 'saleshistory':
-        return ['super_admin', 'admin'].includes(role);
+        return ['super_admin', 'admin', 'sales'].includes(role);
       case 'analytics':
         return ['super_admin', 'admin'].includes(role);
       case 'logs':
@@ -448,7 +448,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       case 'settings':
         return ['super_admin', 'admin'].includes(role);
       case 'profile':
-        return true; // All authenticated users can access their profile
+        return true;
       default:
         return false;
     }

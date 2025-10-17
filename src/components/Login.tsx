@@ -23,12 +23,14 @@ const Login: React.FC = () => {
 
   const checkIfUsersExist = async () => {
     try {
-      if (!supabase) return;
+      if (!supabase) {
+        setShowSignUpOption(false);
+        return;
+      }
 
-      const { data, error } = await supabase
+      const { count, error } = await supabase
         .from('user_profiles')
-        .select('id')
-        .limit(1);
+        .select('*', { count: 'exact', head: true });
 
       if (error) {
         console.error('Error checking users:', error);
@@ -36,7 +38,7 @@ const Login: React.FC = () => {
         return;
       }
 
-      setShowSignUpOption(!data || data.length === 0);
+      setShowSignUpOption(count === 0);
     } catch (error) {
       console.error('Error checking users:', error);
       setShowSignUpOption(false);

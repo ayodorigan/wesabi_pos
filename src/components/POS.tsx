@@ -215,6 +215,11 @@ const POS: React.FC = () => {
       const data = await response.json();
 
       if (!response.ok) {
+        if (data.error && data.error.includes('credentials not configured')) {
+          alert('M-Pesa is not configured. Please configure M-Pesa credentials in Supabase Edge Function secrets to enable mobile payments.');
+          setIsProcessing(false);
+          return;
+        }
         throw new Error(data.error || 'Failed to initiate M-Pesa payment');
       }
 
@@ -224,7 +229,6 @@ const POS: React.FC = () => {
     } catch (error: any) {
       console.error('M-Pesa payment error:', error);
       alert(error.message || 'Failed to process M-Pesa payment. You can still complete the sale manually.');
-    } finally {
       setIsProcessing(false);
     }
   };

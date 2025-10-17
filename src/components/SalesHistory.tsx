@@ -12,8 +12,11 @@ import {
 import { useApp } from '../contexts/AppContext';
 import { formatKES } from '../utils/currency';
 
+import { useAuth } from '../contexts/AuthContext';
+
 const SalesHistory: React.FC = () => {
   const { salesHistory, exportToPDF } = useApp();
+  const { user } = useAuth();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('7days');
@@ -205,11 +208,15 @@ const SalesHistory: React.FC = () => {
               className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
             >
               <option value="1day">Today</option>
-              <option value="7days">Last 7 Days</option>
-              <option value="30days">Last 30 Days</option>
-              <option value="90days">Last 90 Days</option>
-              <option value="all">All Time</option>
-              <option value="custom">Custom Range</option>
+              {user?.role !== 'sales' && (
+                <>
+                  <option value="7days">Last 7 Days</option>
+                  <option value="30days">Last 30 Days</option>
+                  <option value="90days">Last 90 Days</option>
+                  <option value="all">All Time</option>
+                  <option value="custom">Custom Range</option>
+                </>
+              )}
             </select>
           </div>
 
@@ -227,7 +234,7 @@ const SalesHistory: React.FC = () => {
             </select>
           </div>
 
-          {dateRange === 'custom' && (
+          {dateRange === 'custom' && user?.role !== 'sales' && (
             <div className="flex space-x-2">
               <input
                 type="date"

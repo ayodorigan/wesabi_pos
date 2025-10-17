@@ -8,7 +8,7 @@ import AutocompleteInput from './AutocompleteInput';
 import { useApp } from '../contexts/AppContext';
 
 const InvoiceManagement: React.FC = () => {
-  const { user } = useAuth();
+  const { user, canDeleteProducts } = useAuth();
   const { categories, suppliers, addCategory, addSupplier, medicineTemplates, getMedicineByName, refreshData } = useApp();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -457,13 +457,15 @@ const InvoiceManagement: React.FC = () => {
                       >
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button
-                        onClick={() => deleteInvoice(invoice.id)}
-                        className="text-red-600 hover:text-red-800"
-                        title="Delete"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {canDeleteProducts() && (
+                        <button
+                          onClick={() => deleteInvoice(invoice.id)}
+                          className="text-red-600 hover:text-red-800"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
