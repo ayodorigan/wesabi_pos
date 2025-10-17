@@ -39,7 +39,7 @@ const InvoiceManagement: React.FC = () => {
 
   useEffect(() => {
     loadInvoices();
-  }, []);
+  }, [user]);
 
   const loadInvoices = async () => {
     setLoading(true);

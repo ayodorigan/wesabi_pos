@@ -38,8 +38,10 @@ const CreditNotes: React.FC = () => {
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
 
   useEffect(() => {
-    loadCreditNotes();
-  }, []);
+    if (user) {
+      loadCreditNotes();
+    }
+  }, [user]);
 
   const loadCreditNotes = async () => {
     setLoading(true);

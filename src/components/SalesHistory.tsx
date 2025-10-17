@@ -23,6 +23,7 @@ const SalesHistory: React.FC = () => {
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Filter sales history
   const getFilteredHistory = () => {
@@ -43,11 +44,21 @@ const SalesHistory: React.FC = () => {
     }
 
     // Date range filter
-    if (dateRange === 'custom' && startDate && endDate) {
+    if (user?.role === 'sales' && dateRange === 'specificDate' && selectedDate) {
+      const selected = new Date(selectedDate);
+      selected.setHours(0, 0, 0, 0);
+      const nextDay = new Date(selected);
+      nextDay.setDate(selected.getDate() + 1);
+
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.saleDate);
+        return itemDate >= selected && itemDate < nextDay;
+      });
+    } else if (dateRange === 'custom' && startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      
+
       filtered = filtered.filter(item => {
         const itemDate = new Date(item.saleDate);
         return itemDate >= start && itemDate <= end;
@@ -55,7 +66,7 @@ const SalesHistory: React.FC = () => {
     } else if (dateRange !== 'all') {
       const now = new Date();
       const filterDate = new Date();
-      
+
       switch (dateRange) {
         case '1day':
           filterDate.setDate(now.getDate() - 1);
@@ -70,7 +81,7 @@ const SalesHistory: React.FC = () => {
           filterDate.setDate(now.getDate() - 90);
           break;
       }
-      
+
       filtered = filtered.filter(item => new Date(item.saleDate) >= filterDate);
     }
 
@@ -200,25 +211,36 @@ const SalesHistory: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Calendar className="h-5 w-5 text-gray-400" />
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <option value="1day">Today</option>
-              {user?.role !== 'sales' && (
-                <>
-                  <option value="7days">Last 7 Days</option>
-                  <option value="30days">Last 30 Days</option>
-                  <option value="90days">Last 90 Days</option>
-                  <option value="all">All Time</option>
-                  <option value="custom">Custom Range</option>
-                </>
-              )}
-            </select>
-          </div>
+          {user?.role === 'sales' ? (
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-5 w-5 text-gray-400" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value);
+                  setDateRange('specificDate');
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-5 w-5 text-gray-400" />
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="1day">Today</option>
+                <option value="7days">Last 7 Days</option>
+                <option value="30days">Last 30 Days</option>
+                <option value="90days">Last 90 Days</option>
+                <option value="all">All Time</option>
+                <option value="custom">Custom Range</option>
+              </select>
+            </div>
+          )}
 
           <div className="flex items-center space-x-2">
             <Filter className="h-5 w-5 text-gray-400" />

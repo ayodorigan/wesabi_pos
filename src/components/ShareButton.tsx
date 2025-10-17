@@ -39,7 +39,7 @@ const ShareButton: React.FC<ShareButtonProps> = ({ data, title, onExport }) => {
             className="fixed inset-0 z-40"
             onClick={() => setShowOptions(false)}
           />
-          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border z-50">
+          <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-lg shadow-lg border z-50">
             {onExport && (
               <button
                 onClick={() => {
