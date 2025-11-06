@@ -277,11 +277,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         } else {
         const formattedSessions = (sessionsData || []).map(session => ({
           id: session.id,
-          name: session.name,
+          name: session.session_name,
           userId: session.user_id || 'demo-user',
           userName: session.user_name,
           status: session.status,
-          createdAt: new Date(session.created_at),
+          createdAt: new Date(session.created_at || session.started_at),
           completedAt: session.completed_at ? new Date(session.completed_at) : null,
         }));
           setStockTakeSessions(formattedSessions);
@@ -679,10 +679,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       const { data, error } = await supabase
         .from('stock_take_sessions')
         .insert({
-          name: name.trim(),
+          session_name: name.trim(),
           user_id: user?.user_id || 'demo-user',
           user_name: user?.name || 'Demo User',
-          status: 'active'
+          status: 'active',
+          started_at: new Date().toISOString()
         })
         .select()
         .single();
