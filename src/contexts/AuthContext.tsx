@@ -312,39 +312,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error(error.error || 'Failed to create user');
     }
 
-    const { userId } = await response.json();
-    if (!userId) {
+    const result = await response.json();
+    if (!result.userId) {
       throw new Error('Failed to get user ID from response');
-    }
-
-    // Create user profile
-    const { error: profileError } = await supabase
-      .from('user_profiles')
-      .insert({
-        user_id: userId,
-        name: userData.name,
-        phone: userData.phone,
-        role: userData.role,
-        is_active: true,
-      });
-
-    if (profileError) {
-      // If profile creation fails, clean up the auth user via edge function
-      try {
-        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId: userId,
-          }),
-        });
-      } catch (cleanupError) {
-        console.error('Failed to cleanup auth user after profile creation failure:', cleanupError);
-      }
-      throw profileError;
     }
   };
 

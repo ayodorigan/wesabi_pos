@@ -6,7 +6,6 @@ import { CreditNote, CreditNoteItem, Product } from '../types';
 import { formatKES } from '../utils/currency';
 import AutocompleteInput from './AutocompleteInput';
 import { useApp } from '../contexts/AppContext';
-import ShareButton from './ShareButton';
 
 const CreditNotes: React.FC = () => {
   const { user } = useAuth();
@@ -263,6 +262,11 @@ const CreditNotes: React.FC = () => {
   };
 
   const deleteCreditNote = async (creditNoteId: string) => {
+    if (!user || !['super_admin', 'admin'].includes(user.role)) {
+      alert('Only administrators can delete credit notes');
+      return;
+    }
+
     if (!confirm('Are you sure you want to delete this credit note? This will NOT reverse inventory changes.')) {
       return;
     }
@@ -556,13 +560,15 @@ const CreditNotes: React.FC = () => {
                       >
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button
-                        onClick={() => deleteCreditNote(creditNote.id)}
-                        className="text-red-600 hover:text-red-800"
-                        title="Delete"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {user && ['super_admin', 'admin'].includes(user.role) && (
+                        <button
+                          onClick={() => deleteCreditNote(creditNote.id)}
+                          className="text-red-600 hover:text-red-800"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -843,11 +849,13 @@ const CreditNotes: React.FC = () => {
                 >
                   Close
                 </button>
-                <ShareButton
-                  data={getCreditNoteShareText(selectedCreditNote)}
-                  title={`Credit Note ${selectedCreditNote.creditNoteNumber}`}
-                  onExport={() => exportSingleCreditNote(selectedCreditNote)}
-                />
+                <button
+                  onClick={() => exportSingleCreditNote(selectedCreditNote)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Export PDF</span>
+                </button>
               </div>
             </div>
           </div>
