@@ -237,14 +237,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signOut = async () => {
-    if (!isSupabaseEnabled || !supabase) {
-      // Demo mode - just clear user
-      setUser(null);
-      return;
-    }
+    try {
+      if (!isSupabaseEnabled || !supabase) {
+        setUser(null);
+        return;
+      }
 
-    const { error } = await supabase.auth.signOut();
-    if (error) {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Supabase signOut error:', error);
+        throw error;
+      }
+
+      setUser(null);
+    } catch (error) {
+      console.error('Error during sign out:', error);
+      setUser(null);
       throw error;
     }
   };
