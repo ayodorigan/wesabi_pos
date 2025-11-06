@@ -13,7 +13,12 @@ const ShareButton: React.FC<ShareButtonProps> = ({ data, title, onExport }) => {
   const shareViaEmail = () => {
     const subject = encodeURIComponent(title);
     const body = encodeURIComponent(data);
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
+
+    const anchor = document.createElement('a');
+    anchor.href = mailtoLink;
+    anchor.click();
+
     setShowOptions(false);
   };
 
