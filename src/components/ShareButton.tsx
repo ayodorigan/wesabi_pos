@@ -24,7 +24,14 @@ const ShareButton: React.FC<ShareButtonProps> = ({ data, title, onExport }) => {
 
   const shareViaWhatsApp = () => {
     const text = encodeURIComponent(`${title}\n\n${data}`);
-    window.open(`https://wa.me/?text=${text}`, '_blank');
+    const whatsappLink = `https://wa.me/?text=${text}`;
+
+    const anchor = document.createElement('a');
+    anchor.href = whatsappLink;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    anchor.click();
+
     setShowOptions(false);
   };
 
