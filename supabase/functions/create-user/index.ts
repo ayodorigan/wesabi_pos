@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { error: profileError } = await supabaseAdmin
+    const { error: insertError } = await supabaseAdmin
       .from('user_profiles')
       .insert({
         user_id: authData.user.id,
@@ -113,10 +113,10 @@ Deno.serve(async (req: Request) => {
         is_active: true,
       });
 
-    if (profileError) {
+    if (insertError) {
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return new Response(
-        JSON.stringify({ error: `Failed to create user profile: ${profileError.message}` }),
+        JSON.stringify({ error: `Failed to create user profile: ${insertError.message}` }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
