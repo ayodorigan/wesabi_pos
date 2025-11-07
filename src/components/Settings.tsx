@@ -123,22 +123,15 @@ const Settings: React.FC = () => {
       return;
     }
 
-    if (passwordData.newPassword.length < 6) {
-      alert('Password must be at least 6 characters');
+    if (passwordData.newPassword.length < 8) {
+      alert('Password must be at least 8 characters');
       return;
     }
 
     try {
-      // Only super admins can reset passwords via email
-      if (user?.role === 'super_admin' && passwordUser.user_id) {
-        // Get user email from auth.users table or use a default
-        const email = `${passwordUser.name.toLowerCase().replace(/\s+/g, '.')}@wesabi.co.ke`;
-        await resetPassword(email, passwordUser.user_id);
-        alert('Password reset email sent successfully');
-      } else {
-        alert('Only super administrators can reset passwords');
-      }
-      
+      await resetPassword(passwordUser.user_id, passwordData.newPassword);
+      alert('Password updated successfully!');
+
       setShowPasswordModal(false);
       setPasswordUser(null);
       resetPasswordForm();
@@ -274,7 +267,8 @@ const Settings: React.FC = () => {
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">{userItem.name}</div>
-                            <div className="text-sm text-gray-500">{userItem.phone || 'No phone'}</div>
+                            <div className="text-sm text-gray-500">{userItem.email || 'No email'}</div>
+                            {userItem.phone && <div className="text-xs text-gray-400">{userItem.phone}</div>}
                           </div>
                         </div>
                       </td>
@@ -487,12 +481,34 @@ const Settings: React.FC = () => {
           <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-4">Reset Password - {passwordUser.name}</h3>
             <p className="text-sm text-gray-600 mb-4">
-              {user?.role === 'super_admin' 
-                ? "This will send a password reset email to the user's registered email address."
-                : "As an admin, you can reset passwords for non-super admin users."
-              }
+              Set a new password for this user. They will be able to sign in immediately with the new password.
             </p>
             <form onSubmit={handlePasswordChange} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={passwordData.newPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter new password"
+                />
+                <p className="text-xs text-gray-500 mt-1">Minimum 8 characters</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={passwordData.confirmPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Confirm new password"
+                />
+              </div>
               <div className="flex justify-end space-x-2 pt-4">
                 <button
                   type="button"
@@ -509,7 +525,7 @@ const Settings: React.FC = () => {
                   type="submit"
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  Send Reset Email
+                  Reset Password
                 </button>
               </div>
             </form>

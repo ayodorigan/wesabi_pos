@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShoppingCart, 
   Scan, 
@@ -30,6 +30,8 @@ const POS: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastReceipt, setLastReceipt] = useState<string | null>(null);
   const [showMpesaModal, setShowMpesaModal] = useState(false);
+  const [checkoutRequestId, setCheckoutRequestId] = useState<string | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [editingPrice, setEditingPrice] = useState<string | null>(null);
   const [tempPrice, setTempPrice] = useState('');
   const [showPriceHistory, setShowPriceHistory] = useState<string | null>(null);
@@ -223,15 +225,91 @@ const POS: React.FC = () => {
         throw new Error(data.error || 'Failed to initiate M-Pesa payment');
       }
 
-      alert('M-Pesa prompt sent! Please check your phone and enter your PIN.');
+      // Store the CheckoutRequestID to poll for status
+      if (data.CheckoutRequestID) {
+        setCheckoutRequestId(data.CheckoutRequestID);
+        startPollingTransactionStatus(data.CheckoutRequestID);
+      }
 
-      await completeSale();
+      alert('M-Pesa prompt sent! Please check your phone and enter your PIN. You can also complete the sale manually if needed.');
     } catch (error: any) {
       console.error('M-Pesa payment error:', error);
       alert(error.message || 'Failed to process M-Pesa payment. You can still complete the sale manually.');
       setIsProcessing(false);
     }
   };
+
+  const startPollingTransactionStatus = (checkoutId: string) => {
+    let pollCount = 0;
+    const maxPolls = 60; // Poll for 60 seconds (60 * 1 second)
+
+    const interval = setInterval(async () => {
+      pollCount++;
+
+      try {
+        const { supabase } = await import('../lib/supabase');
+        if (!supabase) return;
+
+        const { data, error } = await supabase
+          .from('mpesa_transactions')
+          .select('*')
+          .eq('checkout_request_id', checkoutId)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error polling M-Pesa status:', error);
+          return;
+        }
+
+        if (data) {
+          // Transaction response received
+          clearInterval(interval);
+          setPollingInterval(null);
+
+          if (data.result_code === 0) {
+            // Success
+            alert(`M-Pesa payment successful! Receipt: ${data.mpesa_receipt_number}`);
+            await completeSale();
+          } else {
+            // Failed or cancelled
+            alert(`M-Pesa payment ${data.result_description}. You can try again or complete manually.`);
+            setIsProcessing(false);
+          }
+        } else if (pollCount >= maxPolls) {
+          // Timeout - stop polling
+          clearInterval(interval);
+          setPollingInterval(null);
+          alert('M-Pesa payment timeout. You can complete the sale manually.');
+          setIsProcessing(false);
+        }
+      } catch (error) {
+        console.error('Error in polling:', error);
+      }
+    }, 1000);
+
+    setPollingInterval(interval);
+  };
+
+  const stopPolling = () => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
+  };
+
+  // Cleanup polling on unmount or modal close
+  useEffect(() => {
+    return () => {
+      stopPolling();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showMpesaModal) {
+      stopPolling();
+      setCheckoutRequestId(null);
+    }
+  }, [showMpesaModal]);
 
   const toggleLastPrice = (productId: string) => {
     setUseLastPrice(prev => ({

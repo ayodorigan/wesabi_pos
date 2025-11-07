@@ -6,6 +6,7 @@ export interface UserProfile {
   id: string;
   user_id: string;
   name: string;
+  email?: string;
   phone?: string;
   role: 'super_admin' | 'admin' | 'sales' | 'inventory' | 'stock_take';
   is_active: boolean;
@@ -22,7 +23,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  resetPassword: (email: string, userId: string) => Promise<void>;
+  resetPassword: (userId: string, newPassword: string) => Promise<void>;
   createUser: (userData: {
     name: string;
     phone?: string;
@@ -257,7 +258,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const resetPassword = async (email: string, userId: string) => {
+  const resetPassword = async (userId: string, newPassword: string) => {
     if (!isSupabaseEnabled || !supabase) {
       throw new Error('Password reset not available in demo mode');
     }
@@ -273,7 +274,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         'Authorization': `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, userId }),
+      body: JSON.stringify({ userId, newPassword }),
     });
 
     if (!response.ok) {
@@ -385,13 +386,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return []; // Return empty array in demo mode
     }
 
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // Use the database function to get users with emails
+    const { data, error } = await supabase.rpc('get_all_users_with_emails');
 
     if (error) {
-      throw error;
+      console.error('Error fetching users:', error);
+      // Fallback to basic user profiles without emails
+      const { data: profiles } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      return profiles || [];
     }
 
     return data || [];
