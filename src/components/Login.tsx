@@ -28,9 +28,8 @@ const Login: React.FC = () => {
         return;
       }
 
-      const { count, error } = await supabase
-        .from('user_profiles')
-        .select('*', { count: 'exact', head: true });
+      // Call the database function to check if any users exist in auth.users
+      const { data, error } = await supabase.rpc('has_any_users');
 
       if (error) {
         console.error('Error checking users:', error);
@@ -38,7 +37,8 @@ const Login: React.FC = () => {
         return;
       }
 
-      setShowSignUpOption(count === 0);
+      // Show sign-up option only if NO users exist
+      setShowSignUpOption(data === false);
     } catch (error) {
       console.error('Error checking users:', error);
       setShowSignUpOption(false);
@@ -84,6 +84,9 @@ const Login: React.FC = () => {
         setSuccess('Account created successfully! You can now sign in.');
         setIsSignUp(false);
         setFormData({ email: formData.email, password: '', name: '' });
+
+        // Re-check if users exist to hide sign-up option
+        await checkIfUsersExist();
       } else {
         await signIn(formData.email, formData.password);
       }
