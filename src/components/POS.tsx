@@ -32,6 +32,11 @@ const POS: React.FC = () => {
   const [showMpesaModal, setShowMpesaModal] = useState(false);
   const [checkoutRequestId, setCheckoutRequestId] = useState<string | null>(null);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [mpesaPaymentDetails, setMpesaPaymentDetails] = useState<{
+    phoneNumber: string;
+    receiptNumber: string;
+    amount: number;
+  } | null>(null);
   const [editingPrice, setEditingPrice] = useState<string | null>(null);
   const [tempPrice, setTempPrice] = useState('');
   const [showPriceHistory, setShowPriceHistory] = useState<string | null>(null);
@@ -181,6 +186,8 @@ const POS: React.FC = () => {
       setMpesaPhone('');
       setPaymentMethod('mpesa');
       setShowMpesaModal(false);
+      setMpesaPaymentDetails(null);
+      setCheckoutRequestId(null);
 
       alert(`Sale completed! Receipt #${receiptNumber} - Wesabi Pharmacy`);
     } catch (error) {
@@ -267,9 +274,13 @@ const POS: React.FC = () => {
           setPollingInterval(null);
 
           if (data.result_code === 0) {
-            // Success
-            alert(`M-Pesa payment successful! Receipt: ${data.mpesa_receipt_number}`);
-            await completeSale();
+            // Success - store payment details and enable complete button
+            setMpesaPaymentDetails({
+              phoneNumber: data.phone_number || '',
+              receiptNumber: data.mpesa_receipt_number || '',
+              amount: data.amount || 0,
+            });
+            setIsProcessing(false);
           } else {
             // Failed or cancelled
             alert(`M-Pesa payment ${data.result_description}. You can try again or complete manually.`);
@@ -308,6 +319,7 @@ const POS: React.FC = () => {
     if (!showMpesaModal) {
       stopPolling();
       setCheckoutRequestId(null);
+      setMpesaPaymentDetails(null);
     }
   }, [showMpesaModal]);
 
@@ -657,52 +669,86 @@ const POS: React.FC = () => {
               <p className="text-2xl font-bold text-green-600">{formatKES(getTotalAmount())}</p>
             </div>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Customer Phone Number
-              </label>
-              <input
-                type="tel"
-                value={mpesaPhone}
-                onChange={(e) => setMpesaPhone(e.target.value)}
-                placeholder="0712345678 or 254712345678"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Enter the phone number registered with M-Pesa
-              </p>
-            </div>
+            {mpesaPaymentDetails ? (
+              <div className="mb-4">
+                <div className="p-4 bg-green-100 border border-green-300 rounded-lg mb-4">
+                  <div className="flex items-center mb-2">
+                    <Check className="h-5 w-5 text-green-600 mr-2" />
+                    <p className="text-green-800 font-semibold">Payment Received!</p>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">From:</span>
+                      <span className="font-medium">{mpesaPaymentDetails.phoneNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Receipt:</span>
+                      <span className="font-medium">{mpesaPaymentDetails.receiptNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Amount:</span>
+                      <span className="font-medium text-green-600">{formatKES(mpesaPaymentDetails.amount)}</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 text-center mb-4">
+                  Click "Complete & Close" to finalize the sale
+                </p>
+              </div>
+            ) : (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Customer Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={mpesaPhone}
+                  onChange={(e) => setMpesaPhone(e.target.value)}
+                  placeholder="0712345678 or 254712345678"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  disabled={isProcessing}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {isProcessing ? 'Waiting for payment confirmation...' : 'Enter the phone number registered with M-Pesa'}
+                </p>
+              </div>
+            )}
 
             <div className="flex space-x-2">
               <button
                 onClick={() => {
                   setShowMpesaModal(false);
                   setMpesaPhone('');
+                  setMpesaPaymentDetails(null);
                 }}
                 disabled={isProcessing}
                 className="flex-1 px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg disabled:opacity-50"
               >
                 Cancel
               </button>
-              <button
-                onClick={handleMpesaPayment}
-                disabled={isProcessing || !mpesaPhone.trim()}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isProcessing ? 'Processing...' : 'Send STK Push'}
-              </button>
+              {!mpesaPaymentDetails && (
+                <button
+                  onClick={handleMpesaPayment}
+                  disabled={isProcessing || !mpesaPhone.trim()}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? 'Processing...' : 'Send STK Push'}
+                </button>
+              )}
               <button
                 onClick={completeSale}
                 disabled={isProcessing}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isProcessing ? 'Processing...' : 'Complete Manually'}
+                {isProcessing ? 'Processing...' : (mpesaPaymentDetails ? 'Complete & Close' : 'Complete Manually')}
               </button>
             </div>
 
-            <p className="text-xs text-gray-500 mt-3 text-center">
-              Customer will receive a prompt on their phone to enter M-Pesa PIN
-            </p>
+            {!mpesaPaymentDetails && (
+              <p className="text-xs text-gray-500 mt-3 text-center">
+                Customer will receive a prompt on their phone to enter M-Pesa PIN
+              </p>
+            )}
           </div>
         </div>
       )}
