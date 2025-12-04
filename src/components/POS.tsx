@@ -240,13 +240,14 @@ const POS: React.FC = () => {
         throw new Error(data.error || 'Failed to initiate M-Pesa payment');
       }
 
-      // Store the CheckoutRequestID to poll for status
-      if (data.CheckoutRequestID) {
-        console.log('Got CheckoutRequestID:', data.CheckoutRequestID);
-        setCheckoutRequestId(data.CheckoutRequestID);
-        startPollingTransactionStatus(data.CheckoutRequestID);
+      // Store the CheckoutRequestID to poll for status (note: case-sensitive property name)
+      const checkoutId = data.CheckoutRequestID || data.checkoutRequestID;
+      if (checkoutId) {
+        console.log('Got CheckoutRequestID:', checkoutId);
+        setCheckoutRequestId(checkoutId);
+        startPollingTransactionStatus(checkoutId);
       } else {
-        console.error('No CheckoutRequestID in response!');
+        console.error('No CheckoutRequestID in response!', data);
       }
 
       alert('M-Pesa prompt sent! Please check your phone and enter your PIN. You can also complete the sale manually if needed.');
