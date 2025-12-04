@@ -198,15 +198,22 @@ const POS: React.FC = () => {
   };
 
   const handleMpesaPayment = async () => {
+    console.log('=== M-Pesa Payment Started ===');
+    console.log('Phone:', mpesaPhone);
+    console.log('Amount:', getTotalAmount());
+
     if (!mpesaPhone.trim()) {
       alert('Please enter M-Pesa phone number');
       return;
     }
 
     setIsProcessing(true);
+    console.log('Processing set to true');
 
     try {
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-stkpush`;
+      console.log('Calling STK Push API:', apiUrl);
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -222,6 +229,7 @@ const POS: React.FC = () => {
       });
 
       const data = await response.json();
+      console.log('STK Push Response:', data);
 
       if (!response.ok) {
         if (data.error && data.error.includes('credentials not configured')) {
@@ -234,8 +242,11 @@ const POS: React.FC = () => {
 
       // Store the CheckoutRequestID to poll for status
       if (data.CheckoutRequestID) {
+        console.log('Got CheckoutRequestID:', data.CheckoutRequestID);
         setCheckoutRequestId(data.CheckoutRequestID);
         startPollingTransactionStatus(data.CheckoutRequestID);
+      } else {
+        console.error('No CheckoutRequestID in response!');
       }
 
       alert('M-Pesa prompt sent! Please check your phone and enter your PIN. You can also complete the sale manually if needed.');
@@ -334,6 +345,17 @@ const POS: React.FC = () => {
     }
   };
 
+  // Debug state changes
+  useEffect(() => {
+    console.log('=== M-Pesa State ===', {
+      isProcessing,
+      checkoutRequestId,
+      hasPaymentDetails: !!mpesaPaymentDetails,
+      showMpesaModal,
+      shouldShowButton: isProcessing && checkoutRequestId
+    });
+  }, [isProcessing, checkoutRequestId, mpesaPaymentDetails, showMpesaModal]);
+
   // Cleanup polling on unmount or modal close
   useEffect(() => {
     return () => {
@@ -344,6 +366,7 @@ const POS: React.FC = () => {
   useEffect(() => {
     if (!showMpesaModal) {
       stopPolling();
+      setIsProcessing(false);
       setCheckoutRequestId(null);
       setMpesaPaymentDetails(null);
     }
@@ -737,44 +760,47 @@ const POS: React.FC = () => {
                 <p className="text-xs text-gray-500 mt-1">
                   {isProcessing ? 'Waiting for payment confirmation...' : 'Enter the phone number registered with M-Pesa'}
                 </p>
-                {isProcessing && checkoutRequestId && (
-                  <button
-                    onClick={async () => {
-                      console.log('Manual check triggered for:', checkoutRequestId);
-                      const { supabase } = await import('../lib/supabase');
-                      if (!supabase) return;
+                {(() => {
+                  console.log('Button render check:', { isProcessing, checkoutRequestId, shouldRender: isProcessing && checkoutRequestId });
+                  return isProcessing && checkoutRequestId && (
+                    <button
+                      onClick={async () => {
+                        console.log('Manual check triggered for:', checkoutRequestId);
+                        const { supabase } = await import('../lib/supabase');
+                        if (!supabase) return;
 
-                      const { data, error } = await supabase
-                        .from('mpesa_transactions')
-                        .select('*')
-                        .eq('checkout_request_id', checkoutRequestId)
-                        .maybeSingle();
+                        const { data, error } = await supabase
+                          .from('mpesa_transactions')
+                          .select('*')
+                          .eq('checkout_request_id', checkoutRequestId)
+                          .maybeSingle();
 
-                      console.log('Manual check result:', { data, error });
+                        console.log('Manual check result:', { data, error });
 
-                      if (data) {
-                        if (data.result_code === 0) {
-                          setMpesaPaymentDetails({
-                            phoneNumber: data.phone_number || '',
-                            receiptNumber: data.mpesa_receipt_number || '',
-                            amount: data.amount || 0,
-                          });
-                          setIsProcessing(false);
-                          stopPolling();
+                        if (data) {
+                          if (data.result_code === 0) {
+                            setMpesaPaymentDetails({
+                              phoneNumber: data.phone_number || '',
+                              receiptNumber: data.mpesa_receipt_number || '',
+                              amount: data.amount || 0,
+                            });
+                            setIsProcessing(false);
+                            stopPolling();
+                          } else {
+                            alert(`Payment ${data.result_description}`);
+                            setIsProcessing(false);
+                            stopPolling();
+                          }
                         } else {
-                          alert(`Payment ${data.result_description}`);
-                          setIsProcessing(false);
-                          stopPolling();
+                          alert('No payment found yet. Please wait or complete manually.');
                         }
-                      } else {
-                        alert('No payment found yet. Please wait or complete manually.');
-                      }
-                    }}
-                    className="mt-2 w-full px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-                  >
-                    Check Payment Status Now
-                  </button>
-                )}
+                      }}
+                      className="mt-2 w-full px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                    >
+                      Check Payment Status Now
+                    </button>
+                  );
+                })()}
               </div>
             )}
 
