@@ -248,14 +248,17 @@ const POS: React.FC = () => {
 
   const startPollingTransactionStatus = (checkoutId: string) => {
     let pollCount = 0;
-    const maxPolls = 60; // Poll for 60 seconds (60 * 1 second)
+    const maxPolls = 120; // Poll for 120 seconds (2 minutes)
+    let timeoutId: NodeJS.Timeout | null = null;
 
-    const interval = setInterval(async () => {
-      pollCount++;
+    console.log('Starting polling for checkout:', checkoutId);
 
+    const checkTransaction = async () => {
       try {
         const { supabase } = await import('../lib/supabase');
         if (!supabase) return;
+
+        console.log(`Polling attempt ${pollCount + 1}/${maxPolls} for checkout:`, checkoutId);
 
         const { data, error } = await supabase
           .from('mpesa_transactions')
@@ -265,13 +268,16 @@ const POS: React.FC = () => {
 
         if (error) {
           console.error('Error polling M-Pesa status:', error);
-          return;
         }
+
+        console.log('Polling result:', data);
 
         if (data) {
           // Transaction response received
-          clearInterval(interval);
+          if (timeoutId) clearTimeout(timeoutId);
           setPollingInterval(null);
+
+          console.log('Transaction found with result code:', data.result_code);
 
           if (data.result_code === 0) {
             // Success - store payment details and enable complete button
@@ -281,30 +287,50 @@ const POS: React.FC = () => {
               amount: data.amount || 0,
             });
             setIsProcessing(false);
+            console.log('Payment successful, details saved');
           } else {
             // Failed or cancelled
             alert(`M-Pesa payment ${data.result_description}. You can try again or complete manually.`);
             setIsProcessing(false);
+            console.log('Payment failed:', data.result_description);
           }
-        } else if (pollCount >= maxPolls) {
+          return; // Stop polling
+        }
+
+        pollCount++;
+        if (pollCount < maxPolls) {
+          // Continue polling
+          timeoutId = setTimeout(checkTransaction, 2000); // Poll every 2 seconds
+          setPollingInterval(timeoutId);
+        } else {
           // Timeout - stop polling
-          clearInterval(interval);
           setPollingInterval(null);
           alert('M-Pesa payment timeout. You can complete the sale manually.');
           setIsProcessing(false);
+          console.log('Polling timeout reached');
         }
       } catch (error) {
         console.error('Error in polling:', error);
+        pollCount++;
+        if (pollCount < maxPolls) {
+          timeoutId = setTimeout(checkTransaction, 2000);
+          setPollingInterval(timeoutId);
+        } else {
+          setPollingInterval(null);
+          setIsProcessing(false);
+        }
       }
-    }, 1000);
+    };
 
-    setPollingInterval(interval);
+    // Start the first check immediately
+    checkTransaction();
   };
 
   const stopPolling = () => {
     if (pollingInterval) {
-      clearInterval(pollingInterval);
+      clearTimeout(pollingInterval);
       setPollingInterval(null);
+      console.log('Polling stopped');
     }
   };
 
@@ -711,6 +737,44 @@ const POS: React.FC = () => {
                 <p className="text-xs text-gray-500 mt-1">
                   {isProcessing ? 'Waiting for payment confirmation...' : 'Enter the phone number registered with M-Pesa'}
                 </p>
+                {isProcessing && checkoutRequestId && (
+                  <button
+                    onClick={async () => {
+                      console.log('Manual check triggered for:', checkoutRequestId);
+                      const { supabase } = await import('../lib/supabase');
+                      if (!supabase) return;
+
+                      const { data, error } = await supabase
+                        .from('mpesa_transactions')
+                        .select('*')
+                        .eq('checkout_request_id', checkoutRequestId)
+                        .maybeSingle();
+
+                      console.log('Manual check result:', { data, error });
+
+                      if (data) {
+                        if (data.result_code === 0) {
+                          setMpesaPaymentDetails({
+                            phoneNumber: data.phone_number || '',
+                            receiptNumber: data.mpesa_receipt_number || '',
+                            amount: data.amount || 0,
+                          });
+                          setIsProcessing(false);
+                          stopPolling();
+                        } else {
+                          alert(`Payment ${data.result_description}`);
+                          setIsProcessing(false);
+                          stopPolling();
+                        }
+                      } else {
+                        alert('No payment found yet. Please wait or complete manually.');
+                      }
+                    }}
+                    className="mt-2 w-full px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                  >
+                    Check Payment Status Now
+                  </button>
+                )}
               </div>
             )}
 
