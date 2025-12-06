@@ -42,6 +42,8 @@ const POS: React.FC = () => {
   const [showPriceHistory, setShowPriceHistory] = useState<string | null>(null);
   const [useLastPrice, setUseLastPrice] = useState<Record<string, boolean>>({});
   const [lastSoldPrices, setLastSoldPrices] = useState<Record<string, number | null>>({});
+  const [mpesaTimeoutReached, setMpesaTimeoutReached] = useState(false);
+  const [mpesaTimeoutId, setMpesaTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
   const filteredProducts = products.filter(product => 
     product.currentStock > 0 && (
@@ -208,6 +210,7 @@ const POS: React.FC = () => {
     }
 
     setIsProcessing(true);
+    setMpesaTimeoutReached(false);
     console.log('Processing set to true');
 
     try {
@@ -246,6 +249,13 @@ const POS: React.FC = () => {
         console.log('Got CheckoutRequestID:', checkoutId);
         setCheckoutRequestId(checkoutId);
         startPollingTransactionStatus(checkoutId);
+
+        // Start timeout timer (30 seconds)
+        const timeoutId = setTimeout(() => {
+          console.log('M-Pesa payment timeout reached');
+          setMpesaTimeoutReached(true);
+        }, 30000); // 30 seconds
+        setMpesaTimeoutId(timeoutId);
       } else {
         console.error('No CheckoutRequestID in response!', data);
       }
@@ -288,6 +298,12 @@ const POS: React.FC = () => {
           // Transaction response received
           if (timeoutId) clearTimeout(timeoutId);
           setPollingInterval(null);
+
+          // Clear the M-Pesa timeout as we got a response
+          if (mpesaTimeoutId) {
+            clearTimeout(mpesaTimeoutId);
+            setMpesaTimeoutId(null);
+          }
 
           console.log('Transaction found with result code:', data.result_code);
 
@@ -344,6 +360,11 @@ const POS: React.FC = () => {
       setPollingInterval(null);
       console.log('Polling stopped');
     }
+    if (mpesaTimeoutId) {
+      clearTimeout(mpesaTimeoutId);
+      setMpesaTimeoutId(null);
+      console.log('M-Pesa timeout cleared');
+    }
   };
 
   // Debug state changes
@@ -370,6 +391,7 @@ const POS: React.FC = () => {
       setIsProcessing(false);
       setCheckoutRequestId(null);
       setMpesaPaymentDetails(null);
+      setMpesaTimeoutReached(false);
     }
   }, [showMpesaModal]);
 
@@ -759,7 +781,7 @@ const POS: React.FC = () => {
                   disabled={isProcessing}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  {isProcessing ? 'Waiting for payment confirmation...' : 'Enter the phone number registered with M-Pesa'}
+                  {isProcessing ? (mpesaTimeoutReached ? 'Payment timeout reached. You can now complete manually.' : 'Waiting for payment confirmation...') : 'Enter the phone number registered with M-Pesa'}
                 </p>
                 {(() => {
                   console.log('Button render check:', { isProcessing, checkoutRequestId, shouldRender: isProcessing && checkoutRequestId });
@@ -828,10 +850,10 @@ const POS: React.FC = () => {
               )}
               <button
                 onClick={completeSale}
-                disabled={isProcessing}
+                disabled={isProcessing && !mpesaTimeoutReached}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isProcessing ? 'Processing...' : (mpesaPaymentDetails ? 'Complete & Close' : 'Complete Manually')}
+                {isProcessing && !mpesaTimeoutReached ? 'Processing...' : (mpesaPaymentDetails ? 'Complete & Close' : 'Complete Manually')}
               </button>
             </div>
 
