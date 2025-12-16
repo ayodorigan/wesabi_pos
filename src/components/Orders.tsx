@@ -150,12 +150,12 @@ export default function Orders() {
       return;
     }
 
-    setOrderItems([...orderItems, {
+    setOrderItems([{
       product_id: product.id,
       product_name: product.name,
       current_quantity: product.current_stock,
       order_quantity: product.min_stock_level
-    }]);
+    }, ...orderItems]);
     setSearchProduct('');
   };
 
@@ -199,13 +199,22 @@ export default function Orders() {
     }
 
     try {
+      const futureDate = new Date();
+      futureDate.setFullYear(futureDate.getFullYear() + 2);
+
       const { data, error } = await supabase
         .from('products')
         .insert({
           name: newProduct.name.trim(),
           current_stock: 0,
           min_stock_level: parseInt(newProduct.min_stock_level) || 10,
-          category: 'General'
+          category: 'General',
+          supplier: 'To Be Determined',
+          batch_number: 'TBD',
+          expiry_date: futureDate.toISOString().split('T')[0],
+          barcode: `TBD-${Date.now()}`,
+          cost_price: 0,
+          selling_price: 0
         })
         .select()
         .single();
@@ -219,7 +228,7 @@ export default function Orders() {
         order_quantity: parseInt(newProduct.min_stock_level) || 10
       };
 
-      setOrderItems([...orderItems, newOrderItem]);
+      setOrderItems([newOrderItem, ...orderItems]);
       await fetchProducts();
       setShowAddProductModal(false);
       setSearchProduct('');
@@ -280,7 +289,7 @@ export default function Orders() {
           .from('supplier_orders')
           .insert({
             order_number: orderNumber,
-            created_by: user?.id,
+            created_by: user?.user_id,
             notes,
             total_items: orderItems.reduce((sum, item) => sum + item.order_quantity, 0)
           })
