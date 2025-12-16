@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
       .from('user_profiles')
       .select('role')
       .eq('user_id', requestingUser.id)
-      .single();
+      .maybeSingle();
 
     if (!requesterProfile || !['super_admin', 'admin'].includes(requesterProfile.role)) {
       return new Response(
@@ -80,6 +80,64 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const { data: existingUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+
+    if (listError) {
+      console.error('Error checking existing users:', listError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to verify user existence' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userExists = existingUsers.users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+
+    if (userExists) {
+      const { data: existingProfile } = await supabaseAdmin
+        .from('user_profiles')
+        .select('id')
+        .eq('user_id', userExists.id)
+        .maybeSingle();
+
+      if (existingProfile) {
+        return new Response(
+          JSON.stringify({ error: 'A user with this email already exists' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { error: profileError } = await supabaseAdmin
+        .from('user_profiles')
+        .insert({
+          user_id: userExists.id,
+          name,
+          phone: phone || null,
+          role,
+          is_active: true,
+        });
+
+      if (profileError) {
+        console.error('Error creating profile for existing user:', profileError);
+        return new Response(
+          JSON.stringify({ error: `Failed to create user profile: ${profileError.message}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          user: {
+            id: userExists.id,
+            email: userExists.email,
+            name,
+            role
+          }
+        }),
+        { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -88,6 +146,7 @@ Deno.serve(async (req: Request) => {
     });
 
     if (createError) {
+      console.error('Error creating auth user:', createError);
       const errorMessage = createError.message.toLowerCase().includes('already')
         ? 'A user with this email already exists'
         : createError.message;
@@ -116,6 +175,8 @@ Deno.serve(async (req: Request) => {
       });
 
     if (profileError) {
+      console.error('Error creating profile:', profileError);
+
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
 
       return new Response(
