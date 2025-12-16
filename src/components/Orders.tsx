@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Download, Share2, Search, Filter, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, MessageCircle, Search, Filter, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { AlertDialog } from './AlertDialog';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface Product {
   id: string;
@@ -415,63 +416,85 @@ export default function Orders() {
     doc.setFont('helvetica', 'bold');
     doc.text('SUPPLIER ORDER', 105, 20, { align: 'center' });
 
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('_'.repeat(85), 10, 25);
+    doc.setDrawColor(200);
+    doc.line(15, 25, 195, 25);
 
-    doc.setFontSize(12);
-    doc.text(`Order Number: ${order.order_number}`, 15, 35);
-    doc.text(`Date: ${new Date(order.created_at).toLocaleDateString()}`, 15, 42);
-    doc.text(`Created By: ${order.user_profiles?.name || 'Unknown'}`, 15, 49);
-    doc.text(`Status: ${order.status.toUpperCase()}`, 15, 56);
-
-    doc.setFontSize(10);
-    doc.text('_'.repeat(85), 10, 60);
-
-    doc.setFontSize(14);
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text('ORDER ITEMS', 15, 70);
-
-    doc.setFontSize(10);
+    doc.text('Order Number:', 15, 35);
     doc.setFont('helvetica', 'normal');
+    doc.text(order.order_number, 55, 35);
 
-    let yPos = 80;
-    items.forEach((item, index) => {
-      if (yPos > 270) {
-        doc.addPage();
-        yPos = 20;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Date:', 15, 42);
+    doc.setFont('helvetica', 'normal');
+    doc.text(new Date(order.created_at).toLocaleDateString(), 55, 42);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Created By:', 15, 49);
+    doc.setFont('helvetica', 'normal');
+    doc.text(order.user_profiles?.name || 'Unknown', 55, 49);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Status:', 15, 56);
+    doc.setFont('helvetica', 'normal');
+    doc.text(order.status.toUpperCase(), 55, 56);
+
+    doc.line(15, 60, 195, 60);
+
+    const tableData = items.map((item, index) => [
+      (index + 1).toString(),
+      item.product_name,
+      item.current_quantity.toString(),
+      item.order_quantity.toString()
+    ]);
+
+    autoTable(doc, {
+      startY: 68,
+      head: [['#', 'Product Name', 'Current Stock', 'Order Quantity']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [66, 139, 202],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 10
+      },
+      bodyStyles: {
+        fontSize: 9
+      },
+      columnStyles: {
+        0: { cellWidth: 15, halign: 'center' },
+        1: { cellWidth: 95 },
+        2: { cellWidth: 35, halign: 'center' },
+        3: { cellWidth: 40, halign: 'center' }
+      },
+      margin: { left: 15, right: 15 },
+      didDrawPage: (data) => {
+        if (data.pageNumber > 1) {
+          doc.setFontSize(20);
+          doc.setFont('helvetica', 'bold');
+          doc.text('SUPPLIER ORDER (Continued)', 105, 20, { align: 'center' });
+        }
       }
-
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${index + 1}. ${item.product_name}`, 15, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Current Stock: ${item.current_quantity}`, 20, yPos + 7);
-      doc.text(`Order Quantity: ${item.order_quantity}`, 20, yPos + 14);
-
-      yPos += 25;
     });
 
-    if (yPos > 250) {
-      doc.addPage();
-      yPos = 20;
-    }
+    const finalY = (doc as any).lastAutoTable.finalY || 68;
 
-    doc.setFontSize(10);
-    doc.text('_'.repeat(85), 10, yPos);
-    yPos += 7;
+    doc.setDrawColor(200);
+    doc.line(15, finalY + 5, 195, finalY + 5);
 
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Total Items to Order: ${items.reduce((sum, item) => sum + item.order_quantity, 0)}`, 15, yPos);
+    doc.text(`Total Items to Order: ${items.reduce((sum, item) => sum + item.order_quantity, 0)}`, 15, finalY + 13);
 
     if (order.notes) {
-      yPos += 10;
       doc.setFont('helvetica', 'bold');
-      doc.text('Notes:', 15, yPos);
+      doc.text('Notes:', 15, finalY + 23);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
       const splitNotes = doc.splitTextToSize(order.notes, 180);
-      doc.text(splitNotes, 15, yPos + 7);
+      doc.text(splitNotes, 15, finalY + 30);
     }
 
     return doc;
@@ -487,12 +510,19 @@ export default function Orders() {
       if (error) throw error;
 
       const pdf = generatePDF(order, items || []);
-      pdf.save(`Order_${order.order_number}.pdf`);
+      const fileName = `Order_${order.order_number}.pdf`;
+      pdf.save(fileName);
+
+      setTimeout(() => {
+        const message = `Hi! I'm sharing supplier order ${order.order_number}. The PDF file "${fileName}" has been downloaded to my device. Please find the attached order document with ${items?.length || 0} items for a total quantity of ${items?.reduce((sum, item) => sum + item.order_quantity, 0) || 0} units.`;
+        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+      }, 500);
 
       setInfoDialog({
         isOpen: true,
-        title: 'PDF Downloaded',
-        message: `Order PDF has been downloaded to your device. You can now manually attach and share "Order_${order.order_number}.pdf" via WhatsApp.`,
+        title: 'Opening WhatsApp',
+        message: `Order PDF "${fileName}" has been downloaded. WhatsApp is opening - please attach the downloaded PDF file to your message.`,
         type: 'success'
       });
     } catch (error: any) {
@@ -608,31 +638,51 @@ export default function Orders() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleEditOrder(order)}
-                          className="text-blue-600 hover:text-blue-800"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleEditOrder(order);
+                          }}
+                          className="text-blue-600 hover:text-blue-800 transition-colors p-1"
                           title="Edit"
+                          type="button"
                         >
                           <Edit2 className="w-5 h-5" />
                         </button>
                         <button
-                          onClick={() => exportToPDF(order)}
-                          className="text-green-600 hover:text-green-800"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            exportToPDF(order);
+                          }}
+                          className="text-green-600 hover:text-green-800 transition-colors p-1"
                           title="Export PDF"
+                          type="button"
                         >
                           <Download className="w-5 h-5" />
                         </button>
                         <button
-                          onClick={() => shareViaWhatsApp(order)}
-                          className="text-green-600 hover:text-green-800"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            shareViaWhatsApp(order);
+                          }}
+                          className="text-green-600 hover:text-green-800 transition-colors p-1"
                           title="Share on WhatsApp"
+                          type="button"
                         >
-                          <Share2 className="w-5 h-5" />
+                          <MessageCircle className="w-5 h-5" />
                         </button>
                         {isAdmin && (
                           <button
-                            onClick={() => showDeleteConfirmation(order.id, order.order_number)}
-                            className="text-red-600 hover:text-red-800"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              showDeleteConfirmation(order.id, order.order_number);
+                            }}
+                            className="text-red-600 hover:text-red-800 transition-colors p-1"
                             title="Delete"
+                            type="button"
                           >
                             <Trash2 className="w-5 h-5" />
                           </button>
