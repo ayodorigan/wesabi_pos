@@ -164,6 +164,27 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const { data: checkProfile } = await supabaseAdmin
+      .from('user_profiles')
+      .select('id, name, role')
+      .eq('user_id', authData.user.id)
+      .maybeSingle();
+
+    if (checkProfile) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          user: {
+            id: authData.user.id,
+            email: authData.user.email,
+            name: checkProfile.name,
+            role: checkProfile.role
+          }
+        }),
+        { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { error: profileError } = await supabaseAdmin
       .from('user_profiles')
       .insert({
@@ -176,6 +197,29 @@ Deno.serve(async (req: Request) => {
 
     if (profileError) {
       console.error('Error creating profile:', profileError);
+
+      if (profileError.message.includes('duplicate key')) {
+        const { data: existingProfile } = await supabaseAdmin
+          .from('user_profiles')
+          .select('id, name, role')
+          .eq('user_id', authData.user.id)
+          .maybeSingle();
+
+        if (existingProfile) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              user: {
+                id: authData.user.id,
+                email: authData.user.email,
+                name: existingProfile.name,
+                role: existingProfile.role
+              }
+            }),
+            { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
 
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
 
