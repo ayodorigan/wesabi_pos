@@ -6,7 +6,7 @@ const LoadingScreen: React.FC = () => {
       <div className="text-center">
         <div className="flex items-center justify-center mb-8">
           <div className="animate-spin">
-            <img src="/wesabi_icon.png" alt="Loading" className="h-16 w-16" />
+            <img src="/wesabi_icon_.png" alt="Loading" className="h-16 w-16" />
           </div>
         </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Wesabi Pharmacy</h1>
