@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Download, MessageCircle, Search, Filter, X, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, MessageCircle, Search, Filter, X, RotateCcw, CheckCircle, CheckCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -542,6 +542,38 @@ export default function Orders() {
     }
   };
 
+  const markAsProcessed = async (order: Order) => {
+    try {
+      const { error } = await supabase
+        .from('supplier_orders')
+        .update({ status: 'processed' })
+        .eq('id', order.id);
+
+      if (error) throw error;
+
+      showAlert('success', `Order ${order.order_number} marked as processed`);
+      fetchOrders();
+    } catch (error: any) {
+      showAlert('error', error.message || 'Failed to mark order as processed');
+    }
+  };
+
+  const markAsCompleted = async (order: Order) => {
+    try {
+      const { error } = await supabase
+        .from('supplier_orders')
+        .update({ status: 'completed' })
+        .eq('id', order.id);
+
+      if (error) throw error;
+
+      showAlert('success', `Order ${order.order_number} marked as completed`);
+      fetchOrders();
+    } catch (error: any) {
+      showAlert('error', error.message || 'Failed to mark order as completed');
+    }
+  };
+
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.user_profiles?.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -590,6 +622,7 @@ export default function Orders() {
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
+              <option value="processed">Processed</option>
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </select>
@@ -633,6 +666,7 @@ export default function Orders() {
                       <span className={`px-2 py-1 text-xs rounded-full ${
                         order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                         order.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                        order.status === 'processed' ? 'bg-teal-100 text-teal-800' :
                         order.status === 'completed' ? 'bg-green-100 text-green-800' :
                         'bg-red-100 text-red-800'
                       }`}>
@@ -680,7 +714,35 @@ export default function Orders() {
                         >
                           <MessageCircle className="w-5 h-5" />
                         </button>
-                        {order.status === 'completed' && (
+                        {order.status !== 'processed' && order.status !== 'completed' && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              markAsProcessed(order);
+                            }}
+                            className="text-teal-600 hover:text-teal-800 transition-colors p-1"
+                            title="Mark as Processed"
+                            type="button"
+                          >
+                            <CheckCheck className="w-5 h-5" />
+                          </button>
+                        )}
+                        {order.status !== 'completed' && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              markAsCompleted(order);
+                            }}
+                            className="text-emerald-600 hover:text-emerald-800 transition-colors p-1"
+                            title="Mark as Completed"
+                            type="button"
+                          >
+                            <CheckCircle className="w-5 h-5" />
+                          </button>
+                        )}
+                        {(order.status === 'completed' || order.status === 'processed') && (
                           <button
                             onClick={(e) => {
                               e.preventDefault();
