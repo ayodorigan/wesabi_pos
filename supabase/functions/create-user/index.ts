@@ -82,29 +82,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Check if user already exists in auth.users
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const existingUser = existingUsers?.users?.find(u => u.email === email);
-
-    if (existingUser) {
-      // Check if they have a profile
-      const { data: existingProfile } = await supabaseAdmin
-        .from('user_profiles')
-        .select('user_id')
-        .eq('user_id', existingUser.id)
-        .maybeSingle();
-
-      if (existingProfile) {
-        return new Response(
-          JSON.stringify({ error: 'A user with this email already exists' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      } else {
-        // User exists in auth but not in profiles - delete and recreate
-        await supabaseAdmin.auth.admin.deleteUser(existingUser.id);
-      }
-    }
-
+    // Try to create the user - Supabase will handle duplicate email check
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -113,8 +91,13 @@ Deno.serve(async (req: Request) => {
     });
 
     if (authError) {
+      // Provide clearer error messages
+      const errorMessage = authError.message.toLowerCase().includes('already registered')
+        ? 'A user with this email already exists'
+        : authError.message;
+
       return new Response(
-        JSON.stringify({ error: authError.message }),
+        JSON.stringify({ error: errorMessage }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
