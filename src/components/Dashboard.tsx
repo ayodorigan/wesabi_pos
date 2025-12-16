@@ -78,34 +78,38 @@ const Dashboard: React.FC = () => {
         break;
       }
       case 'week': {
-        for (let i = 3; i >= 0; i--) {
-          const weekEnd = new Date(now);
-          weekEnd.setDate(weekEnd.getDate() - (i * 7));
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+        let weekNumber = 1;
+        let currentWeekStart = new Date(monthStart);
+        currentWeekStart.setHours(0, 0, 0, 0);
+
+        while (currentWeekStart <= monthEnd) {
+          const weekEnd = new Date(currentWeekStart);
+          weekEnd.setDate(weekEnd.getDate() + 6);
           weekEnd.setHours(23, 59, 59, 999);
-          const weekStart = new Date(weekEnd);
-          weekStart.setDate(weekStart.getDate() - 6);
-          weekStart.setHours(0, 0, 0, 0);
+
+          const actualWeekEnd = weekEnd > monthEnd ? monthEnd : weekEnd;
 
           const weekSales = sales.filter(sale => {
             const saleDate = new Date(sale.createdAt);
-            return saleDate >= weekStart && saleDate <= weekEnd;
+            return saleDate >= currentWeekStart && saleDate <= actualWeekEnd;
           });
 
           const total = weekSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
 
-          let label: string;
-          if (i === 0) {
-            label = 'This Week';
-          } else if (i === 1) {
-            label = 'Last Week';
-          } else {
-            label = `${i + 1} Weeks Ago`;
-          }
-
           data.push({
-            label,
+            label: `Week ${weekNumber}`,
             value: total
           });
+
+          currentWeekStart = new Date(weekEnd);
+          currentWeekStart.setDate(currentWeekStart.getDate() + 1);
+          currentWeekStart.setHours(0, 0, 0, 0);
+          weekNumber++;
+
+          if (weekNumber > 6) break;
         }
         break;
       }
