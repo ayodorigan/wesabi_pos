@@ -10,9 +10,11 @@ import {
   Shield
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 
 const Profile: React.FC = () => {
   const { user } = useAuth();
+  const { showAlert } = useAlert();
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -50,7 +52,7 @@ const Profile: React.FC = () => {
   const handleProfileUpdate = (e: React.FormEvent) => {
     e.preventDefault();
 
-    alert('Profile updates will be implemented in a future version');
+    showAlert({ title: 'Profile', message: 'Profile updates will be implemented in a future version', type: 'info' });
     setIsEditing(false);
   };
 
@@ -58,16 +60,16 @@ const Profile: React.FC = () => {
     e.preventDefault();
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('New passwords do not match');
+      showAlert({ title: 'Profile', message: 'New passwords do not match', type: 'error' });
       return;
     }
 
     if (passwordData.newPassword.length < 6) {
-      alert('Password must be at least 6 characters');
+      showAlert({ title: 'Profile', message: 'Password must be at least 6 characters', type: 'error' });
       return;
     }
 
-    alert('Password changes must be done by an administrator');
+    showAlert({ title: 'Profile', message: 'Password changes must be done by an administrator', type: 'info' });
     setShowPasswordChange(false);
     setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
   };

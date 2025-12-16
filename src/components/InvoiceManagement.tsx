@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, FileText, Trash2, Eye, Package, Edit, Upload } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../lib/supabase';
 import { Invoice, InvoiceItem } from '../types';
 import { formatKES, calculateSellingPrice } from '../utils/currency';
@@ -9,6 +10,7 @@ import { useApp } from '../contexts/AppContext';
 
 const InvoiceManagement: React.FC = () => {
   const { user, canDeleteProducts } = useAuth();
+  const { showAlert } = useAlert();
   const { categories, suppliers, addCategory, addSupplier, medicineTemplates, getMedicineByName, refreshData, logActivity } = useApp();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -91,7 +93,7 @@ const InvoiceManagement: React.FC = () => {
       setInvoices(invoicesWithItems);
     } catch (error) {
       console.error('Error loading invoices:', error);
-      alert('Failed to load invoices');
+      showAlert({ title: 'Invoice Management', message: 'Failed to load invoices', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -125,7 +127,7 @@ const InvoiceManagement: React.FC = () => {
 
   const addItemToInvoice = () => {
     if (!currentItem.productName || !currentItem.quantity || !currentItem.costPrice) {
-      alert('Please fill in all required fields for the item');
+      showAlert({ title: 'Invoice Management', message: 'Please fill in all required fields for the item', type: 'error' });
       return;
     }
 
@@ -166,12 +168,12 @@ const InvoiceManagement: React.FC = () => {
 
   const saveInvoice = async () => {
     if (!invoiceData.invoiceNumber || !invoiceData.supplier) {
-      alert('Please fill in invoice number and supplier');
+      showAlert({ title: 'Invoice Management', message: 'Please fill in invoice number and supplier', type: 'error' });
       return;
     }
 
     if (invoiceItems.length === 0) {
-      alert('Please add at least one item to the invoice');
+      showAlert({ title: 'Invoice Management', message: 'Please add at least one item to the invoice', type: 'error' });
       return;
     }
 
@@ -272,10 +274,10 @@ const InvoiceManagement: React.FC = () => {
 
       resetForm();
       setShowAddForm(false);
-      alert('Invoice saved successfully! Inventory updated.');
+      showAlert({ title: 'Invoice Management', message: 'Invoice saved successfully! Inventory updated.', type: 'success' });
     } catch (error: any) {
       console.error('Error saving invoice:', error);
-      alert(`Failed to save invoice: ${error.message}`);
+      showAlert({ title: 'Invoice Management', message: `Failed to save invoice: ${error.message}`, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -306,10 +308,10 @@ const InvoiceManagement: React.FC = () => {
       );
 
       await loadInvoices();
-      alert('Invoice deleted successfully');
+      showAlert({ title: 'Invoice Management', message: 'Invoice deleted successfully', type: 'success' });
     } catch (error: any) {
       console.error('Error deleting invoice:', error);
-      alert(`Failed to delete invoice: ${error.message}`);
+      showAlert({ title: 'Invoice Management', message: `Failed to delete invoice: ${error.message}`, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -330,7 +332,7 @@ const InvoiceManagement: React.FC = () => {
       const lines = csvText.split('\n').filter(line => line.trim());
 
       if (lines.length < 2) {
-        alert('CSV file is empty or invalid');
+        showAlert({ title: 'Invoice Management', message: 'CSV file is empty or invalid', type: 'error' });
         return;
       }
 
@@ -340,7 +342,7 @@ const InvoiceManagement: React.FC = () => {
       const hasAllHeaders = requiredHeaders.every(h => headers.includes(h));
 
       if (!hasAllHeaders) {
-        alert('CSV must have columns: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice, SellingPrice');
+        showAlert({ title: 'Invoice Management', message: 'CSV must have columns: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice, SellingPrice', type: 'error' });
         return;
       }
 
@@ -370,7 +372,7 @@ const InvoiceManagement: React.FC = () => {
       }
 
       setInvoiceItems(items);
-      alert(`Imported ${items.length} items from CSV`);
+      showAlert({ title: 'Invoice Management', message: `Imported ${items.length} items from CSV`, type: 'success' });
     };
 
     reader.readAsText(file);

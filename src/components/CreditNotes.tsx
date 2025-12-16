@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, FileText, Trash2, Download, Eye, Edit } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../lib/supabase';
 import { CreditNote, CreditNoteItem, Product } from '../types';
 import { formatKES } from '../utils/currency';
@@ -9,6 +10,7 @@ import { useApp } from '../contexts/AppContext';
 
 const CreditNotes: React.FC = () => {
   const { user } = useAuth();
+  const { showAlert } = useAlert();
   const { suppliers, products, refreshData, logActivity } = useApp();
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -92,7 +94,7 @@ const CreditNotes: React.FC = () => {
       setCreditNotes(creditNotesWithItems);
     } catch (error) {
       console.error('Error loading credit notes:', error);
-      alert('Failed to load credit notes');
+      showAlert({ title: 'Credit Notes', message: 'Failed to load credit notes', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -113,7 +115,7 @@ const CreditNotes: React.FC = () => {
 
   const addItemToCreditNote = () => {
     if (!currentItem.productId || !currentItem.quantity || !currentItem.costPrice || !currentItem.reason) {
-      alert('Please fill in all required fields for the item including the reason');
+      showAlert({ title: 'Credit Notes', message: 'Please fill in all required fields for the item including the reason', type: 'error' });
       return;
     }
 
@@ -149,12 +151,12 @@ const CreditNotes: React.FC = () => {
 
   const saveCreditNote = async () => {
     if (!creditNoteData.invoiceNumber || !creditNoteData.supplier) {
-      alert('Please fill in all required fields');
+      showAlert({ title: 'Credit Notes', message: 'Please fill in all required fields', type: 'error' });
       return;
     }
 
     if (creditNoteItems.length === 0) {
-      alert('Please add at least one item to the credit note');
+      showAlert({ title: 'Credit Notes', message: 'Please add at least one item to the credit note', type: 'error' });
       return;
     }
 
@@ -235,10 +237,10 @@ const CreditNotes: React.FC = () => {
 
       resetForm();
       setShowAddForm(false);
-      alert('Credit note saved successfully!');
+      showAlert({ title: 'Credit Notes', message: 'Credit note saved successfully!', type: 'success' });
     } catch (error: any) {
       console.error('Error saving credit note:', error);
-      alert(`Failed to save credit note: ${error.message}`);
+      showAlert({ title: 'Credit Notes', message: `Failed to save credit note: ${error.message}`, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -270,7 +272,7 @@ const CreditNotes: React.FC = () => {
 
   const deleteCreditNote = async (creditNoteId: string) => {
     if (!user || !['super_admin', 'admin'].includes(user.role)) {
-      alert('Only administrators can delete credit notes');
+      showAlert({ title: 'Credit Notes', message: 'Only administrators can delete credit notes', type: 'error' });
       return;
     }
 
@@ -299,10 +301,10 @@ const CreditNotes: React.FC = () => {
 
       await refreshData();
       await loadCreditNotes();
-      alert('Credit note deleted successfully');
+      showAlert({ title: 'Credit Notes', message: 'Credit note deleted successfully', type: 'success' });
     } catch (error: any) {
       console.error('Error deleting credit note:', error);
-      alert(`Failed to delete credit note: ${error.message}`);
+      showAlert({ title: 'Credit Notes', message: `Failed to delete credit note: ${error.message}`, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -311,7 +313,7 @@ const CreditNotes: React.FC = () => {
   const exportCreditNotesToPDF = () => {
     try {
       if (filteredCreditNotes.length === 0) {
-        alert('No credit notes to export');
+        showAlert({ title: 'Credit Notes', message: 'No credit notes to export', type: 'warning' });
         return;
       }
 
@@ -370,11 +372,11 @@ const CreditNotes: React.FC = () => {
           }, 250);
         };
       } else {
-        alert('Please allow popups to export PDF reports');
+        showAlert({ title: 'Credit Notes', message: 'Please allow popups to export PDF reports', type: 'warning' });
       }
     } catch (error) {
       console.error('Error exporting credit notes:', error);
-      alert('Error generating PDF report. Please try again.');
+      showAlert({ title: 'Credit Notes', message: 'Error generating PDF report. Please try again.', type: 'error' });
     }
   };
 
@@ -466,11 +468,11 @@ const CreditNotes: React.FC = () => {
           }, 250);
         };
       } else {
-        alert('Please allow popups to export PDF reports');
+        showAlert({ title: 'Credit Notes', message: 'Please allow popups to export PDF reports', type: 'warning' });
       }
     } catch (error) {
       console.error('Error exporting credit note:', error);
-      alert('Error generating PDF report. Please try again.');
+      showAlert({ title: 'Credit Notes', message: 'Error generating PDF report. Please try again.', type: 'error' });
     }
   };
 

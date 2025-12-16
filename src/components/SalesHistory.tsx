@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  History, 
-  Download, 
+import {
+  History,
+  Download,
   Filter,
   Search,
   Calendar,
@@ -10,6 +10,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 
 import { useAuth } from '../contexts/AuthContext';
@@ -17,6 +18,7 @@ import { useAuth } from '../contexts/AuthContext';
 const SalesHistory: React.FC = () => {
   const { salesHistory, exportToPDF } = useApp();
   const { user } = useAuth();
+  const { showAlert } = useAlert();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('7days');
@@ -98,7 +100,7 @@ const SalesHistory: React.FC = () => {
   const exportReport = () => {
     try {
       if (filteredHistory.length === 0) {
-        alert('No sales history to export');
+        showAlert({ title: 'Sales History', message: 'No sales history to export', type: 'warning' });
         return;
       }
 
@@ -171,11 +173,11 @@ const SalesHistory: React.FC = () => {
           }, 250);
         };
       } else {
-        alert('Please allow popups to export PDF reports');
+        showAlert({ title: 'Sales History', message: 'Please allow popups to export PDF reports', type: 'warning' });
       }
     } catch (error) {
       console.error('Error exporting drug sales history:', error);
-      alert('Error generating PDF report. Please try again.');
+      showAlert({ title: 'Sales History', message: 'Error generating PDF report. Please try again.', type: 'error' });
     }
   };
 

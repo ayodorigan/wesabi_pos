@@ -16,12 +16,14 @@ import {
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 import { Product, SaleItem } from '../types';
 import { formatKES, getMinimumSellingPrice, validateSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 
 const POS: React.FC = () => {
   const { products, addSale, getLastSoldPrice } = useApp();
   const { user } = useAuth();
+  const { showAlert } = useAlert();
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'insurance'>('mpesa');
@@ -57,7 +59,7 @@ const POS: React.FC = () => {
     
     if (existingItem) {
       // Don't add duplicate products, just show a message
-      alert('Product already in cart. Adjust quantity if needed.');
+      showAlert({ title: 'Point of Sale', message: 'Product already in cart. Adjust quantity if needed.', type: 'warning' });
       return;
     } else {
       const newItem: SaleItem = {
@@ -118,7 +120,7 @@ const POS: React.FC = () => {
     const minPrice = getMinimumSellingPrice(product.costPrice);
 
     if (newPrice < minPrice) {
-      alert(`Price cannot be less than minimum selling price: ${formatKES(minPrice)}`);
+      showAlert({ title: 'Point of Sale', message: `Price cannot be less than minimum selling price: ${formatKES(minPrice)}`, type: 'error' });
       return;
     }
 
@@ -153,7 +155,7 @@ const POS: React.FC = () => {
       if (product) {
         const minPrice = getMinimumSellingPrice(product.costPrice);
         if (item.unitPrice < minPrice) {
-          alert(`Price for ${item.productName} cannot be less than minimum selling price: ${formatKES(minPrice)}`);
+          showAlert({ title: 'Point of Sale', message: `Price for ${item.productName} cannot be less than minimum selling price: ${formatKES(minPrice)}`, type: 'error' });
           return;
         }
       }
@@ -191,9 +193,9 @@ const POS: React.FC = () => {
       setMpesaPaymentDetails(null);
       setCheckoutRequestId(null);
 
-      alert(`Sale completed! Receipt #${receiptNumber} - Wesabi Pharmacy`);
+      showAlert({ title: 'Point of Sale', message: `Sale completed! Receipt #${receiptNumber} - Wesabi Pharmacy`, type: 'success' });
     } catch (error) {
-      alert('Error processing sale. Please try again.');
+      showAlert({ title: 'Point of Sale', message: 'Error processing sale. Please try again.', type: 'error' });
     } finally {
       setIsProcessing(false);
     }
@@ -205,7 +207,7 @@ const POS: React.FC = () => {
     console.log('Amount:', getTotalAmount());
 
     if (!mpesaPhone.trim()) {
-      alert('Please enter M-Pesa phone number');
+      showAlert({ title: 'Point of Sale', message: 'Please enter M-Pesa phone number', type: 'warning' });
       return;
     }
 
@@ -236,7 +238,7 @@ const POS: React.FC = () => {
 
       if (!response.ok) {
         if (data.error && data.error.includes('credentials not configured')) {
-          alert('M-Pesa is not configured. Please configure M-Pesa credentials in Supabase Edge Function secrets to enable mobile payments.');
+          showAlert({ title: 'Point of Sale', message: 'M-Pesa is not configured. Please configure M-Pesa credentials in Supabase Edge Function secrets to enable mobile payments.', type: 'error' });
           setIsProcessing(false);
           return;
         }
@@ -260,10 +262,10 @@ const POS: React.FC = () => {
         console.error('No CheckoutRequestID in response!', data);
       }
 
-      alert('M-Pesa prompt sent! Please check your phone and enter your PIN. You can also complete the sale manually if needed.');
+      showAlert({ title: 'Point of Sale', message: 'M-Pesa prompt sent! Please check your phone and enter your PIN. You can also complete the sale manually if needed.', type: 'info' });
     } catch (error: any) {
       console.error('M-Pesa payment error:', error);
-      alert(error.message || 'Failed to process M-Pesa payment. You can still complete the sale manually.');
+      showAlert({ title: 'Point of Sale', message: error.message || 'Failed to process M-Pesa payment. You can still complete the sale manually.', type: 'error' });
       setIsProcessing(false);
     }
   };
@@ -318,7 +320,7 @@ const POS: React.FC = () => {
             console.log('Payment successful, details saved');
           } else {
             // Failed or cancelled
-            alert(`M-Pesa payment ${data.result_description}. You can try again or complete manually.`);
+            showAlert({ title: 'Point of Sale', message: `M-Pesa payment ${data.result_description}. You can try again or complete manually.`, type: 'warning' });
             setIsProcessing(false);
             console.log('Payment failed:', data.result_description);
           }
@@ -333,7 +335,7 @@ const POS: React.FC = () => {
         } else {
           // Timeout - stop polling
           setPollingInterval(null);
-          alert('M-Pesa payment timeout. You can complete the sale manually.');
+          showAlert({ title: 'Point of Sale', message: 'M-Pesa payment timeout. You can complete the sale manually.', type: 'warning' });
           setIsProcessing(false);
           console.log('Polling timeout reached');
         }
@@ -593,7 +595,7 @@ const POS: React.FC = () => {
                                 const minPrice = getMinimumSellingPrice(product.costPrice);
                                 if (priceToUse < minPrice) {
                                   priceToUse = minPrice;
-                                  alert(`Price adjusted to minimum selling price: ${formatKES(minPrice)}`);
+                                  showAlert({ title: 'Point of Sale', message: `Price adjusted to minimum selling price: ${formatKES(minPrice)}`, type: 'info' });
                                 }
                                 
                                 setCart(cart.map(cartItem =>
@@ -810,12 +812,12 @@ const POS: React.FC = () => {
                             setIsProcessing(false);
                             stopPolling();
                           } else {
-                            alert(`Payment ${data.result_description}`);
+                            showAlert({ title: 'Point of Sale', message: `Payment ${data.result_description}`, type: 'warning' });
                             setIsProcessing(false);
                             stopPolling();
                           }
                         } else {
-                          alert('No payment found yet. Please wait or complete manually.');
+                          showAlert({ title: 'Point of Sale', message: 'No payment found yet. Please wait or complete manually.', type: 'info' });
                         }
                       }}
                       className="mt-2 w-full px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"

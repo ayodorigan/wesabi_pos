@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { 
-  Clock, 
-  User, 
+import {
+  Clock,
+  User,
   Filter,
   Download,
   Search
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAlert } from '../contexts/AlertContext';
 
 const ActivityLogs: React.FC = () => {
   const { activityLogs } = useApp();
+  const { showAlert } = useAlert();
   const [searchTerm, setSearchTerm] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
   const [userFilter, setUserFilter] = useState('all');
@@ -46,7 +48,7 @@ const ActivityLogs: React.FC = () => {
   const exportLogs = () => {
     try {
       if (filteredLogs.length === 0) {
-        alert('No activity logs to export');
+        showAlert({ title: 'Activity Logs', message: 'No activity logs to export', type: 'warning' });
         return;
       }
 
@@ -105,11 +107,11 @@ const ActivityLogs: React.FC = () => {
           }, 250);
         };
       } else {
-        alert('Please allow popups to export PDF reports');
+        showAlert({ title: 'Activity Logs', message: 'Please allow popups to export PDF reports', type: 'warning' });
       }
     } catch (error) {
       console.error('Error exporting activity logs:', error);
-      alert('Error generating PDF report. Please try again.');
+      showAlert({ title: 'Activity Logs', message: 'Error generating PDF report. Please try again.', type: 'error' });
     }
   };
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Users, 
-  Shield, 
+import {
+  Users,
+  Shield,
   Save,
   Plus,
   Edit,
@@ -12,18 +12,20 @@ import {
   User as UserIcon
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 import type { UserProfile } from '../contexts/AuthContext';
 
 const Settings: React.FC = () => {
-  const { 
-    user, 
-    getAllUsers, 
-    createUser, 
-    updateUser, 
-    deleteUser, 
+  const {
+    user,
+    getAllUsers,
+    createUser,
+    updateUser,
+    deleteUser,
     resetPassword,
-    canManageUsers 
+    canManageUsers
   } = useAuth();
+  const { showAlert } = useAlert();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -89,9 +91,9 @@ const Settings: React.FC = () => {
       await loadUsers();
       setShowAddUser(false);
       resetForm();
-      alert('User created successfully!');
+      showAlert({ title: 'Settings', message: 'User created successfully!', type: 'success' });
     } catch (error: any) {
-      alert(`Error creating user: ${error.message}`);
+      showAlert({ title: 'Settings', message: `Error creating user: ${error.message}`, type: 'error' });
     }
   };
 
@@ -110,7 +112,7 @@ const Settings: React.FC = () => {
       setEditingUser(null);
       resetForm();
     } catch (error: any) {
-      alert(`Error updating user: ${error.message}`);
+      showAlert({ title: 'Settings', message: `Error updating user: ${error.message}`, type: 'error' });
     }
   };
 
@@ -119,24 +121,24 @@ const Settings: React.FC = () => {
     if (!passwordUser) return;
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('Passwords do not match');
+      showAlert({ title: 'Settings', message: 'Passwords do not match', type: 'error' });
       return;
     }
 
     if (passwordData.newPassword.length < 8) {
-      alert('Password must be at least 8 characters');
+      showAlert({ title: 'Settings', message: 'Password must be at least 8 characters', type: 'error' });
       return;
     }
 
     try {
       await resetPassword(passwordUser.user_id, passwordData.newPassword);
-      alert('Password updated successfully!');
+      showAlert({ title: 'Settings', message: 'Password updated successfully!', type: 'success' });
 
       setShowPasswordModal(false);
       setPasswordUser(null);
       resetPasswordForm();
     } catch (error: any) {
-      alert(`Error resetting password: ${error.message}`);
+      showAlert({ title: 'Settings', message: `Error resetting password: ${error.message}`, type: 'error' });
     }
   };
 
@@ -148,7 +150,7 @@ const Settings: React.FC = () => {
         await loadUsers();
       }
     } catch (error: any) {
-      alert(`Error updating user status: ${error.message}`);
+      showAlert({ title: 'Settings', message: `Error updating user status: ${error.message}`, type: 'error' });
     }
   };
 
@@ -158,7 +160,7 @@ const Settings: React.FC = () => {
         await deleteUser(userId);
         await loadUsers();
       } catch (error: any) {
-        alert(`Error deleting user: ${error.message}`);
+        showAlert({ title: 'Settings', message: `Error deleting user: ${error.message}`, type: 'error' });
       }
     }
   };

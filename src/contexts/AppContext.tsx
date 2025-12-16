@@ -3,6 +3,7 @@ import { supabase, isSupabaseEnabled } from '../lib/supabase';
 import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 import { medicineDatabase, drugCategories, commonSuppliers } from '../data/medicineDatabase';
 import { useAuth } from './AuthContext';
+import { useAlert } from './AlertContext';
 import { Product, PriceHistory, SaleItem, Sale, StockTake, ActivityLog, StockAlert, SalesHistoryItem } from '../types';
 
 interface AppContextType {
@@ -56,6 +57,7 @@ interface AppProviderProps {
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const { user } = useAuth();
+  const { showAlert } = useAlert();
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [stockTakes, setStockTakes] = useState<StockTake[]>([]);
@@ -973,11 +975,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           }, 250);
         };
       } else {
-        alert('Please allow popups to print receipts');
+        showAlert({ title: 'App Context', message: 'Please allow popups to print receipts', type: 'warning' });
       }
     } catch (error) {
       console.error('Error generating receipt:', error);
-      alert('Error generating receipt. Please try again.');
+      showAlert({ title: 'App Context', message: 'Error generating receipt. Please try again.', type: 'error' });
     }
   };
 

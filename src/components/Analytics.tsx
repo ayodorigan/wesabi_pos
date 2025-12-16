@@ -9,11 +9,13 @@ import {
   DollarSign
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 import SalesChart from './SalesChart';
 
 const Analytics: React.FC = () => {
   const { sales, products, salesHistory } = useApp();
+  const { showAlert } = useAlert();
   const [dateRange, setDateRange] = useState('7days');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [salesPeriod, setSalesPeriod] = useState<'day' | 'week' | 'month' | 'year'>('week');
@@ -252,7 +254,7 @@ const Analytics: React.FC = () => {
   const exportAnalytics = () => {
     try {
       if (filteredSales.length === 0) {
-        alert('No analytics data to export');
+        showAlert({ title: 'Analytics', message: 'No analytics data to export', type: 'warning' });
         return;
       }
 
@@ -338,11 +340,11 @@ const Analytics: React.FC = () => {
           }, 250);
         };
       } else {
-        alert('Please allow popups to export PDF reports');
+        showAlert({ title: 'Analytics', message: 'Please allow popups to export PDF reports', type: 'warning' });
       }
     } catch (error) {
       console.error('Error exporting analytics:', error);
-      alert('Error generating PDF report. Please try again.');
+      showAlert({ title: 'Analytics', message: 'Error generating PDF report. Please try again.', type: 'error' });
     }
   };
 

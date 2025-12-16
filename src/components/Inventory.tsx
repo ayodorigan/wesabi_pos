@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Download, 
+import {
+  Plus,
+  Search,
+  Filter,
+  Download,
   Upload,
   Edit,
   Trash2,
@@ -12,16 +12,17 @@ import {
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 import { Product } from '../types';
 import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 import AutocompleteInput from './AutocompleteInput';
 
 const Inventory: React.FC = () => {
-  const { 
-    products, 
-    addProduct, 
-    updateProduct, 
-    deleteProduct, 
+  const {
+    products,
+    addProduct,
+    updateProduct,
+    deleteProduct,
     importProducts,
     medicineTemplates,
     addMedicine,
@@ -32,6 +33,7 @@ const Inventory: React.FC = () => {
     getMedicineByName
   } = useApp();
   const { user, canManagePricing, canDeleteProducts } = useAuth();
+  const { showAlert } = useAlert();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -65,7 +67,7 @@ const Inventory: React.FC = () => {
   const exportToCSV = () => {
     try {
       if (filteredProducts.length === 0) {
-        alert('No products to export');
+        showAlert({ title: 'Inventory', message: 'No products to export', type: 'warning' });
         return;
       }
 
@@ -136,11 +138,11 @@ const Inventory: React.FC = () => {
           }, 250);
         };
       } else {
-        alert('Please allow popups to export PDF reports');
+        showAlert({ title: 'Inventory', message: 'Please allow popups to export PDF reports', type: 'warning' });
       }
     } catch (error) {
       console.error('Error exporting inventory report:', error);
-      alert('Error generating PDF report. Please try again.');
+      showAlert({ title: 'Inventory', message: 'Error generating PDF report. Please try again.', type: 'error' });
     }
   };
 
@@ -218,32 +220,32 @@ const Inventory: React.FC = () => {
     
     // Validate required fields
     if (!formData.name.trim()) {
-      alert('Product name is required');
+      showAlert({ title: 'Inventory', message: 'Product name is required', type: 'error' });
       return;
     }
-    
+
     if (!formData.category.trim()) {
-      alert('Category is required');
+      showAlert({ title: 'Inventory', message: 'Category is required', type: 'error' });
       return;
     }
-    
+
     if (!formData.invoiceNumber.trim()) {
-      alert('Invoice number is required');
+      showAlert({ title: 'Inventory', message: 'Invoice number is required', type: 'error' });
       return;
     }
-    
+
     if (!formData.currentStock.trim()) {
-      alert('Quantity is required');
+      showAlert({ title: 'Inventory', message: 'Quantity is required', type: 'error' });
       return;
     }
-    
+
     // Check for duplicate product names (case insensitive)
-    const existingProduct = products.find(p => 
+    const existingProduct = products.find(p =>
       p.name.toLowerCase() === formData.name.toLowerCase()
     );
-    
+
     if (existingProduct) {
-      alert(`Product "${formData.name}" already exists in inventory. Please use a different name or update the existing product.`);
+      showAlert({ title: 'Inventory', message: `Product "${formData.name}" already exists in inventory. Please use a different name or update the existing product.`, type: 'error' });
       return;
     }
 
@@ -251,9 +253,9 @@ const Inventory: React.FC = () => {
     const costPrice = parseFloat(formData.costPrice) || 0;
     const sellingPrice = parseFloat(formData.sellingPrice) || 0;
     const minSellingPrice = getMinimumSellingPrice(costPrice);
-    
+
     if (sellingPrice < minSellingPrice) {
-      alert(`Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × cost price)`);
+      showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × cost price)`, type: 'error' });
       return;
     }
     
@@ -280,7 +282,7 @@ const Inventory: React.FC = () => {
       })
       .catch((error) => {
         console.error('❌ Failed to add product:', error);
-        alert(`Failed to add product: ${error.message}`);
+        showAlert({ title: 'Inventory', message: `Failed to add product: ${error.message}`, type: 'error' });
         console.log('Error details:', error);
       });
   };
@@ -294,9 +296,9 @@ const Inventory: React.FC = () => {
     const costPrice = parseFloat(formData.costPrice) || 0;
     const sellingPrice = parseFloat(formData.sellingPrice) || 0;
     const minSellingPrice = getMinimumSellingPrice(costPrice);
-    
+
     if (sellingPrice < minSellingPrice) {
-      alert(`Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × cost price)`);
+      showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × cost price)`, type: 'error' });
       return;
     }
 
@@ -614,12 +616,12 @@ const Inventory: React.FC = () => {
                           const value = parseFloat(e.target.value) || 0;
                           const costPrice = parseFloat(formData.costPrice) || 0;
                           const minPrice = getMinimumSellingPrice(costPrice);
-                          
+
                           if (value < minPrice && costPrice > 0) {
-                            alert(`Selling price cannot be less than ${formatKES(minPrice)} (1.33 × cost price)`);
+                            showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minPrice)} (1.33 × cost price)`, type: 'error' });
                             return;
                           }
-                          
+
                           setFormData({ ...formData, sellingPrice: e.target.value });
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -775,12 +777,12 @@ const Inventory: React.FC = () => {
                           const value = parseFloat(e.target.value) || 0;
                           const costPrice = parseFloat(formData.costPrice) || 0;
                           const minPrice = getMinimumSellingPrice(costPrice);
-                          
+
                           if (value < minPrice && costPrice > 0) {
-                            alert(`Selling price cannot be less than ${formatKES(minPrice)} (1.33 × cost price)`);
+                            showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minPrice)} (1.33 × cost price)`, type: 'error' });
                             return;
                           }
-                          
+
                           setFormData({ ...formData, sellingPrice: e.target.value });
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"

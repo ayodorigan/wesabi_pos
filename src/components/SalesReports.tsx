@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  Calendar, 
-  Download, 
+import {
+  Calendar,
+  Download,
   Filter,
   TrendingUp,
   Package,
@@ -9,10 +9,12 @@ import {
   Receipt
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 
 const SalesReports: React.FC = () => {
   const { sales, generateReceipt } = useApp();
+  const { showAlert } = useAlert();
   const [dateRange, setDateRange] = useState('7days');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -78,7 +80,7 @@ const SalesReports: React.FC = () => {
   const exportReport = () => {
     try {
       if (filteredSales.length === 0) {
-        alert('No sales data to export');
+        showAlert({ title: 'Sales Reports', message: 'No sales data to export', type: 'warning' });
         return;
       }
 
@@ -153,11 +155,11 @@ const SalesReports: React.FC = () => {
           }, 250);
         };
       } else {
-        alert('Please allow popups to export PDF reports');
+        showAlert({ title: 'Sales Reports', message: 'Please allow popups to export PDF reports', type: 'warning' });
       }
     } catch (error) {
       console.error('Error exporting sales report:', error);
-      alert('Error generating PDF report. Please try again.');
+      showAlert({ title: 'Sales Reports', message: 'Error generating PDF report. Please try again.', type: 'error' });
     }
   };
 

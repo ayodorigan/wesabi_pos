@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { Package, Save, AlertTriangle, CheckCircle, History, Calendar, Download, Edit, Trash2, Plus, ArrowLeft } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 
 interface StockTakeSession {
@@ -16,6 +17,7 @@ interface StockTakeSession {
 const StockTake: React.FC = () => {
   const { products, stockTakes, addStockTake, isSupabaseEnabled, stockTakeSessions, updateStockTakeSession, createStockTakeSession, deleteStockTakeSession, logActivity } = useApp();
   const { user } = useAuth();
+  const { showAlert } = useAlert();
   const [currentView, setCurrentView] = useState<'history' | 'active'>('history');
   const [activeSession, setActiveSession] = useState<StockTakeSession | null>(null);
   const [sessions, setSessions] = useState<StockTakeSession[]>([]);
@@ -82,7 +84,7 @@ const StockTake: React.FC = () => {
 
   const createNewSession = async () => {
     if (!sessionName.trim()) {
-      alert('Please enter a name for the stock take session');
+      showAlert({ title: 'Stock Take', message: 'Please enter a name for the stock take session', type: 'error' });
       return;
     }
 
@@ -108,7 +110,7 @@ const StockTake: React.FC = () => {
       await logActivity('CREATE_STOCK_TAKE_SESSION', `Started stock take session: ${sessionName.trim()}`);
     } catch (error: any) {
       console.error('Error creating session:', error);
-      alert(`Failed to create session: ${error.message}`);
+      showAlert({ title: 'Stock Take', message: `Failed to create session: ${error.message}`, type: 'error' });
     }
   };
 
@@ -120,7 +122,7 @@ const StockTake: React.FC = () => {
 
   const updateSessionName = async () => {
     if (!sessionName.trim() || !editingSessionId) {
-      alert('Please enter a valid name');
+      showAlert({ title: 'Stock Take', message: 'Please enter a valid name', type: 'error' });
       return;
     }
 
@@ -146,7 +148,7 @@ const StockTake: React.FC = () => {
       setEditingSessionId(null);
     } catch (error: any) {
       console.error('Error updating session name:', error);
-      alert(`Failed to update session name: ${error.message}`);
+      showAlert({ title: 'Stock Take', message: `Failed to update session name: ${error.message}`, type: 'error' });
     }
   };
 
@@ -168,7 +170,7 @@ const StockTake: React.FC = () => {
         }
       } catch (error: any) {
         console.error('Error deleting session:', error);
-        alert(`Failed to delete session: ${error.message}`);
+        showAlert({ title: 'Stock Take', message: `Failed to delete session: ${error.message}`, type: 'error' });
       }
     }
   };
@@ -234,10 +236,10 @@ const StockTake: React.FC = () => {
       localStorage.setItem(`stockTakeSession_${activeSession.id}`, JSON.stringify(activeSession));
 
       setLastSaved(new Date());
-      alert('Progress saved successfully!');
+      showAlert({ title: 'Stock Take', message: 'Progress saved successfully!', type: 'success' });
     } catch (error: any) {
       console.error('Error saving progress:', error);
-      alert(`Failed to save progress: ${error.message}`);
+      showAlert({ title: 'Stock Take', message: `Failed to save progress: ${error.message}`, type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -280,7 +282,7 @@ const StockTake: React.FC = () => {
     });
 
     if (stockTakeEntries.length === 0) {
-      alert('No stock discrepancies found to save.');
+      showAlert({ title: 'Stock Take', message: 'No stock discrepancies found to save.', type: 'warning' });
       return;
     }
 
@@ -314,11 +316,11 @@ const StockTake: React.FC = () => {
 
         setActiveSession(null);
         setCurrentView('history');
-        alert('Stock take completed and saved to database successfully!');
+        showAlert({ title: 'Stock Take', message: 'Stock take completed and saved to database successfully!', type: 'success' });
       })
       .catch((error) => {
         console.error('Error saving stock take to database:', error);
-        alert(`Error saving stock take to database: ${error.message}. Please try again.`);
+        showAlert({ title: 'Stock Take', message: `Error saving stock take to database: ${error.message}. Please try again.`, type: 'error' });
       });
   };
 
@@ -393,7 +395,7 @@ const StockTake: React.FC = () => {
   const exportHistoryToPDF = (date: string, items: any[]) => {
     try {
       if (items.length === 0) {
-        alert('No stock take data to export');
+        showAlert({ title: 'Stock Take', message: 'No stock take data to export', type: 'warning' });
         return;
       }
 
@@ -458,11 +460,11 @@ const StockTake: React.FC = () => {
           }, 250);
         };
       } else {
-        alert('Please allow popups to export PDF reports');
+        showAlert({ title: 'Stock Take', message: 'Please allow popups to export PDF reports', type: 'warning' });
       }
     } catch (error) {
       console.error('Error exporting stock take report:', error);
-      alert('Error generating PDF report. Please try again.');
+      showAlert({ title: 'Stock Take', message: 'Error generating PDF report. Please try again.', type: 'error' });
     }
   };
 

@@ -17,6 +17,7 @@ import {
   FileMinus
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -26,6 +27,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
   const { user, signOut, canAccessPage } = useAuth();
+  const { showAlert } = useAlert();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
@@ -55,7 +57,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
        console.log('Sign out completed');
     } catch (error) {
       console.error('Error signing out:', error);
-       alert('Error signing out. Please try again.');
+       showAlert({ title: 'Layout', message: 'Error signing out. Please try again.', type: 'error' });
     }
   };
 
