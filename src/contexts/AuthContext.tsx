@@ -24,6 +24,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (userId: string, newPassword: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  updateProfile: (updates: { name?: string; phone?: string }) => Promise<void>;
   createUser: (userData: {
     name: string;
     phone?: string;
@@ -345,6 +347,70 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    if (!isSupabaseEnabled || !supabase) {
+      throw new Error('Password change not available in demo mode');
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/change-password`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to change password');
+    }
+
+    // Log password change
+    if (user) {
+      await logAuthActivity(
+        user.user_id,
+        user.name,
+        'PASSWORD_CHANGED',
+        `User changed their password`
+      );
+    }
+  };
+
+  const updateProfile = async (updates: { name?: string; phone?: string }) => {
+    if (!isSupabaseEnabled || !supabase || !user) {
+      throw new Error('Profile update not available');
+    }
+
+    const { error } = await supabase
+      .from('user_profiles')
+      .update(updates)
+      .eq('user_id', user.user_id);
+
+    if (error) {
+      throw error;
+    }
+
+    // Update local user state
+    setUser({
+      ...user,
+      ...updates,
+    });
+
+    // Log profile update
+    await logAuthActivity(
+      user.user_id,
+      user.name,
+      'PROFILE_UPDATED',
+      `User updated their profile: ${Object.keys(updates).join(', ')}`
+    );
+  };
+
   const createUser = async (userData: {
     name: string;
     phone?: string;
@@ -561,6 +627,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       signIn,
       signOut,
       resetPassword,
+      changePassword,
+      updateProfile,
       createUser,
       updateUser,
       deleteUser,

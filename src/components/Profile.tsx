@@ -13,7 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 
 const Profile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, changePassword, updateProfile } = useAuth();
   const { showAlert } = useAlert();
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
@@ -49,14 +49,23 @@ const Profile: React.FC = () => {
     }
   };
 
-  const handleProfileUpdate = (e: React.FormEvent) => {
+  const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    showAlert({ title: 'Profile', message: 'Profile updates will be implemented in a future version', type: 'info' });
-    setIsEditing(false);
+    try {
+      await updateProfile({
+        name: profileData.name,
+        phone: profileData.phone,
+      });
+
+      showAlert({ title: 'Profile', message: 'Profile updated successfully!', type: 'success' });
+      setIsEditing(false);
+    } catch (error: any) {
+      showAlert({ title: 'Profile', message: error.message || 'Failed to update profile', type: 'error' });
+    }
   };
 
-  const handlePasswordChange = (e: React.FormEvent) => {
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
@@ -64,14 +73,19 @@ const Profile: React.FC = () => {
       return;
     }
 
-    if (passwordData.newPassword.length < 6) {
-      showAlert({ title: 'Profile', message: 'Password must be at least 6 characters', type: 'error' });
+    if (passwordData.newPassword.length < 8) {
+      showAlert({ title: 'Profile', message: 'Password must be at least 8 characters', type: 'error' });
       return;
     }
 
-    showAlert({ title: 'Profile', message: 'Password changes must be done by an administrator', type: 'info' });
-    setShowPasswordChange(false);
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    try {
+      await changePassword(passwordData.currentPassword, passwordData.newPassword);
+      showAlert({ title: 'Profile', message: 'Password changed successfully!', type: 'success' });
+      setShowPasswordChange(false);
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error: any) {
+      showAlert({ title: 'Profile', message: error.message || 'Failed to change password', type: 'error' });
+    }
   };
 
   const getRoleColor = (role: string) => {

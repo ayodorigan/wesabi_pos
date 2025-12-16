@@ -108,10 +108,11 @@ const Settings: React.FC = () => {
         phone: formData.phone,
         role: formData.role,
       });
-      
+
       await loadUsers();
       setEditingUser(null);
       resetForm();
+      showAlert({ title: 'Settings', message: 'User updated successfully!', type: 'success' });
     } catch (error: any) {
       showAlert({ title: 'Settings', message: getErrorMessage(error), type: 'error' });
     }
@@ -149,6 +150,11 @@ const Settings: React.FC = () => {
       if (userToUpdate) {
         await updateUser(userId, { is_active: !userToUpdate.is_active });
         await loadUsers();
+        showAlert({
+          title: 'Settings',
+          message: `User ${userToUpdate.is_active ? 'deactivated' : 'activated'} successfully!`,
+          type: 'success'
+        });
       }
     } catch (error: any) {
       showAlert({ title: 'Settings', message: getErrorMessage(error), type: 'error' });
