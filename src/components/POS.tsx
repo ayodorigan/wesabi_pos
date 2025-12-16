@@ -524,9 +524,9 @@ const POS: React.FC = () => {
         </div>
 
         {/* Cart Items */}
-        <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
+        <div className="space-y-2 mb-4 max-h-[400px] overflow-y-auto">
           {cart.map(item => (
-            <div key={item.productId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div key={item.productId} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{item.productName}</p>
                 <div className="space-y-1">
