@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { Product } from '../types';
 import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
+import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
 
 const Inventory: React.FC = () => {
@@ -282,7 +283,7 @@ const Inventory: React.FC = () => {
       })
       .catch((error) => {
         console.error('❌ Failed to add product:', error);
-        showAlert({ title: 'Inventory', message: `Failed to add product: ${error.message}`, type: 'error' });
+        showAlert({ title: 'Inventory', message: getErrorMessage(error), type: 'error' });
         console.log('Error details:', error);
       });
   };
@@ -352,7 +353,7 @@ const Inventory: React.FC = () => {
           await deleteProduct(productId);
           showAlert({ title: 'Inventory', message: 'Product deleted successfully', type: 'success' });
         } catch (error: any) {
-          showAlert({ title: 'Inventory', message: `Failed to delete product: ${error.message}`, type: 'error' });
+          showAlert({ title: 'Inventory', message: getErrorMessage(error), type: 'error' });
         }
       }
     });

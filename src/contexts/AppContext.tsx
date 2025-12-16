@@ -4,6 +4,7 @@ import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimu
 import { medicineDatabase, drugCategories, commonSuppliers } from '../data/medicineDatabase';
 import { useAuth } from './AuthContext';
 import { useAlert } from './AlertContext';
+import { retryDatabaseOperation } from '../utils/retry';
 import { Product, PriceHistory, SaleItem, Sale, StockTake, ActivityLog, StockAlert, SalesHistoryItem } from '../types';
 
 interface AppContextType {

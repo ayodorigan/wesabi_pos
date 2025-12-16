@@ -19,6 +19,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { Product, SaleItem } from '../types';
 import { formatKES, getMinimumSellingPrice, validateSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
+import { getErrorMessage } from '../utils/errorMessages';
+import { retryDatabaseOperation } from '../utils/retry';
 
 const POS: React.FC = () => {
   const { products, addSale, getLastSoldPrice } = useApp();
@@ -175,14 +177,17 @@ const POS: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      const receiptNumber = await addSale({
-        items: cart,
-        totalAmount: getTotalAmount(),
-        paymentMethod,
-        customerName: customerName || undefined,
-        salesPersonId: user.user_id,
-        salesPersonName: user.name,
-      });
+      const receiptNumber = await retryDatabaseOperation(
+        () => addSale({
+          items: cart,
+          totalAmount: getTotalAmount(),
+          paymentMethod,
+          customerName: customerName || undefined,
+          salesPersonId: user.user_id,
+          salesPersonName: user.name,
+        }),
+        'Complete sale'
+      );
 
       setLastReceipt(receiptNumber);
       setCart([]);
@@ -195,7 +200,7 @@ const POS: React.FC = () => {
 
       showAlert({ title: 'Point of Sale', message: `Sale completed! Receipt #${receiptNumber} - Wesabi Pharmacy`, type: 'success' });
     } catch (error) {
-      showAlert({ title: 'Point of Sale', message: 'Error processing sale. Please try again.', type: 'error' });
+      showAlert({ title: 'Point of Sale', message: getErrorMessage(error), type: 'error' });
     } finally {
       setIsProcessing(false);
     }
@@ -265,7 +270,7 @@ const POS: React.FC = () => {
       showAlert({ title: 'Point of Sale', message: 'M-Pesa prompt sent! Please check your phone and enter your PIN. You can also complete the sale manually if needed.', type: 'info' });
     } catch (error: any) {
       console.error('M-Pesa payment error:', error);
-      showAlert({ title: 'Point of Sale', message: error.message || 'Failed to process M-Pesa payment. You can still complete the sale manually.', type: 'error' });
+      showAlert({ title: 'Point of Sale', message: getErrorMessage(error), type: 'error' });
       setIsProcessing(false);
     }
   };

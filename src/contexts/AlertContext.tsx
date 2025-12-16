@@ -47,10 +47,15 @@ export const AlertProvider: React.FC<AlertProviderProps> = ({ children }) => {
   };
 
   const handleConfirm = async () => {
-    if (alertState.onConfirm) {
-      await alertState.onConfirm();
+    try {
+      if (alertState.onConfirm) {
+        await alertState.onConfirm();
+      }
+    } catch (error) {
+      console.error('Error in confirm action:', error);
+    } finally {
+      closeAlert();
     }
-    closeAlert();
   };
 
   return (

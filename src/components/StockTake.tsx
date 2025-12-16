@@ -5,6 +5,7 @@ import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
+import { getErrorMessage } from '../utils/errorMessages';
 
 interface StockTakeSession {
   id: string;
@@ -110,7 +111,7 @@ const StockTake: React.FC = () => {
       await logActivity('CREATE_STOCK_TAKE_SESSION', `Started stock take session: ${sessionName.trim()}`);
     } catch (error: any) {
       console.error('Error creating session:', error);
-      showAlert({ title: 'Stock Take', message: `Failed to create session: ${error.message}`, type: 'error' });
+      showAlert({ title: 'Stock Take', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -148,7 +149,7 @@ const StockTake: React.FC = () => {
       setEditingSessionId(null);
     } catch (error: any) {
       console.error('Error updating session name:', error);
-      showAlert({ title: 'Stock Take', message: `Failed to update session name: ${error.message}`, type: 'error' });
+      showAlert({ title: 'Stock Take', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -176,7 +177,7 @@ const StockTake: React.FC = () => {
           showAlert({ title: 'Stock Take', message: 'Session deleted successfully', type: 'success' });
         } catch (error: any) {
           console.error('Error deleting session:', error);
-          showAlert({ title: 'Stock Take', message: `Failed to delete session: ${error.message}`, type: 'error' });
+          showAlert({ title: 'Stock Take', message: getErrorMessage(error), type: 'error' });
         }
       }
     });
@@ -246,7 +247,7 @@ const StockTake: React.FC = () => {
       showAlert({ title: 'Stock Take', message: 'Progress saved successfully!', type: 'success' });
     } catch (error: any) {
       console.error('Error saving progress:', error);
-      showAlert({ title: 'Stock Take', message: `Failed to save progress: ${error.message}`, type: 'error' });
+      showAlert({ title: 'Stock Take', message: getErrorMessage(error), type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -327,7 +328,7 @@ const StockTake: React.FC = () => {
       })
       .catch((error) => {
         console.error('Error saving stock take to database:', error);
-        showAlert({ title: 'Stock Take', message: `Error saving stock take to database: ${error.message}. Please try again.`, type: 'error' });
+        showAlert({ title: 'Stock Take', message: getErrorMessage(error), type: 'error' });
       });
   };
 

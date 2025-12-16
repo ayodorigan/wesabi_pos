@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import type { UserProfile } from '../contexts/AuthContext';
+import { getErrorMessage } from '../utils/errorMessages';
 
 const Settings: React.FC = () => {
   const {
@@ -93,7 +94,7 @@ const Settings: React.FC = () => {
       resetForm();
       showAlert({ title: 'Settings', message: 'User created successfully!', type: 'success' });
     } catch (error: any) {
-      showAlert({ title: 'Settings', message: `Error creating user: ${error.message}`, type: 'error' });
+      showAlert({ title: 'Settings', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -112,7 +113,7 @@ const Settings: React.FC = () => {
       setEditingUser(null);
       resetForm();
     } catch (error: any) {
-      showAlert({ title: 'Settings', message: `Error updating user: ${error.message}`, type: 'error' });
+      showAlert({ title: 'Settings', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -138,7 +139,7 @@ const Settings: React.FC = () => {
       setPasswordUser(null);
       resetPasswordForm();
     } catch (error: any) {
-      showAlert({ title: 'Settings', message: `Error resetting password: ${error.message}`, type: 'error' });
+      showAlert({ title: 'Settings', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -150,7 +151,7 @@ const Settings: React.FC = () => {
         await loadUsers();
       }
     } catch (error: any) {
-      showAlert({ title: 'Settings', message: `Error updating user status: ${error.message}`, type: 'error' });
+      showAlert({ title: 'Settings', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -166,7 +167,7 @@ const Settings: React.FC = () => {
           await loadUsers();
           showAlert({ title: 'Settings', message: 'User deleted successfully!', type: 'success' });
         } catch (error: any) {
-          showAlert({ title: 'Settings', message: `Error deleting user: ${error.message}`, type: 'error' });
+          showAlert({ title: 'Settings', message: getErrorMessage(error), type: 'error' });
         }
       }
     });

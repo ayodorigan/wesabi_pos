@@ -57,12 +57,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       type: 'confirm',
       confirmText: 'Sign Out',
       onConfirm: async () => {
-        try {
-          await signOut();
-        } catch (error) {
-          console.error('Error signing out:', error);
-          showAlert({ title: 'Error', message: 'Error signing out. Please try again.', type: 'error' });
-        }
+        await signOut();
       }
     });
   };

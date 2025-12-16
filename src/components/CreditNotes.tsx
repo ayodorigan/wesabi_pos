@@ -5,6 +5,7 @@ import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../lib/supabase';
 import { CreditNote, CreditNoteItem, Product } from '../types';
 import { formatKES } from '../utils/currency';
+import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
 import { useApp } from '../contexts/AppContext';
 
@@ -240,7 +241,7 @@ const CreditNotes: React.FC = () => {
       showAlert({ title: 'Credit Notes', message: 'Credit note saved successfully!', type: 'success' });
     } catch (error: any) {
       console.error('Error saving credit note:', error);
-      showAlert({ title: 'Credit Notes', message: `Failed to save credit note: ${error.message}`, type: 'error' });
+      showAlert({ title: 'Credit Notes', message: getErrorMessage(error), type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -306,7 +307,7 @@ const CreditNotes: React.FC = () => {
           showAlert({ title: 'Credit Notes', message: 'Credit note deleted successfully', type: 'success' });
         } catch (error: any) {
           console.error('Error deleting credit note:', error);
-          showAlert({ title: 'Credit Notes', message: `Failed to delete credit note: ${error.message}`, type: 'error' });
+          showAlert({ title: 'Credit Notes', message: getErrorMessage(error), type: 'error' });
         } finally {
           setLoading(false);
         }

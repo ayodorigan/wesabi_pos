@@ -5,6 +5,7 @@ import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../lib/supabase';
 import { Invoice, InvoiceItem } from '../types';
 import { formatKES, calculateSellingPrice } from '../utils/currency';
+import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
 import { useApp } from '../contexts/AppContext';
 
@@ -277,7 +278,7 @@ const InvoiceManagement: React.FC = () => {
       showAlert({ title: 'Invoice Management', message: 'Invoice saved successfully! Inventory updated.', type: 'success' });
     } catch (error: any) {
       console.error('Error saving invoice:', error);
-      showAlert({ title: 'Invoice Management', message: `Failed to save invoice: ${error.message}`, type: 'error' });
+      showAlert({ title: 'Invoice Management', message: getErrorMessage(error), type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -313,7 +314,7 @@ const InvoiceManagement: React.FC = () => {
           showAlert({ title: 'Invoice Management', message: 'Invoice deleted successfully', type: 'success' });
         } catch (error: any) {
           console.error('Error deleting invoice:', error);
-          showAlert({ title: 'Invoice Management', message: `Failed to delete invoice: ${error.message}`, type: 'error' });
+          showAlert({ title: 'Invoice Management', message: getErrorMessage(error), type: 'error' });
         } finally {
           setLoading(false);
         }
