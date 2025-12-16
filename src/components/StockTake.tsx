@@ -719,7 +719,7 @@ const StockTake: React.FC = () => {
       </div>
 
       {/* Active Sessions */}
-      {stockTakeSessions.filter(s => s.status === 'active').length > 0 && (
+      {stockTakeSessions.filter(s => s.status === 'in_progress').length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border">
           <div className="p-6 border-b">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center">
@@ -729,7 +729,7 @@ const StockTake: React.FC = () => {
           </div>
           <div className="p-6">
             <div className="space-y-3">
-              {stockTakeSessions.filter(s => s.status === 'active').map((session) => (
+              {stockTakeSessions.filter(s => s.status === 'in_progress').map((session) => (
                 <div key={session.id} className="border rounded-lg p-4 bg-green-50">
                   <div className="flex justify-between items-center">
                     <div>
