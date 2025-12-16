@@ -417,13 +417,13 @@ const POS: React.FC = () => {
   ];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-8rem)]">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Product Selection */}
-      <div className="lg:col-span-2 flex flex-col gap-4">
+      <div className="lg:col-span-2 space-y-4">
         <h1 className="text-3xl font-bold text-gray-900">Point of Sale</h1>
 
         {/* Search Bar */}
-        <div className="relative flex-shrink-0">
+        <div className="relative">
           <Scan className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
           <input
             type="text"
@@ -435,7 +435,7 @@ const POS: React.FC = () => {
         </div>
 
         {/* Products Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 overflow-y-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[calc(100vh-16rem)] overflow-y-auto">
           {filteredProducts.map(product => (
             <div 
               key={product.id} 
@@ -505,14 +505,14 @@ const POS: React.FC = () => {
         </div>
 
         {filteredProducts.length === 0 && searchTerm && (
-          <div className="text-center py-8 flex-1 flex items-center justify-center">
+          <div className="text-center py-8">
             <p className="text-gray-500">No products found matching "{searchTerm}"</p>
           </div>
         )}
       </div>
 
       {/* Cart and Checkout */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border h-fit overflow-y-auto">
+      <div className="bg-white p-6 rounded-lg shadow-sm border h-fit">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900 flex items-center">
             <ShoppingCart className="h-5 w-5 mr-2" />
