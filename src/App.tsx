@@ -143,11 +143,11 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppProvider>
-        <AlertProvider>
+      <AlertProvider>
+        <AppProvider>
           <AppContent />
-        </AlertProvider>
-      </AppProvider>
+        </AppProvider>
+      </AlertProvider>
     </AuthProvider>
   );
 };
