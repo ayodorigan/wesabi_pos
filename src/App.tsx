@@ -17,6 +17,7 @@ import SalesReports from './components/SalesReports';
 import Profile from './components/Profile';
 import InvoiceManagement from './components/InvoiceManagement';
 import CreditNotes from './components/CreditNotes';
+import Orders from './components/Orders';
 import { useApp } from './contexts/AppContext';
 
 const AppContent: React.FC = () => {
@@ -112,6 +113,8 @@ const AppContent: React.FC = () => {
         return <POS />;
       case 'invoices':
         return <InvoiceManagement />;
+      case 'orders':
+        return <Orders />;
       case 'creditnotes':
         return <CreditNotes />;
       case 'analytics':

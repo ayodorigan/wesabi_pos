@@ -1,0 +1,635 @@
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, Edit2, Download, Share2, Search, Filter, X } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
+
+interface Product {
+  id: string;
+  name: string;
+  current_stock: number;
+  min_stock_level: number;
+}
+
+interface OrderItem {
+  id?: string;
+  product_id: string;
+  product_name: string;
+  current_quantity: number;
+  order_quantity: number;
+}
+
+interface Order {
+  id: string;
+  order_number: string;
+  status: string;
+  notes: string;
+  total_items: number;
+  created_at: string;
+  created_by: string;
+  user_profiles: {
+    name: string;
+  };
+}
+
+export default function Orders() {
+  const { user } = useAuth();
+  const { showAlert } = useAlert();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [notes, setNotes] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [searchProduct, setSearchProduct] = useState('');
+
+  useEffect(() => {
+    fetchOrders();
+    fetchProducts();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('supplier_orders')
+        .select(`
+          *,
+          user_profiles (
+            name
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setOrders(data || []);
+    } catch (error: any) {
+      showAlert('error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, current_stock, min_stock_level')
+        .order('name');
+
+      if (error) throw error;
+      setAllProducts(data || []);
+    } catch (error: any) {
+      showAlert('error', error.message);
+    }
+  };
+
+  const loadLowStockItems = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, current_stock, min_stock_level')
+        .lte('current_stock', supabase.rpc('min_stock_level'))
+        .order('current_stock');
+
+      if (error) {
+        const lowStock = allProducts.filter(p => p.current_stock <= p.min_stock_level);
+        const items: OrderItem[] = lowStock.map(product => ({
+          product_id: product.id,
+          product_name: product.name,
+          current_quantity: product.current_stock,
+          order_quantity: product.min_stock_level * 2 - product.current_stock
+        }));
+        setOrderItems(items);
+      } else {
+        const items: OrderItem[] = (data || []).map(product => ({
+          product_id: product.id,
+          product_name: product.name,
+          current_quantity: product.current_stock,
+          order_quantity: product.min_stock_level * 2 - product.current_stock
+        }));
+        setOrderItems(items);
+      }
+    } catch (error: any) {
+      showAlert('error', error.message);
+    }
+  };
+
+  const handleCreateOrder = () => {
+    setEditingOrder(null);
+    setOrderItems([]);
+    setNotes('');
+    loadLowStockItems();
+    setShowCreateModal(true);
+  };
+
+  const handleEditOrder = async (order: Order) => {
+    try {
+      const { data, error } = await supabase
+        .from('supplier_order_items')
+        .select('*')
+        .eq('order_id', order.id);
+
+      if (error) throw error;
+
+      setEditingOrder(order);
+      setOrderItems(data || []);
+      setNotes(order.notes || '');
+      setShowCreateModal(true);
+    } catch (error: any) {
+      showAlert('error', error.message);
+    }
+  };
+
+  const handleAddItem = (product: Product) => {
+    if (orderItems.some(item => item.product_id === product.id)) {
+      showAlert('warning', 'Item already added to order');
+      return;
+    }
+
+    setOrderItems([...orderItems, {
+      product_id: product.id,
+      product_name: product.name,
+      current_quantity: product.current_stock,
+      order_quantity: product.min_stock_level
+    }]);
+    setSearchProduct('');
+  };
+
+  const handleRemoveItem = (productId: string) => {
+    setOrderItems(orderItems.filter(item => item.product_id !== productId));
+  };
+
+  const handleUpdateQuantity = (productId: string, quantity: number) => {
+    setOrderItems(orderItems.map(item =>
+      item.product_id === productId
+        ? { ...item, order_quantity: Math.max(1, quantity) }
+        : item
+    ));
+  };
+
+  const handleSaveOrder = async () => {
+    if (orderItems.length === 0) {
+      showAlert('error', 'Please add at least one item to the order');
+      return;
+    }
+
+    try {
+      if (editingOrder) {
+        const { error: updateError } = await supabase
+          .from('supplier_orders')
+          .update({
+            notes,
+            total_items: orderItems.reduce((sum, item) => sum + item.order_quantity, 0)
+          })
+          .eq('id', editingOrder.id);
+
+        if (updateError) throw updateError;
+
+        const { error: deleteError } = await supabase
+          .from('supplier_order_items')
+          .delete()
+          .eq('order_id', editingOrder.id);
+
+        if (deleteError) throw deleteError;
+
+        const { error: insertError } = await supabase
+          .from('supplier_order_items')
+          .insert(orderItems.map(item => ({
+            order_id: editingOrder.id,
+            product_id: item.product_id,
+            product_name: item.product_name,
+            current_quantity: item.current_quantity,
+            order_quantity: item.order_quantity
+          })));
+
+        if (insertError) throw insertError;
+
+        showAlert('success', 'Order updated successfully');
+      } else {
+        const { data: funcData, error: funcError } = await supabase
+          .rpc('generate_order_number');
+
+        if (funcError) throw funcError;
+
+        const orderNumber = funcData;
+
+        const { data: orderData, error: orderError } = await supabase
+          .from('supplier_orders')
+          .insert({
+            order_number: orderNumber,
+            created_by: user?.id,
+            notes,
+            total_items: orderItems.reduce((sum, item) => sum + item.order_quantity, 0)
+          })
+          .select()
+          .single();
+
+        if (orderError) throw orderError;
+
+        const { error: itemsError } = await supabase
+          .from('supplier_order_items')
+          .insert(orderItems.map(item => ({
+            order_id: orderData.id,
+            product_id: item.product_id,
+            product_name: item.product_name,
+            current_quantity: item.current_quantity,
+            order_quantity: item.order_quantity
+          })));
+
+        if (itemsError) throw itemsError;
+
+        showAlert('success', 'Order created successfully');
+      }
+
+      setShowCreateModal(false);
+      fetchOrders();
+    } catch (error: any) {
+      showAlert('error', error.message);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!window.confirm('Are you sure you want to delete this order?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('supplier_orders')
+        .delete()
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      showAlert('success', 'Order deleted successfully');
+      fetchOrders();
+    } catch (error: any) {
+      showAlert('error', error.message);
+    }
+  };
+
+  const exportToPDF = async (order: Order) => {
+    try {
+      const { data: items, error } = await supabase
+        .from('supplier_order_items')
+        .select('*')
+        .eq('order_id', order.id);
+
+      if (error) throw error;
+
+      const pdfContent = generatePDFContent(order, items || []);
+      const blob = new Blob([pdfContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${order.order_number}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showAlert('success', 'Order exported successfully');
+    } catch (error: any) {
+      showAlert('error', error.message);
+    }
+  };
+
+  const generatePDFContent = (order: Order, items: OrderItem[]) => {
+    let content = `SUPPLIER ORDER\n`;
+    content += `${'='.repeat(50)}\n\n`;
+    content += `Order Number: ${order.order_number}\n`;
+    content += `Date: ${new Date(order.created_at).toLocaleDateString()}\n`;
+    content += `Created By: ${order.user_profiles?.name}\n`;
+    content += `Status: ${order.status.toUpperCase()}\n`;
+    content += `\n${'='.repeat(50)}\n\n`;
+    content += `ITEMS:\n\n`;
+
+    items.forEach((item, index) => {
+      content += `${index + 1}. ${item.product_name}\n`;
+      content += `   Current Stock: ${item.current_quantity}\n`;
+      content += `   Order Quantity: ${item.order_quantity}\n\n`;
+    });
+
+    content += `${'='.repeat(50)}\n`;
+    content += `Total Items to Order: ${items.reduce((sum, item) => sum + item.order_quantity, 0)}\n`;
+
+    if (order.notes) {
+      content += `\nNotes: ${order.notes}\n`;
+    }
+
+    return content;
+  };
+
+  const shareViaWhatsApp = async (order: Order) => {
+    try {
+      const { data: items, error } = await supabase
+        .from('supplier_order_items')
+        .select('*')
+        .eq('order_id', order.id);
+
+      if (error) throw error;
+
+      const message = generateWhatsAppMessage(order, items || []);
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+    } catch (error: any) {
+      showAlert('error', error.message);
+    }
+  };
+
+  const generateWhatsAppMessage = (order: Order, items: OrderItem[]) => {
+    let message = `*SUPPLIER ORDER*\n\n`;
+    message += `Order #: ${order.order_number}\n`;
+    message += `Date: ${new Date(order.created_at).toLocaleDateString()}\n`;
+    message += `Status: ${order.status.toUpperCase()}\n\n`;
+    message += `*ITEMS:*\n`;
+
+    items.forEach((item, index) => {
+      message += `${index + 1}. ${item.product_name}\n`;
+      message += `   Current: ${item.current_quantity} | Order: ${item.order_quantity}\n`;
+    });
+
+    message += `\n*Total Items:* ${items.reduce((sum, item) => sum + item.order_quantity, 0)}`;
+
+    if (order.notes) {
+      message += `\n\n*Notes:* ${order.notes}`;
+    }
+
+    return message;
+  };
+
+  const filteredOrders = orders.filter(order => {
+    const matchesSearch = order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.user_profiles?.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const filteredProducts = allProducts.filter(product =>
+    product.name.toLowerCase().includes(searchProduct.toLowerCase())
+  );
+
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Supplier Orders</h2>
+        <button
+          onClick={handleCreateOrder}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+        >
+          <Plus className="w-5 h-5" />
+          Create Order
+        </button>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex gap-4 mb-6">
+          <div className="flex-1 relative">
+            <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search orders..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+          <div className="relative">
+            <Filter className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg appearance-none bg-white"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            No orders found
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order #</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Items</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredOrders.map((order) => (
+                  <tr key={order.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
+                      {order.order_number}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                      {new Date(order.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                      {order.user_profiles?.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        order.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                        order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {order.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                      {order.total_items}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditOrder(order)}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="Edit"
+                        >
+                          <Edit2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => exportToPDF(order)}
+                          className="text-green-600 hover:text-green-800"
+                          title="Export PDF"
+                        >
+                          <Download className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => shareViaWhatsApp(order)}
+                          className="text-green-600 hover:text-green-800"
+                          title="Share on WhatsApp"
+                        >
+                          <Share2 className="w-5 h-5" />
+                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleDeleteOrder(order.id)}
+                            className="text-red-600 hover:text-red-800"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
+              <h3 className="text-xl font-semibold">
+                {editingOrder ? 'Edit Order' : 'Create New Order'}
+              </h3>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Add Items
+                </label>
+                <div className="relative">
+                  <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search products to add..."
+                    value={searchProduct}
+                    onChange={(e) => setSearchProduct(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+                {searchProduct && filteredProducts.length > 0 && (
+                  <div className="mt-2 border border-gray-300 rounded-lg max-h-48 overflow-y-auto">
+                    {filteredProducts.slice(0, 10).map(product => (
+                      <button
+                        key={product.id}
+                        onClick={() => handleAddItem(product)}
+                        className="w-full px-4 py-2 text-left hover:bg-gray-50 flex justify-between items-center"
+                      >
+                        <span>{product.name}</span>
+                        <span className="text-sm text-gray-500">
+                          Stock: {product.current_stock}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Order Items
+                </label>
+                {orderItems.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 border border-gray-300 rounded-lg">
+                    No items added yet. Search and add products above.
+                  </div>
+                ) : (
+                  <div className="border border-gray-300 rounded-lg overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Current Stock</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Order Quantity</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {orderItems.map((item) => (
+                          <tr key={item.product_id}>
+                            <td className="px-4 py-2">{item.product_name}</td>
+                            <td className="px-4 py-2">{item.current_quantity}</td>
+                            <td className="px-4 py-2">
+                              <input
+                                type="number"
+                                value={item.order_quantity}
+                                onChange={(e) => handleUpdateQuantity(item.product_id, parseInt(e.target.value) || 0)}
+                                className="w-24 px-2 py-1 border border-gray-300 rounded"
+                                min="1"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <button
+                                onClick={() => handleRemoveItem(item.product_id)}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes (Optional)
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                  rows={3}
+                  placeholder="Add any additional notes..."
+                />
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={handleSaveOrder}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                >
+                  {editingOrder ? 'Update Order' : 'Create Order'}
+                </button>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
