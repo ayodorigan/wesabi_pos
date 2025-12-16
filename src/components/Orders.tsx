@@ -45,6 +45,11 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [searchProduct, setSearchProduct] = useState('');
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    min_stock_level: '10'
+  });
 
   useEffect(() => {
     fetchOrders();
@@ -89,7 +94,17 @@ export default function Orders() {
 
   const loadLowStockItems = async () => {
     try {
-      const lowStock = allProducts.filter(p => p.current_stock <= p.min_stock_level);
+      await fetchProducts();
+
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, current_stock, min_stock_level')
+        .order('name');
+
+      if (error) throw error;
+
+      const products = data || [];
+      const lowStock = products.filter(p => p.current_stock <= p.min_stock_level);
       const items: OrderItem[] = lowStock.map(product => ({
         product_id: product.id,
         product_name: product.name,
@@ -107,8 +122,8 @@ export default function Orders() {
     setOrderItems([]);
     setNotes('');
     setSearchProduct('');
-    await loadLowStockItems();
     setShowCreateModal(true);
+    await loadLowStockItems();
   };
 
   const handleEditOrder = async (order: Order) => {
@@ -166,6 +181,52 @@ export default function Orders() {
         nextInput.focus();
         nextInput.select();
       }
+    }
+  };
+
+  const handleAddNewProduct = () => {
+    setNewProduct({
+      name: searchProduct,
+      min_stock_level: '10'
+    });
+    setShowAddProductModal(true);
+  };
+
+  const handleSaveNewProduct = async () => {
+    if (!newProduct.name.trim()) {
+      showAlert('error', 'Please enter a product name');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .insert({
+          name: newProduct.name.trim(),
+          current_stock: 0,
+          min_stock_level: parseInt(newProduct.min_stock_level) || 10,
+          category: 'General'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newOrderItem: OrderItem = {
+        product_id: data.id,
+        product_name: data.name,
+        current_quantity: 0,
+        order_quantity: parseInt(newProduct.min_stock_level) || 10
+      };
+
+      setOrderItems([...orderItems, newOrderItem]);
+      await fetchProducts();
+      setShowAddProductModal(false);
+      setSearchProduct('');
+      setNewProduct({ name: '', min_stock_level: '10' });
+      showAlert('success', 'Product added successfully');
+    } catch (error: any) {
+      showAlert('error', error.message);
     }
   };
 
@@ -535,24 +596,34 @@ export default function Orders() {
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-                {searchProduct && filteredProducts.length > 0 && (
+                {searchProduct && (
                   <div className="mt-2 border border-gray-300 rounded-lg max-h-48 overflow-y-auto bg-white shadow-md">
-                    {filteredProducts.slice(0, 10).map(product => (
+                    {filteredProducts.length > 0 ? (
+                      filteredProducts.slice(0, 10).map(product => (
+                        <button
+                          key={product.id}
+                          onClick={() => handleAddItem(product)}
+                          className="w-full px-4 py-2.5 text-left hover:bg-blue-50 flex justify-between items-center border-b last:border-b-0"
+                        >
+                          <span className="font-medium">{product.name}</span>
+                          <span className={`text-sm px-2 py-1 rounded ${
+                            product.current_stock <= product.min_stock_level
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            Stock: {product.current_stock}
+                          </span>
+                        </button>
+                      ))
+                    ) : (
                       <button
-                        key={product.id}
-                        onClick={() => handleAddItem(product)}
-                        className="w-full px-4 py-2.5 text-left hover:bg-blue-50 flex justify-between items-center border-b last:border-b-0"
+                        onClick={handleAddNewProduct}
+                        className="w-full px-4 py-3 text-left hover:bg-green-50 flex items-center gap-2 text-green-700 font-medium"
                       >
-                        <span className="font-medium">{product.name}</span>
-                        <span className={`text-sm px-2 py-1 rounded ${
-                          product.current_stock <= product.min_stock_level
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-green-100 text-green-700'
-                        }`}>
-                          Stock: {product.current_stock}
-                        </span>
+                        <Plus className="w-5 h-5" />
+                        <span>Add "{searchProduct}" as a new product</span>
                       </button>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
@@ -640,6 +711,77 @@ export default function Orders() {
                 </button>
                 <button
                   onClick={() => setShowCreateModal(false)}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddProductModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold">Add New Product</h3>
+              <button
+                onClick={() => {
+                  setShowAddProductModal(false);
+                  setNewProduct({ name: '', min_stock_level: '10' });
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Product Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newProduct.name}
+                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter product name"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Minimum Stock Level
+                </label>
+                <input
+                  type="number"
+                  value={newProduct.min_stock_level}
+                  onChange={(e) => setNewProduct({ ...newProduct, min_stock_level: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter minimum stock level"
+                  min="1"
+                />
+              </div>
+
+              <p className="text-sm text-gray-600">
+                This product will be created with 0 current stock and can be updated later from the Inventory page.
+              </p>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  onClick={handleSaveNewProduct}
+                  className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 font-medium"
+                >
+                  Add Product
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddProductModal(false);
+                    setNewProduct({ name: '', min_stock_level: '10' });
+                  }}
                   className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
                 >
                   Cancel
