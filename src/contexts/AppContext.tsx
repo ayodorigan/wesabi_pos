@@ -355,6 +355,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     refreshData();
   }, []);
 
+  // Refresh data when user changes (sign in/out)
+  useEffect(() => {
+    if (user) {
+      refreshData();
+    }
+  }, [user]);
+
   const logActivity = async (action: string, details: string) => {
     if (!isSupabaseEnabled || !supabase) {
       console.log('Demo mode: Activity logged -', action, details);
