@@ -343,11 +343,11 @@ const InvoiceManagement: React.FC = () => {
 
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
 
-      const requiredHeaders = ['productname', 'category', 'batchnumber', 'expirydate', 'quantity', 'costprice', 'sellingprice'];
+      const requiredHeaders = ['productname', 'category', 'batchnumber', 'expirydate', 'quantity', 'costprice'];
       const hasAllHeaders = requiredHeaders.every(h => headers.includes(h));
 
       if (!hasAllHeaders) {
-        showAlert({ title: 'Invoice Management', message: 'CSV must have columns: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice, SellingPrice', type: 'error' });
+        showAlert({ title: 'Invoice Management', message: 'CSV must have columns: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice', type: 'error' });
         return;
       }
 
@@ -363,15 +363,16 @@ const InvoiceManagement: React.FC = () => {
 
         if (!row.productname || !row.quantity || !row.costprice) continue;
 
+        const costPrice = parseFloat(row.costprice) || 0;
         items.push({
           productName: row.productname,
           category: row.category || 'General',
           batchNumber: row.batchnumber || '',
           expiryDate: row.expirydate ? new Date(row.expirydate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
           quantity: parseInt(row.quantity) || 0,
-          costPrice: parseFloat(row.costprice) || 0,
-          sellingPrice: parseFloat(row.sellingprice) || calculateSellingPrice(parseFloat(row.costprice) || 0),
-          totalCost: (parseInt(row.quantity) || 0) * (parseFloat(row.costprice) || 0),
+          costPrice,
+          sellingPrice: calculateSellingPrice(costPrice),
+          totalCost: (parseInt(row.quantity) || 0) * costPrice,
           barcode: row.barcode || `${Date.now()}-${i}`,
         });
       }
@@ -629,7 +630,7 @@ const InvoiceManagement: React.FC = () => {
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  CSV format: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice, SellingPrice
+                  CSV format: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice (Selling price auto-calculated as Cost × 1.33)
                 </p>
               </div>
 
