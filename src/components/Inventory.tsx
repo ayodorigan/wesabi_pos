@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Download, 
+import {
+  Plus,
+  Search,
+  Filter,
+  Download,
   Upload,
   Edit,
   Trash2,
@@ -11,25 +11,30 @@ import {
   Package
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 import { Product } from '../types';
-import { formatKES, calculateSellingPrice } from '../utils/currency';
+import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
+import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
 
 const Inventory: React.FC = () => {
-  const { 
-    user,
-    products, 
-    addProduct, 
-    updateProduct, 
-    deleteProduct, 
+  const {
+    products,
+    addProduct,
+    updateProduct,
+    deleteProduct,
     importProducts,
     medicineTemplates,
+    addMedicine,
     categories,
     suppliers,
     addCategory,
     addSupplier,
     getMedicineByName
   } = useApp();
+  const { user, canManagePricing, canDeleteProducts } = useAuth();
+  const { showAlert } = useAlert();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -61,31 +66,85 @@ const Inventory: React.FC = () => {
   });
 
   const exportToCSV = () => {
-    const headers = ['Name', 'Category', 'Supplier', 'Batch Number', 'Expiry Date', 'Invoice Number', 'Cost Price', 'Selling Price', 'Current Stock', 'Min Stock Level', 'Barcode'];
-    const csvContent = [
-      headers.join(','),
-      ...filteredProducts.map(product => [
-        product.name,
-        product.category,
-        product.supplier,
-        product.batchNumber,
-        product.expiryDate.toISOString().split('T')[0],
-        product.invoiceNumber || '',
-        product.costPrice,
-        product.sellingPrice,
-        product.currentStock,
-        product.minStockLevel,
-        product.barcode
-      ].join(','))
-    ].join('\n');
+    try {
+      if (filteredProducts.length === 0) {
+        showAlert({ title: 'Inventory', message: 'No products to export', type: 'warning' });
+        return;
+      }
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'wesabi-pharmacy-inventory.csv';
-    a.click();
-    window.URL.revokeObjectURL(url);
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Inventory Report - ${new Date().toLocaleDateString('en-KE')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 8px 4px; text-align: left; border: 1px solid #333; font-size: 11px; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    .summary { margin-bottom: 20px; }
+    @media print { 
+      body { margin: 0; } 
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - INVENTORY REPORT</h1>
+  <div class="summary">
+    <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+    <p><strong>Total Products:</strong> ${filteredProducts.length}</p>
+  </div>
+  
+  <table>
+    <tr>
+      <th>Product</th>
+      <th>Category</th>
+      <th>Supplier</th>
+      <th>Batch Number</th>
+      <th>Expiry Date</th>
+      <th>Cost Price</th>
+      <th>Selling Price</th>
+      <th>Stock</th>
+      <th>Min Stock</th>
+      <th>Barcode</th>
+    </tr>
+    ${filteredProducts.map(product => `
+    <tr>
+      <td>${product.name}</td>
+      <td>${product.category}</td>
+      <td>${product.supplier}</td>
+      <td>${product.batchNumber || '-'}</td>
+      <td>${product.expiryDate.toLocaleDateString('en-KE')}</td>
+      <td>${formatKES(product.costPrice)}</td>
+      <td>${formatKES(product.sellingPrice)}</td>
+      <td>${product.currentStock}</td>
+      <td>${product.minStockLevel}</td>
+      <td>${product.barcode}</td>
+    </tr>
+    `).join('')}
+  </table>
+</body>
+</html>`;
+      
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(content);
+        printWindow.document.close();
+        
+        // Wait for content to load then trigger print
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      } else {
+        showAlert({ title: 'Inventory', message: 'Please allow popups to export PDF reports', type: 'warning' });
+      }
+    } catch (error) {
+      console.error('Error exporting inventory report:', error);
+      showAlert({ title: 'Inventory', message: 'Error generating PDF report. Please try again.', type: 'error' });
+    }
   };
 
   const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,19 +216,59 @@ const Inventory: React.FC = () => {
 
   const handleAddProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     
     console.log('🏥 Form submitted with data:', formData);
     
+    // Validate required fields
+    if (!formData.name.trim()) {
+      showAlert({ title: 'Inventory', message: 'Product name is required', type: 'error' });
+      return;
+    }
+
+    if (!formData.category.trim()) {
+      showAlert({ title: 'Inventory', message: 'Category is required', type: 'error' });
+      return;
+    }
+
+    if (!formData.invoiceNumber.trim()) {
+      showAlert({ title: 'Inventory', message: 'Invoice number is required', type: 'error' });
+      return;
+    }
+
+    if (!formData.currentStock.trim()) {
+      showAlert({ title: 'Inventory', message: 'Quantity is required', type: 'error' });
+      return;
+    }
+
+    // Check for duplicate product names (case insensitive)
+    const existingProduct = products.find(p =>
+      p.name.toLowerCase() === formData.name.toLowerCase()
+    );
+
+    if (existingProduct) {
+      showAlert({ title: 'Inventory', message: `Product "${formData.name}" already exists in inventory. Please use a different name or update the existing product.`, type: 'error' });
+      return;
+    }
+
+    // Validate selling price against minimum
+    const costPrice = parseFloat(formData.costPrice) || 0;
+    const sellingPrice = parseFloat(formData.sellingPrice) || 0;
+    const minSellingPrice = getMinimumSellingPrice(costPrice);
+
+    if (sellingPrice < minSellingPrice) {
+      showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × cost price)`, type: 'error' });
+      return;
+    }
+    
     const productData = {
       name: formData.name,
-      category: formData.category,
+      category: formData.category || 'General',
       supplier: formData.supplier || 'Unknown Supplier',
-      batchNumber: formData.batchNumber || `BATCH-${Date.now()}`,
+      batchNumber: formData.batchNumber || '',
       expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now if not specified
       invoiceNumber: formData.invoiceNumber,
       costPrice: parseFloat(formData.costPrice) || 0,
-      sellingPrice: parseFloat(formData.sellingPrice) || calculateSellingPrice(parseFloat(formData.costPrice) || 0),
+      sellingPrice: enforceMinimumSellingPrice(parseFloat(formData.sellingPrice) || 0, parseFloat(formData.costPrice) || 0),
       currentStock: parseInt(formData.currentStock) || 0,
       minStockLevel: parseInt(formData.minStockLevel) || 10,
       barcode: formData.barcode || `${Date.now()}`,
@@ -184,7 +283,8 @@ const Inventory: React.FC = () => {
       })
       .catch((error) => {
         console.error('❌ Failed to add product:', error);
-        alert(`Failed to add product: ${error.message}`);
+        showAlert({ title: 'Inventory', message: getErrorMessage(error), type: 'error' });
+        console.log('Error details:', error);
       });
   };
 
@@ -192,6 +292,16 @@ const Inventory: React.FC = () => {
     e.preventDefault();
     e.stopPropagation();
     if (!editingProduct) return;
+
+    // Validate selling price against minimum
+    const costPrice = parseFloat(formData.costPrice) || 0;
+    const sellingPrice = parseFloat(formData.sellingPrice) || 0;
+    const minSellingPrice = getMinimumSellingPrice(costPrice);
+
+    if (sellingPrice < minSellingPrice) {
+      showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × cost price)`, type: 'error' });
+      return;
+    }
 
     const totalUnits = parseInt(formData.packSize || '1') * parseInt(formData.numberOfPacks || '1');
 
@@ -203,7 +313,7 @@ const Inventory: React.FC = () => {
       expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : editingProduct.expiryDate,
       invoiceNumber: formData.invoiceNumber || editingProduct.invoiceNumber,
       costPrice: parseFloat(formData.costPrice) || 0,
-      sellingPrice: parseFloat(formData.sellingPrice) || calculateSellingPrice(parseFloat(formData.costPrice) || 0),
+      sellingPrice: enforceMinimumSellingPrice(parseFloat(formData.sellingPrice) || 0, parseFloat(formData.costPrice) || 0),
       currentStock: totalUnits,
       minStockLevel: parseInt(formData.minStockLevel) || 10,
       barcode: formData.barcode || editingProduct.barcode,
@@ -231,8 +341,25 @@ const Inventory: React.FC = () => {
     });
   };
 
-  const canManagePricing = user?.role === 'admin';
-  const canManageInventory = user?.role === 'admin' || user?.role === 'inventory_manager';
+  const handleDeleteProduct = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    showAlert({
+      title: 'Delete Product',
+      message: `Are you sure you want to delete "${product?.name}"? This action cannot be undone.`,
+      type: 'confirm',
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        try {
+          await deleteProduct(productId);
+          showAlert({ title: 'Inventory', message: 'Product deleted successfully', type: 'success' });
+        } catch (error: any) {
+          showAlert({ title: 'Inventory', message: getErrorMessage(error), type: 'error' });
+        }
+      }
+    });
+  };
+
+  const canManageInventory = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'sales' || user?.role === 'inventory';
 
   return (
     <div className="space-y-6">
@@ -388,9 +515,9 @@ const Inventory: React.FC = () => {
                           >
                             <Edit className="h-4 w-4" />
                           </button>
-                          {user?.role === 'admin' && (
+                          {canDeleteProducts() && (
                           <button
-                            onClick={() => deleteProduct(product.id)}
+                            onClick={() => handleDeleteProduct(product.id)}
                             className="text-red-600 hover:text-red-900"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -420,6 +547,8 @@ const Inventory: React.FC = () => {
                   options={medicineNames}
                   placeholder="Start typing medicine name..."
                   label="Product Name"
+                  allowAddNew
+                  onAddNew={addMedicine}
                   required
                 />
                 
@@ -450,7 +579,7 @@ const Inventory: React.FC = () => {
                     type="text"
                     value={formData.batchNumber}
                     onChange={(e) => setFormData({ ...formData, batchNumber: e.target.value })}
-                    placeholder="Auto-generated if empty"
+                    placeholder="Enter batch number"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
@@ -482,34 +611,63 @@ const Inventory: React.FC = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price (KES)</label>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9.]*"
                         step="0.1"
                         value={formData.costPrice}
-                        onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9.]/g, '');
+                          setFormData({ ...formData, costPrice: value });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none"
+                        style={{ MozAppearance: 'textfield' }}
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (KES)</label>
                       <input
                         type="number"
-                        step="0.1"
+                        step="0.01"
+                        min={formData.costPrice ? getMinimumSellingPrice(parseFloat(formData.costPrice)).toString() : "0"}
                         value={formData.sellingPrice}
-                        onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          const costPrice = parseFloat(formData.costPrice) || 0;
+                          const minPrice = getMinimumSellingPrice(costPrice);
+
+                          if (value < minPrice && costPrice > 0) {
+                            showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minPrice)} (1.33 × cost price)`, type: 'error' });
+                            return;
+                          }
+
+                          setFormData({ ...formData, sellingPrice: e.target.value });
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
+                      {formData.costPrice && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Minimum: {formatKES(getMinimumSellingPrice(parseFloat(formData.costPrice)))}
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity <span className="text-red-500">*</span></label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     required
                     value={formData.currentStock}
-                    onChange={(e) => setFormData({ ...formData, currentStock: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setFormData({ ...formData, currentStock: value });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none"
+                    style={{ MozAppearance: 'textfield' }}
                   />
                 </div>
 
@@ -632,10 +790,27 @@ const Inventory: React.FC = () => {
                       <input
                         type="number"
                         step="0.1"
+                        min={formData.costPrice ? getMinimumSellingPrice(parseFloat(formData.costPrice)).toString() : "0"}
                         value={formData.sellingPrice}
-                        onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          const costPrice = parseFloat(formData.costPrice) || 0;
+                          const minPrice = getMinimumSellingPrice(costPrice);
+
+                          if (value < minPrice && costPrice > 0) {
+                            showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minPrice)} (1.33 × cost price)`, type: 'error' });
+                            return;
+                          }
+
+                          setFormData({ ...formData, sellingPrice: e.target.value });
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
+                      {formData.costPrice && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Minimum: {formatKES(getMinimumSellingPrice(parseFloat(formData.costPrice)))}
+                        </p>
+                      )}
                     </div>
                   </>
                 )}

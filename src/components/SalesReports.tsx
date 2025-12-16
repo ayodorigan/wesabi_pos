@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  Calendar, 
-  Download, 
+import {
+  Calendar,
+  Download,
   Filter,
   TrendingUp,
   Package,
@@ -9,10 +9,12 @@ import {
   Receipt
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 
 const SalesReports: React.FC = () => {
   const { sales, generateReceipt } = useApp();
+  const { showAlert } = useAlert();
   const [dateRange, setDateRange] = useState('7days');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -76,37 +78,89 @@ const SalesReports: React.FC = () => {
   }, {} as Record<string, number>);
 
   const exportReport = () => {
-    const reportData = {
-      summary: {
-        totalRevenue,
-        totalTransactions,
-        averageTransaction,
-        dateRange,
-        startDate,
-        endDate,
-        paymentFilter,
-        generatedAt: new Date().toISOString(),
-        pharmacy: 'Wesabi Pharmacy'
-      },
-      paymentMethods,
-      detailedSales: filteredSales.map(sale => ({
-        receiptNumber: sale.receiptNumber,
-        date: sale.createdAt,
-        customer: sale.customerName || 'Walk-in',
-        items: sale.items,
-        total: sale.totalAmount,
-        paymentMethod: sale.paymentMethod,
-        salesPerson: sale.salesPersonName
-      }))
-    };
+    try {
+      if (filteredSales.length === 0) {
+        showAlert({ title: 'Sales Reports', message: 'No sales data to export', type: 'warning' });
+        return;
+      }
 
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `wesabi-pharmacy-sales-report-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Sales Report - ${new Date().toLocaleDateString('en-KE')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 10px 6px; text-align: left; border: 1px solid #333; font-size: 12px; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    h2 { color: #333; margin-top: 30px; margin-bottom: 15px; }
+    .summary { margin-bottom: 20px; }
+    @media print { 
+      body { margin: 0; } 
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - SALES REPORT</h1>
+  <div class="summary">
+    <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+    <p><strong>Date Range:</strong> ${dateRange}</p>
+  </div>
+  
+  <h2>Summary Statistics</h2>
+  <table>
+    <tr><th>Metric</th><th>Value</th></tr>
+    <tr><td>Total Revenue</td><td>${formatKES(totalRevenue)}</td></tr>
+    <tr><td>Total Transactions</td><td>${totalTransactions}</td></tr>
+    <tr><td>Average Transaction</td><td>${formatKES(averageTransaction)}</td></tr>
+  </table>
+  
+  <h2>Sales Transactions</h2>
+  <table>
+    <tr>
+      <th>Date</th>
+      <th>Receipt</th>
+      <th>Customer</th>
+      <th>Items</th>
+      <th>Payment</th>
+      <th>Total</th>
+      <th>Sales Person</th>
+    </tr>
+    ${filteredSales.map(sale => `
+    <tr>
+      <td>${sale.createdAt.toLocaleDateString('en-KE')}</td>
+      <td>${sale.receiptNumber}</td>
+      <td>${sale.customerName || 'Walk-in Customer'}</td>
+      <td>${sale.items.length} items</td>
+      <td>${sale.paymentMethod.toUpperCase()}</td>
+      <td>${formatKES(sale.totalAmount)}</td>
+      <td>${sale.salesPersonName}</td>
+    </tr>
+    `).join('')}
+  </table>
+</body>
+</html>`;
+      
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(content);
+        printWindow.document.close();
+        
+        // Wait for content to load then trigger print
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      } else {
+        showAlert({ title: 'Sales Reports', message: 'Please allow popups to export PDF reports', type: 'warning' });
+      }
+    } catch (error) {
+      console.error('Error exporting sales report:', error);
+      showAlert({ title: 'Sales Reports', message: 'Error generating PDF report. Please try again.', type: 'error' });
+    }
   };
 
   return (
@@ -208,12 +262,33 @@ const SalesReports: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Average Transaction</p>
-              <p className="text-2xl font-bold text-purple-600">{formatKES(averageTransaction)}</p>
+              <p className="text-2xl font-bold text-gray-600">{formatKES(averageTransaction)}</p>
             </div>
-            <div className="bg-purple-100 p-3 rounded-full">
-              <TrendingUp className="h-6 w-6 text-purple-600" />
+            <div className="bg-gray-100 p-3 rounded-full">
+              <TrendingUp className="h-6 w-6 text-gray-600" />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Payment Method Breakdown */}
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Payment Method Breakdown</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {Object.entries(paymentMethods).map(([method, amount]) => (
+            <div key={method} className="bg-gray-50 p-4 rounded-lg">
+              <p className="text-sm font-medium text-gray-600 uppercase">{method}</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">{formatKES(amount)}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {((amount / totalRevenue) * 100).toFixed(1)}% of total
+              </p>
+            </div>
+          ))}
+          {Object.keys(paymentMethods).length === 0 && (
+            <div className="col-span-4 text-center text-gray-500 py-4">
+              No payment data available
+            </div>
+          )}
         </div>
       </div>
 
@@ -233,13 +308,12 @@ const SalesReports: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sales Person</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredSales.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                     No sales transactions found
                   </td>
                 </tr>
@@ -277,15 +351,6 @@ const SalesReports: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {sale.salesPersonName}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => generateReceipt(sale)}
-                        className="text-blue-600 hover:text-blue-900"
-                        title="Print Receipt"
-                      >
-                        <Receipt className="h-4 w-4" />
-                      </button>
                     </td>
                   </tr>
                 ))

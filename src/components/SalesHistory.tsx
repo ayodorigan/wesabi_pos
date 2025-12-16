@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  History, 
-  Download, 
+import {
+  History,
+  Download,
   Filter,
   Search,
   Calendar,
@@ -10,16 +10,22 @@ import {
   DollarSign
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
+
+import { useAuth } from '../contexts/AuthContext';
 
 const SalesHistory: React.FC = () => {
   const { salesHistory, exportToPDF } = useApp();
+  const { user } = useAuth();
+  const { showAlert } = useAlert();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('7days');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Filter sales history
   const getFilteredHistory = () => {
@@ -40,11 +46,21 @@ const SalesHistory: React.FC = () => {
     }
 
     // Date range filter
-    if (dateRange === 'custom' && startDate && endDate) {
+    if (user?.role === 'sales' && dateRange === 'specificDate' && selectedDate) {
+      const selected = new Date(selectedDate);
+      selected.setHours(0, 0, 0, 0);
+      const nextDay = new Date(selected);
+      nextDay.setDate(selected.getDate() + 1);
+
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.saleDate);
+        return itemDate >= selected && itemDate < nextDay;
+      });
+    } else if (dateRange === 'custom' && startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      
+
       filtered = filtered.filter(item => {
         const itemDate = new Date(item.saleDate);
         return itemDate >= start && itemDate <= end;
@@ -52,7 +68,7 @@ const SalesHistory: React.FC = () => {
     } else if (dateRange !== 'all') {
       const now = new Date();
       const filterDate = new Date();
-      
+
       switch (dateRange) {
         case '1day':
           filterDate.setDate(now.getDate() - 1);
@@ -67,7 +83,7 @@ const SalesHistory: React.FC = () => {
           filterDate.setDate(now.getDate() - 90);
           break;
       }
-      
+
       filtered = filtered.filter(item => new Date(item.saleDate) >= filterDate);
     }
 
@@ -82,7 +98,85 @@ const SalesHistory: React.FC = () => {
   const totalItems = filteredHistory.reduce((sum, item) => sum + item.quantity, 0);
 
   const exportReport = () => {
-    exportToPDF(filteredHistory, 'sales');
+    try {
+      if (filteredHistory.length === 0) {
+        showAlert({ title: 'Sales History', message: 'No sales history to export', type: 'warning' });
+        return;
+      }
+
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Drug Sales History - ${new Date().toLocaleDateString('en-KE')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 8px 4px; text-align: left; border: 1px solid #333; font-size: 10px; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    .summary { margin-bottom: 20px; }
+    @media print { 
+      body { margin: 0; } 
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - DRUG SALES HISTORY</h1>
+  <div class="summary">
+    <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+    <p><strong>Total Records:</strong> ${filteredHistory.length}</p>
+    <p><strong>Total Revenue:</strong> ${formatKES(totalRevenue)}</p>
+    <p><strong>Total Profit:</strong> ${formatKES(totalProfit)}</p>
+  </div>
+  
+  <table>
+    <tr>
+      <th>Date</th>
+      <th>Product</th>
+      <th>Qty</th>
+      <th>Cost Price</th>
+      <th>Selling Price</th>
+      <th>Profit</th>
+      <th>Payment</th>
+      <th>Receipt</th>
+      <th>Sales Person</th>
+    </tr>
+    ${filteredHistory.map(item => `
+    <tr>
+      <td>${item.saleDate.toLocaleDateString('en-KE')}</td>
+      <td>${item.productName}</td>
+      <td>${item.quantity}</td>
+      <td>${formatKES(item.costPrice)}</td>
+      <td>${formatKES(item.sellingPrice)}</td>
+      <td>${formatKES(item.profit)}</td>
+      <td>${item.paymentMethod.toUpperCase()}</td>
+      <td>${item.receiptNumber}</td>
+      <td>${item.salesPersonName}</td>
+    </tr>
+    `).join('')}
+  </table>
+</body>
+</html>`;
+      
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(content);
+        printWindow.document.close();
+        
+        // Wait for content to load then trigger print
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      } else {
+        showAlert({ title: 'Sales History', message: 'Please allow popups to export PDF reports', type: 'warning' });
+      }
+    } catch (error) {
+      console.error('Error exporting drug sales history:', error);
+      showAlert({ title: 'Sales History', message: 'Error generating PDF report. Please try again.', type: 'error' });
+    }
   };
 
   const paymentMethods = ['cash', 'mpesa', 'card', 'insurance'];
@@ -117,21 +211,36 @@ const SalesHistory: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Calendar className="h-5 w-5 text-gray-400" />
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <option value="1day">Today</option>
-              <option value="7days">Last 7 Days</option>
-              <option value="30days">Last 30 Days</option>
-              <option value="90days">Last 90 Days</option>
-              <option value="all">All Time</option>
-              <option value="custom">Custom Range</option>
-            </select>
-          </div>
+          {user?.role === 'sales' ? (
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-5 w-5 text-gray-400" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value);
+                  setDateRange('specificDate');
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-5 w-5 text-gray-400" />
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="1day">Today</option>
+                <option value="7days">Last 7 Days</option>
+                <option value="30days">Last 30 Days</option>
+                <option value="90days">Last 90 Days</option>
+                <option value="all">All Time</option>
+                <option value="custom">Custom Range</option>
+              </select>
+            </div>
+          )}
 
           <div className="flex items-center space-x-2">
             <Filter className="h-5 w-5 text-gray-400" />
@@ -147,7 +256,7 @@ const SalesHistory: React.FC = () => {
             </select>
           </div>
 
-          {dateRange === 'custom' && (
+          {dateRange === 'custom' && user?.role !== 'sales' && (
             <div className="flex space-x-2">
               <input
                 type="date"
@@ -177,7 +286,6 @@ const SalesHistory: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost Price</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Receipt</th>
@@ -186,7 +294,7 @@ const SalesHistory: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredHistory.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                     No sales history found
                   </td>
                 </tr>
@@ -213,9 +321,6 @@ const SalesHistory: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatKES(item.sellingPrice)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                      {formatKES(item.totalRevenue)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
                       {formatKES(item.profit)}

@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
+import { AlertProvider } from './contexts/AlertContext';
+import Login from './components/Login';
 import Layout from './components/Layout';
 import LoadingScreen from './components/LoadingScreen';
 import Dashboard from './components/Dashboard';
@@ -12,13 +15,95 @@ import ActivityLogs from './components/ActivityLogs';
 import SalesHistory from './components/SalesHistory';
 import SalesReports from './components/SalesReports';
 import Profile from './components/Profile';
+import InvoiceManagement from './components/InvoiceManagement';
+import CreditNotes from './components/CreditNotes';
+import Orders from './components/Orders';
 import { useApp } from './contexts/AppContext';
 
 const AppContent: React.FC = () => {
-  const { } = useApp();
+  const { user, loading } = useAuth();
+  const { canAccessPage } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
 
+  // Set default landing page based on user role
+  useEffect(() => {
+    if (user) {
+      let defaultTab = 'dashboard';
+      
+      switch (user.role) {
+        case 'sales':
+          defaultTab = 'pos';
+          break;
+        case 'inventory':
+          defaultTab = 'inventory';
+          break;
+        case 'stock_take':
+          defaultTab = 'stocktake';
+          break;
+        case 'super_admin':
+        case 'admin':
+        default:
+          defaultTab = 'dashboard';
+          break;
+      }
+      
+      setActiveTab(defaultTab);
+    }
+  }, [user]);
+
+  // Prevent app reload on focus
+  useEffect(() => {
+    const handleFocus = (e: FocusEvent) => {
+      e.preventDefault();
+    };
+    
+    const handleVisibilityChange = () => {
+      // Do nothing - prevent any reload behavior
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
   const renderActiveTab = () => {
+    // If user doesn't have access to current tab, redirect to appropriate page
+    if (user && !canAccessPage(activeTab)) {
+      let fallbackTab = 'pos'; // Default fallback
+      
+      switch (user.role) {
+        case 'sales':
+          fallbackTab = 'pos';
+          break;
+        case 'inventory':
+          fallbackTab = 'inventory';
+          break;
+        case 'stock_take':
+          fallbackTab = 'stocktake';
+          break;
+        case 'super_admin':
+        case 'admin':
+        default:
+          fallbackTab = 'dashboard';
+          break;
+      }
+      
+      setActiveTab(fallbackTab);
+      return null; // Will re-render with correct tab
+    }
+
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard />;
@@ -26,6 +111,12 @@ const AppContent: React.FC = () => {
         return <Inventory />;
       case 'pos':
         return <POS />;
+      case 'invoices':
+        return <InvoiceManagement />;
+      case 'orders':
+        return <Orders />;
+      case 'creditnotes':
+        return <CreditNotes />;
       case 'analytics':
         return <Analytics />;
       case 'settings':
@@ -54,9 +145,13 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <AuthProvider>
+      <AlertProvider>
+        <AppProvider>
+          <AppContent />
+        </AppProvider>
+      </AlertProvider>
+    </AuthProvider>
   );
 };
 

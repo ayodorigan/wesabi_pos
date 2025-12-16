@@ -9,10 +9,12 @@ import {
   Phone,
   Shield
 } from 'lucide-react';
-import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 
 const Profile: React.FC = () => {
-  const { user } = useApp();
+  const { user, changePassword, updateProfile } = useAuth();
+  const { showAlert } = useAlert();
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -32,6 +34,8 @@ const Profile: React.FC = () => {
 
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
+  if (!user) return null;
+
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -45,29 +49,43 @@ const Profile: React.FC = () => {
     }
   };
 
-  const handleProfileUpdate = (e: React.FormEvent) => {
+  const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    alert('Profile updates are not available in this demo version');
-    setIsEditing(false);
+    try {
+      await updateProfile({
+        name: profileData.name,
+        phone: profileData.phone,
+      });
+
+      showAlert({ title: 'Profile', message: 'Profile updated successfully!', type: 'success' });
+      setIsEditing(false);
+    } catch (error: any) {
+      showAlert({ title: 'Profile', message: error.message || 'Failed to update profile', type: 'error' });
+    }
   };
 
-  const handlePasswordChange = (e: React.FormEvent) => {
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('New passwords do not match');
+      showAlert({ title: 'Profile', message: 'New passwords do not match', type: 'error' });
       return;
     }
 
-    if (passwordData.newPassword.length < 6) {
-      alert('Password must be at least 6 characters');
+    if (passwordData.newPassword.length < 8) {
+      showAlert({ title: 'Profile', message: 'Password must be at least 8 characters', type: 'error' });
       return;
     }
 
-    alert('Password changes are not available in this demo version');
-    setShowPasswordChange(false);
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    try {
+      await changePassword(passwordData.currentPassword, passwordData.newPassword);
+      showAlert({ title: 'Profile', message: 'Password changed successfully!', type: 'success' });
+      setShowPasswordChange(false);
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error: any) {
+      showAlert({ title: 'Profile', message: error.message || 'Failed to change password', type: 'error' });
+    }
   };
 
   const getRoleColor = (role: string) => {
@@ -84,8 +102,9 @@ const Profile: React.FC = () => {
     switch (role) {
       case 'super_admin': return 'Super Administrator';
       case 'admin': return 'Administrator';
-      case 'inventory_manager': return 'Inventory Manager';
+      case 'inventory': return 'Inventory Manager';
       case 'sales': return 'Sales Person';
+      case 'stock_take': return 'Stock Take';
       default: return role;
     }
   };
@@ -230,7 +249,7 @@ const Profile: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-500">Email Address</label>
-                  <p className="text-lg text-gray-900">{user.email || 'admin@wesabi.co.ke'}</p>
+                  <p className="text-lg text-gray-900">{user.email || 'Not provided'}</p>
                 </div>
               </div>
               <div className="space-y-4">

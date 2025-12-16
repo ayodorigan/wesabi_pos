@@ -1,120 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { formatKES, calculateSellingPrice } from '../utils/currency';
+import { supabase, isSupabaseEnabled } from '../lib/supabase';
+import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 import { medicineDatabase, drugCategories, commonSuppliers } from '../data/medicineDatabase';
-
-// Mock user for the system
-const MOCK_USER = {
-  id: '00000000-0000-0000-0000-000000000001',
-  email: 'admin@wesabi.co.ke',
-  name: 'Administrator',
-  role: 'admin' as const,
-  phone: '+254700000001'
-};
-
-// Frontend types
-interface PriceHistory {
-  id: string;
-  date: Date;
-  costPrice: number;
-  sellingPrice: number;
-  userId: string;
-  userName: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  supplier: string;
-  batchNumber: string;
-  expiryDate: Date;
-  costPrice: number;
-  sellingPrice: number;
-  currentStock: number;
-  minStockLevel: number;
-  barcode: string;
-  invoiceNumber?: string;
-  priceHistory: PriceHistory[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface SaleItem {
-  productId: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  originalPrice?: number;
-  priceAdjusted?: boolean;
-  batchNumber?: string;
-}
-
-interface Sale {
-  id: string;
-  receiptNumber: string;
-  customerName?: string;
-  totalAmount: number;
-  paymentMethod: 'cash' | 'mpesa' | 'card' | 'insurance';
-  salesPersonId: string;
-  salesPersonName: string;
-  items: SaleItem[];
-  createdAt: Date;
-}
-
-interface StockTake {
-  id: string;
-  productId: string;
-  productName: string;
-  expectedStock: number;
-  actualStock: number;
-  difference: number;
-  reason?: string;
-  userId: string;
-  userName: string;
-  createdAt: Date;
-}
-
-interface ActivityLog {
-  id: string;
-  userId: string;
-  userName: string;
-  action: string;
-  details: string;
-  timestamp: Date;
-}
-
-interface StockAlert {
-  id: string;
-  productId: string;
-  productName: string;
-  alertType: 'low_stock' | 'expiry_warning';
-  currentStock?: number;
-  minStockLevel?: number;
-  expiryDate?: Date;
-  daysToExpiry?: number;
-}
-
-interface SalesHistoryItem {
-  id: string;
-  productId: string;
-  productName: string;
-  quantity: number;
-  costPrice: number;
-  sellingPrice: number;
-  totalCost: number;
-  totalRevenue: number;
-  profit: number;
-  paymentMethod: string;
-  customerName?: string;
-  salesPersonName: string;
-  receiptNumber: string;
-  saleDate: Date;
-}
+import { useAuth } from './AuthContext';
+import { useAlert } from './AlertContext';
+import { retryDatabaseOperation } from '../utils/retry';
+import { Product, PriceHistory, SaleItem, Sale, StockTake, ActivityLog, StockAlert, SalesHistoryItem } from '../types';
 
 interface AppContextType {
-  user: typeof MOCK_USER;
   products: Product[];
   sales: Sale[];
   stockTakes: StockTake[];
@@ -124,21 +17,29 @@ interface AppContextType {
   suppliers: string[];
   medicineTemplates: typeof medicineDatabase;
   loading: boolean;
+  stockTakeSessions: any[];
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceHistory'>) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   addSale: (sale: Omit<Sale, 'id' | 'createdAt' | 'receiptNumber'>) => Promise<string>;
   addStockTake: (stockTake: Omit<StockTake, 'id' | 'createdAt'>) => Promise<void>;
+  createStockTakeSession: (name: string) => Promise<string>;
+  updateStockTakeSession: (id: string, updates: any) => Promise<void>;
+  deleteStockTakeSession: (id: string) => Promise<void>;
+  completeStockTakeSession: (sessionId: string, stockTakes: any[]) => Promise<void>;
   logActivity: (action: string, details: string) => Promise<void>;
   getStockAlerts: () => StockAlert[];
   importProducts: (products: any[]) => Promise<void>;
   addCategory: (category: string) => void;
   addSupplier: (supplier: string) => void;
+  addMedicine: (medicine: string) => void;
   getMedicineByName: (name: string) => typeof medicineDatabase[0] | undefined;
   getSalesHistory: () => SalesHistoryItem[];
   generateReceipt: (sale: Sale) => void;
   exportToPDF: (data: any, type: string) => void;
   refreshData: () => Promise<void>;
+  getLastSoldPrice: (productId: string) => Promise<number | null>;
+  isSupabaseEnabled: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -156,6 +57,8 @@ interface AppProviderProps {
 }
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
+  const { user } = useAuth();
+  const { showAlert } = useAlert();
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [stockTakes, setStockTakes] = useState<StockTake[]>([]);
@@ -163,29 +66,48 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [salesHistory, setSalesHistory] = useState<SalesHistoryItem[]>([]);
   const [categories, setCategories] = useState<string[]>(drugCategories);
   const [suppliers, setSuppliers] = useState<string[]>(commonSuppliers);
+  const [medicineTemplates, setMedicineTemplates] = useState(medicineDatabase);
   const [loading, setLoading] = useState(false);
+  const [stockTakeSessions, setStockTakeSessions] = useState<any[]>([]);
 
   // Load data from database
   const refreshData = async () => {
+    setLoading(true);
+    let hasError = false;
+
     try {
-      // Don't show loading screen for data refresh
-      
+      // Skip database operations if Supabase is not enabled
+      if (!isSupabaseEnabled) {
+        console.log('Supabase not configured - running in demo mode with mock data only');
+        setLoading(false);
+        return;
+      }
+
+      // Additional safety check for supabase client
+      if (!supabase) {
+        console.warn('Supabase client not initialized - running in demo mode');
+        setLoading(false);
+        return;
+      }
+
       // Declare variables at function scope
       let formattedProducts: Product[] = [];
       let formattedSales: Sale[] = [];
       let formattedStockTakes: StockTake[] = [];
       let formattedLogs: ActivityLog[] = [];
-      
-      // Load products
-      const { data: productsData, error: productsError } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
 
-      if (productsError) {
-        console.error('Error loading products:', productsError);
-      } else {
-        formattedProducts = (productsData || []).map(product => ({
+      // Load products - don't exit early on error, just log it
+      try {
+        const { data: productsData, error: productsError } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (productsError) {
+          console.error('Error loading products:', productsError);
+          hasError = true;
+        } else {
+          formattedProducts = (productsData || []).map(product => ({
           id: product.id,
           name: product.name,
           category: product.category,
@@ -198,40 +120,78 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           minStockLevel: product.min_stock_level || 10,
           barcode: product.barcode,
           invoiceNumber: product.invoice_number,
-          priceHistory: [], // We'll load this separately if needed
+          priceHistory: [],
           createdAt: new Date(product.created_at),
           updatedAt: new Date(product.updated_at),
         }));
-        setProducts(formattedProducts);
+
+        // Load price history for all products
+        const { data: priceHistoryData, error: priceHistoryError } = await supabase
+          .from('price_history')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!priceHistoryError && priceHistoryData) {
+          // Group price history by product_id
+          const priceHistoryByProduct: Record<string, PriceHistory[]> = {};
+          priceHistoryData.forEach(history => {
+            if (!priceHistoryByProduct[history.product_id]) {
+              priceHistoryByProduct[history.product_id] = [];
+            }
+            priceHistoryByProduct[history.product_id].push({
+              id: history.id,
+              productId: history.product_id,
+              date: new Date(history.created_at),
+              costPrice: parseFloat(history.cost_price) || 0,
+              sellingPrice: parseFloat(history.selling_price) || 0,
+              userId: history.user_id || 'demo-user',
+              userName: history.user_name,
+            });
+          });
+
+          // Assign price history to each product
+          formattedProducts = formattedProducts.map(product => ({
+            ...product,
+            priceHistory: priceHistoryByProduct[product.id] || []
+          }));
+        }
+
+          setProducts(formattedProducts);
+        }
+      } catch (error) {
+        console.error('Error in products loading block:', error);
+        hasError = true;
       }
 
-      // Load sales
-      const { data: salesData, error: salesError } = await supabase
-        .from('sales')
-        .select(`
-          *,
-          sale_items (
-            id,
-            product_id,
-            product_name,
-            quantity,
-            unit_price,
-            total_price,
-            batch_number
-          )
-        `)
-        .order('created_at', { ascending: false });
+      // Load sales - don't exit early on error
+      try {
+        const { data: salesData, error: salesError } = await supabase
+          .from('sales')
+          .select(`
+            *,
+            sale_items (
+              id,
+              product_id,
+              product_name,
+              quantity,
+              unit_price,
+              total_price,
+              batch_number
+            )
+          `)
+          .order('created_at', { ascending: false });
 
-      if (salesError) {
-        console.error('Error loading sales:', salesError);
-      } else {
-        formattedSales = (salesData || []).map(sale => ({
+        if (salesError) {
+          console.error('Error loading sales:', salesError);
+          hasError = true;
+        } else {
+          formattedSales = (salesData || []).map(sale => ({
           id: sale.id,
           receiptNumber: sale.receipt_number,
           customerName: sale.customer_name,
           totalAmount: parseFloat(sale.total_amount) || 0,
           paymentMethod: sale.payment_method,
-          salesPersonId: sale.sales_person_id || MOCK_USER.id,
+          salesPersonId: sale.sales_person_id || 'demo-user',
           salesPersonName: sale.sales_person_name,
           items: (sale.sale_items || []).map((item: any) => ({
             productId: item.product_id,
@@ -243,18 +203,24 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           })),
           createdAt: new Date(sale.created_at),
         }));
-        setSales(formattedSales);
+          setSales(formattedSales);
+        }
+      } catch (error) {
+        console.error('Error in sales loading block:', error);
+        hasError = true;
       }
 
       // Load stock takes
-      const { data: stockTakesData, error: stockTakesError } = await supabase
-        .from('stock_takes')
-        .select('*')
-        .order('created_at', { ascending: false });
+      try {
+        const { data: stockTakesData, error: stockTakesError } = await supabase
+          .from('stock_takes')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      if (stockTakesError) {
-        console.error('Error loading stock takes:', stockTakesError);
-      } else {
+        if (stockTakesError) {
+          console.error('Error loading stock takes:', stockTakesError);
+          hasError = true;
+        } else {
         formattedStockTakes = (stockTakesData || []).map(stockTake => ({
           id: stockTake.id,
           productId: stockTake.product_id,
@@ -263,32 +229,71 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           actualStock: stockTake.actual_stock,
           difference: stockTake.difference,
           reason: stockTake.reason,
-          userId: stockTake.user_id || MOCK_USER.id,
+          userId: stockTake.user_id || 'demo-user',
           userName: stockTake.user_name,
           createdAt: new Date(stockTake.created_at),
         }));
-        setStockTakes(formattedStockTakes);
+          setStockTakes(formattedStockTakes);
+        }
+      } catch (error) {
+        console.error('Error in stock takes loading block:', error);
+        hasError = true;
       }
 
       // Load activity logs
-      const { data: logsData, error: logsError } = await supabase
-        .from('activity_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
+      try {
+        const { data: logsData, error: logsError } = await supabase
+          .from('activity_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(100);
 
-      if (logsError) {
-        console.error('Error loading activity logs:', logsError);
-      } else {
+        if (logsError) {
+          console.error('Error loading activity logs:', logsError);
+          hasError = true;
+        } else {
         formattedLogs = (logsData || []).map(log => ({
           id: log.id,
-          userId: log.user_id || MOCK_USER.id,
+          userId: log.user_id || 'demo-user',
           userName: log.user_name,
           action: log.action,
           details: log.details,
           timestamp: new Date(log.created_at),
         }));
-        setActivityLogs(formattedLogs);
+          setActivityLogs(formattedLogs);
+        }
+      } catch (error) {
+        console.error('Error in activity logs loading block:', error);
+        hasError = true;
+      }
+
+      // Load stock take sessions
+      try {
+        const { data: sessionsData, error: sessionsError } = await supabase
+          .from('stock_take_sessions')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (sessionsError) {
+          console.error('Error loading stock take sessions:', sessionsError);
+          hasError = true;
+        } else {
+        const formattedSessions = (sessionsData || []).map(session => ({
+          id: session.id,
+          name: session.session_name,
+          session_name: session.session_name,
+          userId: session.user_id || 'demo-user',
+          userName: session.user_name,
+          status: session.status,
+          createdAt: new Date(session.created_at || session.started_at),
+          completedAt: session.completed_at ? new Date(session.completed_at) : null,
+          progress_data: session.progress_data || {},
+        }));
+          setStockTakeSessions(formattedSessions);
+        }
+      } catch (error) {
+        console.error('Error in stock take sessions loading block:', error);
+        hasError = true;
       }
 
       // Generate sales history from sales data
@@ -329,8 +334,24 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     } catch (error) {
       console.error('Error refreshing data:', error);
+      
+      // Check if it's a network/fetch error
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        console.warn('Network error detected. Please check:');
+        console.warn('1. Supabase URL and API key are correct in .env file');
+        console.warn('2. Internet connection is stable');
+        console.warn('3. CORS settings in Supabase dashboard allow localhost:5173');
+        console.warn('4. No firewall/ad blocker blocking requests to *.supabase.co');
+        
+        // Don't throw the error, just log it and continue in demo mode
+        console.warn('Continuing in demo mode due to network error');
+        return;
+      }
+      
+      // For other errors, log but don't crash the app
+      console.warn('Database error occurred, continuing in demo mode:', error);
     } finally {
-      // Loading state managed elsewhere if needed
+      setLoading(false);
     }
   };
 
@@ -339,13 +360,31 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     refreshData();
   }, []);
 
+  // Refresh data when user changes (sign in/out)
+  useEffect(() => {
+    if (user) {
+      refreshData();
+    }
+  }, [user]);
+
   const logActivity = async (action: string, details: string) => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Activity logged -', action, details);
+      return;
+    }
+
+    // Check if user is mock user (demo mode) - prevent database writes
+    if (!user || user.user_id === '00000000-0000-0000-0000-000000000001' || user.user_id === 'demo-user') {
+      console.log('Demo mode: Activity logged -', action, details);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('activity_logs')
         .insert({
-          user_id: MOCK_USER.id,
-          user_name: MOCK_USER.name,
+          user_id: user.user_id,
+          user_name: user?.name || 'Demo User',
           action,
           details,
         });
@@ -363,7 +402,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         if (logsData) {
           const formattedLogs: ActivityLog[] = logsData.map(log => ({
             id: log.id,
-            userId: log.user_id || MOCK_USER.id,
+            userId: log.user_id || 'demo-user',
             userName: log.user_name,
             action: log.action,
             details: log.details,
@@ -378,7 +417,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const addProduct = async (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceHistory'>) => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Cannot add products without Supabase configuration');
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
+    console.log('🔄 Starting product addition process...');
+    console.log('Product data to insert:', productData);
+
+    // Enforce minimum selling price
+    const enforcedSellingPrice = enforceMinimumSellingPrice(productData.sellingPrice, productData.costPrice);
+    
     try {
+      console.log('📡 Inserting product into database...');
       const { data, error } = await supabase
         .from('products')
         .insert({
@@ -388,7 +439,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           batch_number: productData.batchNumber,
           expiry_date: productData.expiryDate.toISOString(),
           cost_price: productData.costPrice,
-          selling_price: productData.sellingPrice,
+          selling_price: enforcedSellingPrice,
           current_stock: productData.currentStock,
           min_stock_level: productData.minStockLevel,
           barcode: productData.barcode,
@@ -398,19 +449,51 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         .single();
 
       if (error) {
-        console.error('Error adding product:', error);
+        console.error('❌ Database error adding product:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error details:', error.details);
         throw error;
       }
 
+      console.log('✅ Product inserted successfully:', data);
+
+      // Add price history entry
+      console.log('📊 Adding price history entry...');
+      const { error: priceHistoryError } = await supabase
+        .from('price_history')
+        .insert({
+          product_id: data.id,
+          cost_price: productData.costPrice,
+          selling_price: enforcedSellingPrice,
+          user_id: user?.user_id || 'demo-user',
+          user_name: user?.name || 'Demo User',
+        });
+
+      if (priceHistoryError) {
+        console.warn('⚠️ Warning: Could not add price history:', priceHistoryError);
+        // Don't throw error for price history failure
+      }
+
+      console.log('📝 Logging activity...');
       await logActivity('ADD_PRODUCT', `Added product: ${productData.name}`);
+      
+      console.log('🔄 Refreshing data...');
       await refreshData();
+      
+      console.log('🎉 Product addition completed successfully!');
     } catch (error) {
-      console.error('Error adding product:', error);
+      console.error('💥 Fatal error adding product:', error);
       throw error;
     }
   };
 
   const updateProduct = async (id: string, updates: Partial<Product>) => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Cannot update products without Supabase configuration');
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
     try {
       const updateData: any = {};
       
@@ -420,7 +503,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (updates.batchNumber) updateData.batch_number = updates.batchNumber;
       if (updates.expiryDate) updateData.expiry_date = updates.expiryDate.toISOString();
       if (updates.costPrice !== undefined) updateData.cost_price = updates.costPrice;
-      if (updates.sellingPrice !== undefined) updateData.selling_price = updates.sellingPrice;
+      if (updates.sellingPrice !== undefined) {
+        // Enforce minimum selling price
+        const costPrice = updates.costPrice !== undefined ? updates.costPrice : 
+          products.find(p => p.id === id)?.costPrice || 0;
+        updateData.selling_price = enforceMinimumSellingPrice(updates.sellingPrice, costPrice);
+      }
       if (updates.currentStock !== undefined) updateData.current_stock = updates.currentStock;
       if (updates.minStockLevel !== undefined) updateData.min_stock_level = updates.minStockLevel;
       if (updates.barcode) updateData.barcode = updates.barcode;
@@ -445,6 +533,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const deleteProduct = async (id: string) => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Cannot delete products without Supabase configuration');
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
     try {
       const product = products.find(p => p.id === id);
       
@@ -467,6 +560,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const addSale = async (saleData: Omit<Sale, 'id' | 'createdAt' | 'receiptNumber'>): Promise<string> => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Cannot process sales without Supabase configuration');
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
     try {
       // Generate receipt number
       const receiptNumber = `WSB${String(sales.length + 1).padStart(4, '0')}`;
@@ -510,21 +608,100 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         throw itemsError;
       }
 
-      // Update product stock
-      for (const item of saleData.items) {
+      // Update product stock and add price history in parallel
+      const stockUpdates = saleData.items.map(item => {
         const product = products.find(p => p.id === item.productId);
         if (product) {
           const newStock = product.currentStock - item.quantity;
-          await supabase
+          return supabase
             .from('products')
             .update({ current_stock: newStock })
             .eq('id', item.productId);
         }
-      }
+        return null;
+      }).filter(Boolean);
 
-      await logActivity('SALE', `Sale completed: ${receiptNumber} - ${formatKES(saleData.totalAmount)}`);
-      await refreshData();
-      
+      // Batch insert price history entries
+      const priceHistoryEntries = saleData.items
+        .filter(() => user && user.user_id !== '00000000-0000-0000-0000-000000000001' && user.user_id !== 'demo-user')
+        .map(item => {
+          const product = products.find(p => p.id === item.productId);
+          if (product) {
+            return {
+              product_id: item.productId,
+              cost_price: product.costPrice,
+              selling_price: item.unitPrice,
+              user_id: user.user_id,
+              user_name: user?.name || 'Demo User',
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      // Execute all updates in parallel
+      const priceHistoryPromise = priceHistoryEntries.length > 0
+        ? supabase.from('price_history').insert(priceHistoryEntries)
+        : Promise.resolve({ data: null, error: null });
+
+      await Promise.all([
+        ...stockUpdates,
+        priceHistoryPromise,
+        logActivity('SALE', `Sale completed: ${receiptNumber} - ${formatKES(saleData.totalAmount)}`)
+      ]);
+
+      // Update local state instead of full refresh
+      setProducts(prev => prev.map(p => {
+        const soldItem = saleData.items.find(item => item.productId === p.id);
+        if (soldItem) {
+          return {
+            ...p,
+            currentStock: p.currentStock - soldItem.quantity
+          };
+        }
+        return p;
+      }));
+
+      // Add the sale to local state
+      const newSale: Sale = {
+        id: saleResult.id,
+        receiptNumber,
+        customerName: saleData.customerName,
+        totalAmount: saleData.totalAmount,
+        paymentMethod: saleData.paymentMethod,
+        salesPersonId: saleData.salesPersonId,
+        salesPersonName: saleData.salesPersonName,
+        items: saleData.items,
+        createdAt: new Date(),
+      };
+      setSales(prev => [newSale, ...prev]);
+
+      // Update sales history
+      const newSalesHistoryItems: SalesHistoryItem[] = saleData.items.map(item => {
+        const product = products.find(p => p.id === item.productId);
+        const costPrice = product?.costPrice || 0;
+        const totalCost = costPrice * item.quantity;
+        const profit = item.totalPrice - totalCost;
+
+        return {
+          id: `${saleResult.id}-${item.productId}`,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          costPrice: costPrice,
+          sellingPrice: item.unitPrice,
+          totalCost: totalCost,
+          totalRevenue: item.totalPrice,
+          profit: profit,
+          paymentMethod: saleData.paymentMethod,
+          customerName: saleData.customerName,
+          salesPersonName: saleData.salesPersonName,
+          receiptNumber: receiptNumber,
+          saleDate: new Date(),
+        };
+      });
+      setSalesHistory(prev => [...newSalesHistoryItems, ...prev]);
+
       return receiptNumber;
     } catch (error) {
       console.error('Error adding sale:', error);
@@ -533,8 +710,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const addStockTake = async (stockTakeData: Omit<StockTake, 'id' | 'createdAt'>) => {
+    if (!isSupabaseEnabled || !supabase) {
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('stock_takes')
         .insert({
           product_id: stockTakeData.productId,
@@ -545,25 +726,151 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           reason: stockTakeData.reason,
           user_id: stockTakeData.userId,
           user_name: stockTakeData.userName,
-        });
+        })
+        .select()
+        .single();
 
       if (error) {
         console.error('Error adding stock take:', error);
         throw error;
       }
 
-      // Update product stock if there's a difference
-      if (stockTakeData.difference !== 0) {
-        await supabase
-          .from('products')
-          .update({ current_stock: stockTakeData.actualStock })
-          .eq('id', stockTakeData.productId);
-      }
+      console.log('Stock take saved to database:', data);
 
       await logActivity('STOCK_TAKE', `Stock take: ${stockTakeData.productName} - Difference: ${stockTakeData.difference}`);
       await refreshData();
     } catch (error) {
       console.error('Error adding stock take:', error);
+      throw error;
+    }
+  };
+
+  const createStockTakeSession = async (name: string): Promise<string> => {
+    if (!isSupabaseEnabled || !supabase) {
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('stock_take_sessions')
+        .insert({
+          session_name: name.trim(),
+          user_id: user?.user_id || 'demo-user',
+          user_name: user?.name || 'Demo User',
+          status: 'in_progress'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating stock take session:', error);
+        throw error;
+      }
+
+      await logActivity('CREATE_STOCK_TAKE_SESSION', `Created stock take session: ${name}`);
+      await refreshData();
+      
+      return data.id;
+    } catch (error) {
+      console.error('Error creating stock take session:', error);
+      throw error;
+    }
+  };
+
+  const updateStockTakeSession = async (id: string, updates: any) => {
+    if (!isSupabaseEnabled || !supabase) {
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('stock_take_sessions')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error updating stock take session:', error);
+        throw error;
+      }
+
+      await logActivity('UPDATE_STOCK_TAKE_SESSION', `Updated stock take session: ${id}`);
+      await refreshData();
+    } catch (error) {
+      console.error('Error updating stock take session:', error);
+      throw error;
+    }
+  };
+
+  const deleteStockTakeSession = async (id: string) => {
+    if (!isSupabaseEnabled || !supabase) {
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('stock_take_sessions')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting stock take session:', error);
+        throw error;
+      }
+
+      await logActivity('DELETE_STOCK_TAKE_SESSION', `Deleted stock take session: ${id}`);
+      await refreshData();
+    } catch (error) {
+      console.error('Error deleting stock take session:', error);
+      throw error;
+    }
+  };
+
+  const completeStockTakeSession = async (sessionId: string, stockTakeEntries: any[]) => {
+    if (!isSupabaseEnabled || !supabase) {
+      throw new Error('Database not configured. Please set up Supabase environment variables.');
+    }
+
+    try {
+      // Insert all stock take entries with session reference
+      const stockTakeInserts = stockTakeEntries.map(entry => ({
+        session_id: sessionId,
+        product_id: entry.productId,
+        product_name: entry.productName,
+        expected_stock: entry.expectedStock,
+        actual_stock: entry.actualStock,
+        difference: entry.difference,
+        reason: entry.reason,
+        user_id: entry.userId,
+        user_name: entry.userName,
+      }));
+
+      const { error: stockTakeError } = await supabase
+        .from('stock_takes')
+        .insert(stockTakeInserts);
+
+      if (stockTakeError) {
+        console.error('Error inserting stock takes:', stockTakeError);
+        throw stockTakeError;
+      }
+
+      // Mark session as completed
+      const { error: sessionError } = await supabase
+        .from('stock_take_sessions')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', sessionId);
+
+      if (sessionError) {
+        console.error('Error completing session:', sessionError);
+        throw sessionError;
+      }
+
+      await logActivity('COMPLETE_STOCK_TAKE_SESSION', `Completed stock take session: ${sessionId}`);
+      await refreshData();
+    } catch (error) {
+      console.error('Error completing stock take session:', error);
       throw error;
     }
   };
@@ -645,8 +952,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   };
 
+  const addMedicine = (medicine: string) => {
+    const newMedicine = {
+      name: medicine,
+      category: 'Other',
+      commonDosages: ['As prescribed'],
+      description: 'User-added medicine'
+    };
+    setMedicineTemplates(prev => [...prev, newMedicine]);
+  };
+
   const getMedicineByName = (name: string) => {
-    return medicineDatabase.find(med => 
+    return medicineTemplates.find(med => 
       med.name.toLowerCase() === name.toLowerCase()
     );
   };
@@ -656,56 +973,77 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const generateReceipt = (sale: Sale) => {
-    const receiptContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Receipt - ${sale.receiptNumber}</title>
-        <style>
-          body { font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; padding: 20px; }
-          .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-          .item { display: flex; justify-content: space-between; margin: 5px 0; }
-          .total { border-top: 1px solid #000; padding-top: 10px; font-weight: bold; }
-          @media print { body { margin: 0; } }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h2>WESABI PHARMACY</h2>
-          <p>Receipt #${sale.receiptNumber}</p>
-          <p>${sale.createdAt.toLocaleDateString('en-KE')} ${sale.createdAt.toLocaleTimeString('en-KE')}</p>
-        </div>
-        <div class="items">
-          ${sale.items.map(item => `
-            <div class="item">
-              <span>${item.productName} x${item.quantity}</span>
-              <span>${formatKES(item.totalPrice)}</span>
+    try {
+      const receiptContent = `
+        <html>
+          <head>
+            <title>Receipt - ${sale.receiptNumber}</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto; padding: 20px; line-height: 1.4; }
+              .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+              .item { display: flex; justify-content: space-between; margin: 8px 0; padding: 2px 0; }
+              .total { border-top: 2px solid #000; padding-top: 10px; font-weight: bold; margin-top: 15px; }
+              .footer { text-align: center; margin-top: 20px; border-top: 1px solid #ccc; padding-top: 15px; }
+              h2 { margin: 0 0 10px 0; font-size: 18px; }
+              @media print { 
+                body { margin: 0; padding: 10px; } 
+                .no-print { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h2>WESABI PHARMACY</h2>
+              <p><strong>Receipt #${sale.receiptNumber}</strong></p>
+              <p>${sale.createdAt.toLocaleDateString('en-KE')} ${sale.createdAt.toLocaleTimeString('en-KE')}</p>
+              ${sale.customerName ? `<p>Customer: ${sale.customerName}</p>` : ''}
             </div>
-          `).join('')}
-        </div>
-        <div class="total">
-          <div class="item">
-            <span>TOTAL:</span>
-            <span>${formatKES(sale.totalAmount)}</span>
-          </div>
-          <div class="item">
-            <span>Payment:</span>
-            <span>${sale.paymentMethod.toUpperCase()}</span>
-          </div>
-        </div>
-        <div style="text-align: center; margin-top: 20px;">
-          <p>Thank you for your business!</p>
-          <p>Served by: ${sale.salesPersonName}</p>
-        </div>
-      </body>
-      </html>
-    `;
-    
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(receiptContent);
-      printWindow.document.close();
-      printWindow.print();
+            
+            <div class="items">
+              ${sale.items.map(item => `
+                <div class="item">
+                  <span>${item.productName} x${item.quantity}</span>
+                  <span>${formatKES(item.totalPrice)}</span>
+                </div>
+              `).join('')}
+            </div>
+            
+            <div class="total">
+              <div class="item">
+                <span>TOTAL:</span>
+                <span>${formatKES(sale.totalAmount)}</span>
+              </div>
+              <div class="item">
+                <span>Payment Method:</span>
+                <span>${sale.paymentMethod.toUpperCase()}</span>
+              </div>
+            </div>
+            
+            <div class="footer">
+              <p>Thank you for your business!</p>
+              <p>Served by: ${sale.salesPersonName}</p>
+            </div>
+          </body>
+        </html>
+      `;
+      
+      const printWindow = window.open('', '_blank', 'width=400,height=600');
+      if (printWindow) {
+        printWindow.document.write(receiptContent);
+        printWindow.document.close();
+        
+        // Wait for content to load then trigger print
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      } else {
+        showAlert({ title: 'App Context', message: 'Please allow popups to print receipts', type: 'warning' });
+      }
+    } catch (error) {
+      console.error('Error generating receipt:', error);
+      showAlert({ title: 'App Context', message: 'Error generating receipt. Please try again.', type: 'error' });
     }
   };
 
@@ -771,34 +1109,73 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       printWindow.print();
     }
   };
+  const getLastSoldPrice = async (productId: string): Promise<number | null> => {
+    if (!isSupabaseEnabled || !supabase) {
+      console.log('Demo mode: Cannot fetch price history without Supabase configuration');
+      return null;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('price_history')
+        .select('selling_price')
+        .eq('product_id', productId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Error fetching last sold price:', error);
+        return null;
+      }
+
+      if (data && data.length > 0) {
+        const lastPrice = parseFloat(data[0].selling_price);
+        console.log(`Last sold price for product ${productId}:`, lastPrice);
+        return lastPrice;
+      }
+      
+      console.log(`No price history found for product ${productId}`);
+      return null;
+    } catch (error) {
+      console.error('Error fetching last sold price:', error);
+      return null;
+    }
+  };
 
   return (
     <AppContext.Provider value={{
-      user: MOCK_USER,
       products,
       sales,
       stockTakes,
+      stockTakeSessions,
       activityLogs,
       salesHistory,
       categories,
       suppliers,
-      medicineTemplates: medicineDatabase,
+      medicineTemplates,
       loading,
       addProduct,
       updateProduct,
       deleteProduct,
       addSale,
       addStockTake,
+      createStockTakeSession,
+      updateStockTakeSession,
+      deleteStockTakeSession,
+      completeStockTakeSession,
       logActivity,
       getStockAlerts,
       importProducts,
       addCategory,
       addSupplier,
+      addMedicine,
       getMedicineByName,
       getSalesHistory,
       generateReceipt,
       exportToPDF,
       refreshData,
+      getLastSoldPrice,
+      isSupabaseEnabled,
     }}>
       {children}
     </AppContext.Provider>

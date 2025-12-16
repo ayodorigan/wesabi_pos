@@ -3,14 +3,37 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase environment variables not found. Using fallback configuration.');
+// Check if Supabase environment variables are properly configured
+const isSupabaseConfigured = Boolean(
+  supabaseUrl && 
+  supabaseAnonKey && 
+  supabaseUrl !== 'https://placeholder.supabase.co' && 
+  supabaseAnonKey !== 'placeholder-key' &&
+  supabaseUrl !== 'your-supabase-url' &&
+  supabaseAnonKey !== 'your-supabase-anon-key' &&
+  supabaseUrl.startsWith('https://') &&
+  supabaseUrl.includes('.supabase.co')
+);
+
+if (!isSupabaseConfigured) {
+  console.warn('⚠️  Supabase not configured - Running in demo mode');
+  console.warn('To enable database features:');
+  console.warn('1. Create a .env file in the project root');
+  console.warn('2. Add: VITE_SUPABASE_URL=https://your-project.supabase.co');
+  console.warn('3. Add: VITE_SUPABASE_ANON_KEY=your-anon-key');
+  console.warn('4. Restart the development server');
 }
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
-);
+// Create Supabase client only if properly configured
+export const supabase = isSupabaseConfigured ? createClient(
+  supabaseUrl!,
+  supabaseAnonKey!,
+  {
+  }
+) : null;
+
+// Export configuration status
+export const isSupabaseEnabled = isSupabaseConfigured;
 
 // Database types
 export interface User {

@@ -15,9 +15,12 @@ const LoadingScreen: React.FC = () => {
         <div className="flex justify-center">
           <div className="animate-pulse flex space-x-1">
             <div className="w-3 h-3 bg-green-600 rounded-full"></div>
-            <div className="w-3 h-3 bg-green-600 rounded-full animation-delay-200"></div>
-            <div className="w-3 h-3 bg-green-600 rounded-full animation-delay-400"></div>
+            <div className="w-3 h-3 bg-green-600 rounded-full" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-3 h-3 bg-green-600 rounded-full" style={{ animationDelay: '0.4s' }}></div>
           </div>
+        </div>
+        <div className="mt-4 text-sm text-gray-500">
+          If this takes too long, please check your database connection
         </div>
       </div>
     </div>

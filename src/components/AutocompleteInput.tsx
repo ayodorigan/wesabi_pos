@@ -67,7 +67,9 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
     }
   };
 
-  const showAddNew = allowAddNew && value.trim() && !options.includes(value.trim());
+  const showAddNew = allowAddNew && value.trim() && !options.some(option => 
+    option.toLowerCase() === value.trim().toLowerCase()
+  );
 
   return (
     <div className="relative">

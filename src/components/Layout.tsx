@@ -1,19 +1,24 @@
 import React, { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  Package, 
-  ShoppingCart, 
-  BarChart3, 
+import {
+  LayoutDashboard,
+  Package,
+  ShoppingCart,
+  BarChart3,
   TrendingUp,
   FileText,
   User,
   ChevronDown,
-  Settings, 
+  Settings,
   LogOut,
   Menu,
   X,
-  Pill
+  Pill,
+  FileInput,
+  FileMinus,
+  ClipboardList
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -22,27 +27,47 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
+  const { user, signOut, canAccessPage } = useAuth();
+  const { showAlert } = useAlert();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
-  const user = {
-    name: 'Administrator',
-    role: 'admin'
-  };
+  if (!user) return null;
 
-  const adminMenuItems = [
+  const allMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'pos', label: 'Point of Sale', icon: ShoppingCart },
+    { id: 'invoices', label: 'Invoices', icon: FileInput },
     { id: 'inventory', label: 'Inventory', icon: Package },
+    { id: 'orders', label: 'Orders', icon: ClipboardList },
+    { id: 'creditnotes', label: 'Credit Notes', icon: FileMinus },
     { id: 'stocktake', label: 'Stock Take', icon: Package },
-    { id: 'drugsaleshistory', label: 'Drug History', icon: BarChart3 },
+    { id: 'drugsaleshistory', label: 'Drug History', icon: FileText },
     { id: 'saleshistory', label: 'Sales History', icon: BarChart3 },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'logs', label: 'Activity Logs', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
-  const menuItems = adminMenuItems;
+  // Filter menu items based on user permissions
+  const menuItems = allMenuItems.filter(item => canAccessPage(item.id));
+
+  const handleSignOut = () => {
+    setShowProfileDropdown(false);
+    showAlert({
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out?',
+      type: 'confirm',
+      confirmText: 'Sign Out',
+      onConfirm: async () => {
+        try {
+          await signOut();
+        } catch (error) {
+          console.error('Sign out error:', error);
+        }
+      }
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -65,13 +90,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       <div className="flex">
         {/* Sidebar */}
         <div className={`
-          fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out min-h-screen
+          fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out min-h-screen flex-shrink-0
           lg:translate-x-0 lg:static lg:inset-0
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
           <div className="flex flex-col h-full">
             {/* Logo */}
-            <div className="hidden lg:flex items-center space-x-2 p-6 border-b">
+            <div className="hidden lg:flex items-center space-x-2 px-6 py-4 border-b">
               <Pill className="h-8 w-8 text-green-600" />
               <h1 className="text-xl font-bold text-gray-900">Wesabi Pharmacy</h1>
             </div>
@@ -109,18 +134,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 lg:ml-0">
+        <div className="flex-1 lg:ml-0 min-w-0">
           {/* Top Header with Profile */}
           <div className="bg-white shadow-sm border-b px-4 lg:px-8 py-4">
             <div className="flex justify-between items-center">
-              <div className="lg:hidden">
-                <button
-                  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                  className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
-                >
-                  {isSidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-                </button>
-              </div>
+              <div></div>
               
               {/* Profile Dropdown */}
               <div className="relative ml-auto">
@@ -153,6 +171,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                         <User className="h-4 w-4 mr-2" />
                         My Profile
                       </button>
+                     <button
+                       onClick={handleSignOut}
+                       className="w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-red-50 flex items-center"
+                     >
+                       <LogOut className="h-4 w-4 mr-2" />
+                       Sign Out
+                     </button>
                     </div>
                   </div>
                 )}

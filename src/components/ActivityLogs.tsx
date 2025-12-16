@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { 
-  Clock, 
-  User, 
+import {
+  Clock,
+  User,
   Filter,
   Download,
   Search
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAlert } from '../contexts/AlertContext';
 
 const ActivityLogs: React.FC = () => {
   const { activityLogs } = useApp();
+  const { showAlert } = useAlert();
   const [searchTerm, setSearchTerm] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
   const [userFilter, setUserFilter] = useState('all');
@@ -28,24 +30,89 @@ const ActivityLogs: React.FC = () => {
     return matchesSearch && matchesAction && matchesUser;
   });
 
-  const exportLogs = () => {
-    const csvContent = [
-      ['Timestamp', 'User', 'Action', 'Details'].join(','),
-      ...filteredLogs.map(log => [
-        log.timestamp.toISOString(),
-        log.userName,
-        log.action,
-        `"${log.details.replace(/"/g, '""')}"`
-      ].join(','))
-    ].join('\n');
+  const getActionLabel = (action: string) => {
+    switch (action) {
+      case 'ADD_PRODUCT': return 'Product Added';
+      case 'UPDATE_PRODUCT': return 'Product Updated';
+      case 'DELETE_PRODUCT': return 'Product Deleted';
+      case 'SALE': return 'Sale Completed';
+      case 'STOCK_TAKE': return 'Stock Take';
+      case 'IMPORT_PRODUCTS': return 'Products Imported';
+      case 'ADD_CATEGORY': return 'Category Added';
+      case 'ADD_SUPPLIER': return 'Supplier Added';
+      case 'UPDATE_USERS': return 'Users Updated';
+      default: return action.replace(/_/g, ' ');
+    }
+  };
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `wesabi-pharmacy-activity-logs-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportLogs = () => {
+    try {
+      if (filteredLogs.length === 0) {
+        showAlert({ title: 'Activity Logs', message: 'No activity logs to export', type: 'warning' });
+        return;
+      }
+
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Activity Logs - ${new Date().toLocaleDateString('en-KE')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 10px 6px; text-align: left; border: 1px solid #333; font-size: 12px; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    .summary { margin-bottom: 20px; }
+    @media print { 
+      body { margin: 0; } 
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - ACTIVITY LOGS</h1>
+  <div class="summary">
+    <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+    <p><strong>Total Activities:</strong> ${filteredLogs.length}</p>
+  </div>
+  
+  <table>
+    <tr>
+      <th>Timestamp</th>
+      <th>User</th>
+      <th>Action</th>
+      <th>Details</th>
+    </tr>
+    ${filteredLogs.map(log => `
+    <tr>
+      <td>${log.timestamp.toLocaleDateString('en-KE')} ${log.timestamp.toLocaleTimeString('en-KE')}</td>
+      <td>${log.userName}</td>
+      <td>${getActionLabel(log.action)}</td>
+      <td>${log.details}</td>
+    </tr>
+    `).join('')}
+  </table>
+</body>
+</html>`;
+      
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(content);
+        printWindow.document.close();
+        
+        // Wait for content to load then trigger print
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      } else {
+        showAlert({ title: 'Activity Logs', message: 'Please allow popups to export PDF reports', type: 'warning' });
+      }
+    } catch (error) {
+      console.error('Error exporting activity logs:', error);
+      showAlert({ title: 'Activity Logs', message: 'Error generating PDF report. Please try again.', type: 'error' });
+    }
   };
 
   const getActionColor = (action: string) => {
@@ -64,21 +131,6 @@ const ActivityLogs: React.FC = () => {
         return 'bg-indigo-100 text-indigo-800';
       default:
         return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getActionLabel = (action: string) => {
-    switch (action) {
-      case 'ADD_PRODUCT': return 'Product Added';
-      case 'UPDATE_PRODUCT': return 'Product Updated';
-      case 'DELETE_PRODUCT': return 'Product Deleted';
-      case 'SALE': return 'Sale Completed';
-      case 'STOCK_TAKE': return 'Stock Take';
-      case 'IMPORT_PRODUCTS': return 'Products Imported';
-      case 'ADD_CATEGORY': return 'Category Added';
-      case 'ADD_SUPPLIER': return 'Supplier Added';
-      case 'UPDATE_USERS': return 'Users Updated';
-      default: return action.replace(/_/g, ' ');
     }
   };
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { 
-  TrendingUp, 
+import {
+  TrendingUp,
   Download,
   Calendar,
   Filter,
@@ -9,12 +9,16 @@ import {
   DollarSign
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
+import SalesChart from './SalesChart';
 
 const Analytics: React.FC = () => {
   const { sales, products, salesHistory } = useApp();
+  const { showAlert } = useAlert();
   const [dateRange, setDateRange] = useState('7days');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [salesPeriod, setSalesPeriod] = useState<'day' | 'week' | 'month' | 'year'>('week');
 
   // Filter sales by date range
   const getFilteredSales = () => {
@@ -155,29 +159,208 @@ const Analytics: React.FC = () => {
       return acc;
     }, {} as Record<string, number>);
 
-  const exportAnalytics = () => {
-    const data = {
-      summary: {
-        totalRevenue,
-        totalTransactions,
-        averageTransaction,
-        dateRange,
-        pharmacy: 'Wesabi Pharmacy',
-        generatedAt: new Date().toISOString(),
-      },
-      topProducts,
-      categoryStats,
-      paymentMethodStats,
-      dailySales,
-    };
+  // Generate sales chart data based on selected period
+  const getSalesChartData = () => {
+    const now = new Date();
+    const data: { label: string; value: number }[] = [];
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `wesabi-pharmacy-analytics-${dateRange}-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    switch (salesPeriod) {
+      case 'day': {
+        for (let i = 6; i >= 0; i--) {
+          const date = new Date(now);
+          date.setDate(date.getDate() - i);
+          date.setHours(0, 0, 0, 0);
+          const nextDay = new Date(date);
+          nextDay.setDate(nextDay.getDate() + 1);
+
+          const daySales = filteredSales.filter(sale => {
+            const saleDate = new Date(sale.createdAt);
+            return saleDate >= date && saleDate < nextDay;
+          });
+
+          const total = daySales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+          data.push({
+            label: date.toLocaleDateString('en-KE', { weekday: 'short' }),
+            value: total
+          });
+        }
+        break;
+      }
+      case 'week': {
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+        let weekNumber = 1;
+        let currentWeekStart = new Date(monthStart);
+        currentWeekStart.setHours(0, 0, 0, 0);
+
+        while (currentWeekStart <= monthEnd) {
+          const weekEnd = new Date(currentWeekStart);
+          weekEnd.setDate(weekEnd.getDate() + 6);
+          weekEnd.setHours(23, 59, 59, 999);
+
+          const actualWeekEnd = weekEnd > monthEnd ? monthEnd : weekEnd;
+
+          const weekSales = filteredSales.filter(sale => {
+            const saleDate = new Date(sale.createdAt);
+            return saleDate >= currentWeekStart && saleDate <= actualWeekEnd;
+          });
+
+          const total = weekSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+
+          data.push({
+            label: `Week ${weekNumber}`,
+            value: total
+          });
+
+          currentWeekStart = new Date(weekEnd);
+          currentWeekStart.setDate(currentWeekStart.getDate() + 1);
+          currentWeekStart.setHours(0, 0, 0, 0);
+          weekNumber++;
+
+          if (weekNumber > 6) break;
+        }
+        break;
+      }
+      case 'month': {
+        for (let i = 5; i >= 0; i--) {
+          const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+
+          const monthSales = filteredSales.filter(sale => {
+            const saleDate = new Date(sale.createdAt);
+            return saleDate >= monthStart && saleDate < monthEnd;
+          });
+
+          const total = monthSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+          data.push({
+            label: monthStart.toLocaleDateString('en-KE', { month: 'short' }),
+            value: total
+          });
+        }
+        break;
+      }
+      case 'year': {
+        for (let i = 4; i >= 0; i--) {
+          const year = now.getFullYear() - i;
+          const yearStart = new Date(year, 0, 1);
+          const yearEnd = new Date(year + 1, 0, 1);
+
+          const yearSales = filteredSales.filter(sale => {
+            const saleDate = new Date(sale.createdAt);
+            return saleDate >= yearStart && saleDate < yearEnd;
+          });
+
+          const total = yearSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+          data.push({
+            label: year.toString(),
+            value: total
+          });
+        }
+        break;
+      }
+    }
+
+    return data;
+  };
+
+  const salesChartData = getSalesChartData();
+
+  const exportAnalytics = () => {
+    try {
+      if (filteredSales.length === 0) {
+        showAlert({ title: 'Analytics', message: 'No analytics data to export', type: 'warning' });
+        return;
+      }
+
+      const content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Analytics Report - ${new Date().toLocaleDateString('en-KE')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 12px 8px; text-align: left; border: 1px solid #333; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    h2 { color: #333; margin-top: 30px; margin-bottom: 15px; }
+    .summary { margin-bottom: 20px; }
+    @media print { 
+      body { margin: 0; } 
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>WESABI PHARMACY - ANALYTICS REPORT</h1>
+  <div class="summary">
+    <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
+    <p><strong>Date Range:</strong> ${dateRange}</p>
+  </div>
+  
+  <h2>Summary Statistics</h2>
+  <table>
+    <tr><th>Metric</th><th>Value</th></tr>
+    <tr><td>Total Revenue</td><td>${formatKES(totalRevenue)}</td></tr>
+    <tr><td>Total Transactions</td><td>${totalTransactions}</td></tr>
+    <tr><td>Average Transaction</td><td>${formatKES(averageTransaction)}</td></tr>
+  </table>
+  
+  <h2>Top Selling Products</h2>
+  <table>
+    <tr><th>Product</th><th>Quantity Sold</th><th>Revenue</th></tr>
+    ${topProducts.map(product => `
+    <tr>
+      <td>${product.name}</td>
+      <td>${product.quantity}</td>
+      <td>${formatKES(product.revenue)}</td>
+    </tr>
+    `).join('')}
+  </table>
+  
+  <h2>Category Performance</h2>
+  <table>
+    <tr><th>Category</th><th>Quantity</th><th>Revenue</th></tr>
+    ${Object.entries(categoryStats).map(([category, stats]) => `
+    <tr>
+      <td>${category}</td>
+      <td>${stats.quantity}</td>
+      <td>${formatKES(stats.revenue)}</td>
+    </tr>
+    `).join('')}
+  </table>
+  
+  <h2>Payment Methods</h2>
+  <table>
+    <tr><th>Payment Method</th><th>Amount</th></tr>
+    ${Object.entries(paymentMethodStats).map(([method, amount]) => `
+    <tr>
+      <td>${method.toUpperCase()}</td>
+      <td>${formatKES(amount)}</td>
+    </tr>
+    `).join('')}
+  </table>
+</body>
+</html>`;
+      
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(content);
+        printWindow.document.close();
+        
+        // Wait for content to load then trigger print
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      } else {
+        showAlert({ title: 'Analytics', message: 'Please allow popups to export PDF reports', type: 'warning' });
+      }
+    } catch (error) {
+      console.error('Error exporting analytics:', error);
+      showAlert({ title: 'Analytics', message: 'Error generating PDF report. Please try again.', type: 'error' });
+    }
   };
 
   return (
@@ -226,6 +409,32 @@ const Analytics: React.FC = () => {
             </select>
           </div>
         </div>
+      </div>
+
+      {/* Sales Graph */}
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-semibold text-gray-900">Sales Trends</h2>
+          <div className="flex space-x-2">
+            {(['day', 'week', 'month', 'year'] as const).map((period) => (
+              <button
+                key={period}
+                onClick={() => setSalesPeriod(period)}
+                className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                  salesPeriod === period
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {period.charAt(0).toUpperCase() + period.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <SalesChart
+          data={salesChartData}
+          title={`Sales by ${salesPeriod.charAt(0).toUpperCase() + salesPeriod.slice(1)}`}
+        />
       </div>
 
       {/* Summary Cards */}
