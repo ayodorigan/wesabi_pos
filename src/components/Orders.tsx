@@ -3,6 +3,8 @@ import { Plus, Trash2, Edit2, Download, Share2, Search, Filter, X } from 'lucide
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
+import { AlertDialog } from './AlertDialog';
+import jsPDF from 'jspdf';
 
 interface Product {
   id: string;
@@ -49,6 +51,26 @@ export default function Orders() {
   const [newProduct, setNewProduct] = useState({
     name: '',
     min_stock_level: '10'
+  });
+  const [deleteDialog, setDeleteDialog] = useState<{
+    isOpen: boolean;
+    orderId: string | null;
+    orderNumber: string;
+  }>({
+    isOpen: false,
+    orderId: null,
+    orderNumber: ''
+  });
+  const [infoDialog, setInfoDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'error' | 'warning';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
   });
 
   useEffect(() => {
@@ -320,22 +342,42 @@ export default function Orders() {
     }
   };
 
-  const handleDeleteOrder = async (orderId: string) => {
-    if (!window.confirm('Are you sure you want to delete this order?')) return;
+  const handleDeleteOrder = async () => {
+    if (!deleteDialog.orderId) return;
 
     try {
       const { error } = await supabase
         .from('supplier_orders')
         .delete()
-        .eq('id', orderId);
+        .eq('id', deleteDialog.orderId);
 
       if (error) throw error;
 
-      showAlert('success', 'Order deleted successfully');
+      setInfoDialog({
+        isOpen: true,
+        title: 'Success',
+        message: 'Order deleted successfully',
+        type: 'success'
+      });
       fetchOrders();
     } catch (error: any) {
-      showAlert('error', error.message);
+      setInfoDialog({
+        isOpen: true,
+        title: 'Error',
+        message: error.message || 'Failed to delete order',
+        type: 'error'
+      });
+    } finally {
+      setDeleteDialog({ isOpen: false, orderId: null, orderNumber: '' });
     }
+  };
+
+  const showDeleteConfirmation = (orderId: string, orderNumber: string) => {
+    setDeleteDialog({
+      isOpen: true,
+      orderId,
+      orderNumber
+    });
   };
 
   const exportToPDF = async (order: Order) => {
@@ -347,47 +389,92 @@ export default function Orders() {
 
       if (error) throw error;
 
-      const pdfContent = generatePDFContent(order, items || []);
-      const blob = new Blob([pdfContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${order.order_number}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const pdf = generatePDF(order, items || []);
+      pdf.save(`Order_${order.order_number}.pdf`);
 
-      showAlert('success', 'Order exported successfully');
+      setInfoDialog({
+        isOpen: true,
+        title: 'Success',
+        message: 'Order exported successfully as PDF',
+        type: 'success'
+      });
     } catch (error: any) {
-      showAlert('error', error.message);
+      setInfoDialog({
+        isOpen: true,
+        title: 'Error',
+        message: error.message || 'Failed to export order',
+        type: 'error'
+      });
     }
   };
 
-  const generatePDFContent = (order: Order, items: OrderItem[]) => {
-    let content = `SUPPLIER ORDER\n`;
-    content += `${'='.repeat(50)}\n\n`;
-    content += `Order Number: ${order.order_number}\n`;
-    content += `Date: ${new Date(order.created_at).toLocaleDateString()}\n`;
-    content += `Created By: ${order.user_profiles?.name}\n`;
-    content += `Status: ${order.status.toUpperCase()}\n`;
-    content += `\n${'='.repeat(50)}\n\n`;
-    content += `ITEMS:\n\n`;
+  const generatePDF = (order: Order, items: OrderItem[]) => {
+    const doc = new jsPDF();
 
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SUPPLIER ORDER', 105, 20, { align: 'center' });
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('_'.repeat(85), 10, 25);
+
+    doc.setFontSize(12);
+    doc.text(`Order Number: ${order.order_number}`, 15, 35);
+    doc.text(`Date: ${new Date(order.created_at).toLocaleDateString()}`, 15, 42);
+    doc.text(`Created By: ${order.user_profiles?.name || 'Unknown'}`, 15, 49);
+    doc.text(`Status: ${order.status.toUpperCase()}`, 15, 56);
+
+    doc.setFontSize(10);
+    doc.text('_'.repeat(85), 10, 60);
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ORDER ITEMS', 15, 70);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+
+    let yPos = 80;
     items.forEach((item, index) => {
-      content += `${index + 1}. ${item.product_name}\n`;
-      content += `   Current Stock: ${item.current_quantity}\n`;
-      content += `   Order Quantity: ${item.order_quantity}\n\n`;
+      if (yPos > 270) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${index + 1}. ${item.product_name}`, 15, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Current Stock: ${item.current_quantity}`, 20, yPos + 7);
+      doc.text(`Order Quantity: ${item.order_quantity}`, 20, yPos + 14);
+
+      yPos += 25;
     });
 
-    content += `${'='.repeat(50)}\n`;
-    content += `Total Items to Order: ${items.reduce((sum, item) => sum + item.order_quantity, 0)}\n`;
-
-    if (order.notes) {
-      content += `\nNotes: ${order.notes}\n`;
+    if (yPos > 250) {
+      doc.addPage();
+      yPos = 20;
     }
 
-    return content;
+    doc.setFontSize(10);
+    doc.text('_'.repeat(85), 10, yPos);
+    yPos += 7;
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Total Items to Order: ${items.reduce((sum, item) => sum + item.order_quantity, 0)}`, 15, yPos);
+
+    if (order.notes) {
+      yPos += 10;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Notes:', 15, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      const splitNotes = doc.splitTextToSize(order.notes, 180);
+      doc.text(splitNotes, 15, yPos + 7);
+    }
+
+    return doc;
   };
 
   const shareViaWhatsApp = async (order: Order) => {
@@ -399,33 +486,23 @@ export default function Orders() {
 
       if (error) throw error;
 
-      const message = generateWhatsAppMessage(order, items || []);
-      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-      window.open(whatsappUrl, '_blank');
+      const pdf = generatePDF(order, items || []);
+      pdf.save(`Order_${order.order_number}.pdf`);
+
+      setInfoDialog({
+        isOpen: true,
+        title: 'PDF Downloaded',
+        message: `Order PDF has been downloaded to your device. You can now manually attach and share "Order_${order.order_number}.pdf" via WhatsApp.`,
+        type: 'success'
+      });
     } catch (error: any) {
-      showAlert('error', error.message);
+      setInfoDialog({
+        isOpen: true,
+        title: 'Error',
+        message: error.message || 'Failed to generate PDF for sharing',
+        type: 'error'
+      });
     }
-  };
-
-  const generateWhatsAppMessage = (order: Order, items: OrderItem[]) => {
-    let message = `*SUPPLIER ORDER*\n\n`;
-    message += `Order #: ${order.order_number}\n`;
-    message += `Date: ${new Date(order.created_at).toLocaleDateString()}\n`;
-    message += `Status: ${order.status.toUpperCase()}\n\n`;
-    message += `*ITEMS:*\n`;
-
-    items.forEach((item, index) => {
-      message += `${index + 1}. ${item.product_name}\n`;
-      message += `   Current: ${item.current_quantity} | Order: ${item.order_quantity}\n`;
-    });
-
-    message += `\n*Total Items:* ${items.reduce((sum, item) => sum + item.order_quantity, 0)}`;
-
-    if (order.notes) {
-      message += `\n\n*Notes:* ${order.notes}`;
-    }
-
-    return message;
   };
 
   const filteredOrders = orders.filter(order => {
@@ -553,7 +630,7 @@ export default function Orders() {
                         </button>
                         {isAdmin && (
                           <button
-                            onClick={() => handleDeleteOrder(order.id)}
+                            onClick={() => showDeleteConfirmation(order.id, order.order_number)}
                             className="text-red-600 hover:text-red-800"
                             title="Delete"
                           >
@@ -800,6 +877,24 @@ export default function Orders() {
           </div>
         </div>
       )}
+
+      <AlertDialog
+        isOpen={deleteDialog.isOpen}
+        title="Confirm Deletion"
+        message={`Are you sure you want to delete order ${deleteDialog.orderNumber}? This action cannot be undone.`}
+        type="confirm"
+        onClose={() => setDeleteDialog({ isOpen: false, orderId: null, orderNumber: '' })}
+        onConfirm={handleDeleteOrder}
+        confirmText="Delete Order"
+      />
+
+      <AlertDialog
+        isOpen={infoDialog.isOpen}
+        title={infoDialog.title}
+        message={infoDialog.message}
+        type={infoDialog.type}
+        onClose={() => setInfoDialog({ isOpen: false, title: '', message: '', type: 'info' })}
+      />
     </div>
   );
 }
