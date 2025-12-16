@@ -155,14 +155,20 @@ const Settings: React.FC = () => {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (confirm('Are you sure you want to delete this user?')) {
-      try {
-        await deleteUser(userId);
-        await loadUsers();
-      } catch (error: any) {
-        showAlert({ title: 'Settings', message: `Error deleting user: ${error.message}`, type: 'error' });
+    showAlert({
+      title: 'Delete User',
+      message: 'Are you sure you want to delete this user? This action cannot be undone.',
+      type: 'confirm',
+      onConfirm: async () => {
+        try {
+          await deleteUser(userId);
+          await loadUsers();
+          showAlert({ title: 'Settings', message: 'User deleted successfully!', type: 'success' });
+        } catch (error: any) {
+          showAlert({ title: 'Settings', message: `Error deleting user: ${error.message}`, type: 'error' });
+        }
       }
-    }
+    });
   };
 
   const startEdit = (userToEdit: UserProfile) => {
