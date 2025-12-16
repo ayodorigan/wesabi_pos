@@ -89,40 +89,25 @@ export default function Orders() {
 
   const loadLowStockItems = async () => {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, current_stock, min_stock_level')
-        .lte('current_stock', supabase.rpc('min_stock_level'))
-        .order('current_stock');
-
-      if (error) {
-        const lowStock = allProducts.filter(p => p.current_stock <= p.min_stock_level);
-        const items: OrderItem[] = lowStock.map(product => ({
-          product_id: product.id,
-          product_name: product.name,
-          current_quantity: product.current_stock,
-          order_quantity: product.min_stock_level * 2 - product.current_stock
-        }));
-        setOrderItems(items);
-      } else {
-        const items: OrderItem[] = (data || []).map(product => ({
-          product_id: product.id,
-          product_name: product.name,
-          current_quantity: product.current_stock,
-          order_quantity: product.min_stock_level * 2 - product.current_stock
-        }));
-        setOrderItems(items);
-      }
+      const lowStock = allProducts.filter(p => p.current_stock <= p.min_stock_level);
+      const items: OrderItem[] = lowStock.map(product => ({
+        product_id: product.id,
+        product_name: product.name,
+        current_quantity: product.current_stock,
+        order_quantity: Math.max(1, product.min_stock_level * 2 - product.current_stock)
+      }));
+      setOrderItems(items);
     } catch (error: any) {
       showAlert('error', error.message);
     }
   };
 
-  const handleCreateOrder = () => {
+  const handleCreateOrder = async () => {
     setEditingOrder(null);
     setOrderItems([]);
     setNotes('');
-    loadLowStockItems();
+    setSearchProduct('');
+    await loadLowStockItems();
     setShowCreateModal(true);
   };
 
@@ -169,6 +154,19 @@ export default function Orders() {
         ? { ...item, order_quantity: Math.max(1, quantity) }
         : item
     ));
+  };
+
+  const handleQuantityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, currentIndex: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const inputs = document.querySelectorAll('input[data-quantity-input]');
+      const nextIndex = currentIndex + 1;
+      if (nextIndex < inputs.length) {
+        const nextInput = inputs[nextIndex] as HTMLInputElement;
+        nextInput.focus();
+        nextInput.select();
+      }
+    }
   };
 
   const handleSaveOrder = async () => {
@@ -518,30 +516,39 @@ export default function Orders() {
             </div>
 
             <div className="p-6 space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Add Items
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <label className="block text-sm font-semibold text-blue-900 mb-2">
+                  Search & Add Products to Order
                 </label>
+                <p className="text-xs text-blue-700 mb-3">
+                  {orderItems.length > 0
+                    ? `${orderItems.length} low-stock item(s) auto-added. Search below to add more products.`
+                    : 'No low-stock items found. Search below to add products to your order.'}
+                </p>
                 <div className="relative">
                   <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Search products to add..."
+                    placeholder="Type product name to search and add..."
                     value={searchProduct}
                     onChange={(e) => setSearchProduct(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 {searchProduct && filteredProducts.length > 0 && (
-                  <div className="mt-2 border border-gray-300 rounded-lg max-h-48 overflow-y-auto">
+                  <div className="mt-2 border border-gray-300 rounded-lg max-h-48 overflow-y-auto bg-white shadow-md">
                     {filteredProducts.slice(0, 10).map(product => (
                       <button
                         key={product.id}
                         onClick={() => handleAddItem(product)}
-                        className="w-full px-4 py-2 text-left hover:bg-gray-50 flex justify-between items-center"
+                        className="w-full px-4 py-2.5 text-left hover:bg-blue-50 flex justify-between items-center border-b last:border-b-0"
                       >
-                        <span>{product.name}</span>
-                        <span className="text-sm text-gray-500">
+                        <span className="font-medium">{product.name}</span>
+                        <span className={`text-sm px-2 py-1 rounded ${
+                          product.current_stock <= product.min_stock_level
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}>
                           Stock: {product.current_stock}
                         </span>
                       </button>
@@ -570,16 +577,27 @@ export default function Orders() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {orderItems.map((item) => (
+                        {orderItems.map((item, index) => (
                           <tr key={item.product_id}>
                             <td className="px-4 py-2">{item.product_name}</td>
-                            <td className="px-4 py-2">{item.current_quantity}</td>
+                            <td className="px-4 py-2">
+                              <span className={`px-2 py-1 rounded text-sm ${
+                                item.current_quantity <= 0
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {item.current_quantity}
+                              </span>
+                            </td>
                             <td className="px-4 py-2">
                               <input
                                 type="number"
                                 value={item.order_quantity}
                                 onChange={(e) => handleUpdateQuantity(item.product_id, parseInt(e.target.value) || 0)}
-                                className="w-24 px-2 py-1 border border-gray-300 rounded"
+                                onKeyDown={(e) => handleQuantityKeyDown(e, index)}
+                                onFocus={(e) => e.target.select()}
+                                data-quantity-input
+                                className="w-24 px-2 py-1.5 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 min="1"
                               />
                             </td>
@@ -587,6 +605,7 @@ export default function Orders() {
                               <button
                                 onClick={() => handleRemoveItem(item.product_id)}
                                 className="text-red-600 hover:text-red-800"
+                                title="Remove item"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
