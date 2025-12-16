@@ -28,8 +28,8 @@ interface AuthContextType {
     name: string;
     phone?: string;
     role: UserProfile['role'];
-    email?: string;
-    password?: string;
+    email: string;
+    password: string;
   }) => Promise<void>;
   updateUser: (userId: string, updates: Partial<UserProfile>) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
