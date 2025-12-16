@@ -181,6 +181,8 @@ const InvoiceManagement: React.FC = () => {
     if (!user || !supabase) return;
 
     setLoading(true);
+    let invoiceId: string | null = null;
+
     try {
       const totalAmount = invoiceItems.reduce((sum, item) => sum + item.totalCost, 0);
 
@@ -198,76 +200,82 @@ const InvoiceManagement: React.FC = () => {
         .single();
 
       if (invoiceError) throw invoiceError;
+      invoiceId = invoice.id;
 
-      for (const item of invoiceItems) {
-        const { data: existingProduct } = await supabase
-          .from('products')
-          .select('*')
-          .eq('name', item.productName)
-          .eq('batch_number', item.batchNumber)
-          .maybeSingle();
-
-        let productId = existingProduct?.id;
-
-        if (existingProduct) {
-          const { error: updateError } = await supabase
+      const itemPromises = invoiceItems.map(async (item) => {
+        try {
+          const { data: existingProduct } = await supabase
             .from('products')
-            .update({
-              current_stock: existingProduct.current_stock + item.quantity,
-              cost_price: item.costPrice,
-              selling_price: item.sellingPrice,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', existingProduct.id);
+            .select('*')
+            .eq('name', item.productName)
+            .eq('batch_number', item.batchNumber)
+            .maybeSingle();
 
-          if (updateError) throw updateError;
-        } else {
-          const { data: newProduct, error: productError } = await supabase
-            .from('products')
+          let productId = existingProduct?.id;
+
+          if (existingProduct) {
+            const { error: updateError } = await supabase
+              .from('products')
+              .update({
+                current_stock: existingProduct.current_stock + item.quantity,
+                cost_price: item.costPrice,
+                selling_price: item.sellingPrice,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existingProduct.id);
+
+            if (updateError) throw updateError;
+          } else {
+            const { data: newProduct, error: productError } = await supabase
+              .from('products')
+              .insert({
+                name: item.productName,
+                category: item.category,
+                supplier: invoiceData.supplier,
+                batch_number: item.batchNumber,
+                expiry_date: item.expiryDate.toISOString().split('T')[0],
+                cost_price: item.costPrice,
+                selling_price: item.sellingPrice,
+                current_stock: item.quantity,
+                min_stock_level: 10,
+                barcode: item.barcode,
+                invoice_number: invoiceData.invoiceNumber,
+              })
+              .select()
+              .single();
+
+            if (productError) throw productError;
+            productId = newProduct.id;
+          }
+
+          const { error: itemError } = await supabase
+            .from('invoice_items')
             .insert({
-              name: item.productName,
+              invoice_id: invoiceId,
+              product_id: productId,
+              product_name: item.productName,
               category: item.category,
-              supplier: invoiceData.supplier,
               batch_number: item.batchNumber,
               expiry_date: item.expiryDate.toISOString().split('T')[0],
+              quantity: item.quantity,
               cost_price: item.costPrice,
               selling_price: item.sellingPrice,
-              current_stock: item.quantity,
-              min_stock_level: 10,
+              total_cost: item.totalCost,
               barcode: item.barcode,
-              invoice_number: invoiceData.invoiceNumber,
-            })
-            .select()
-            .single();
+            });
 
-          if (productError) throw productError;
-          productId = newProduct.id;
+          if (itemError) throw itemError;
+        } catch (itemError) {
+          console.error(`Error processing item ${item.productName}:`, itemError);
+          throw itemError;
         }
+      });
 
-        const { error: itemError } = await supabase
-          .from('invoice_items')
-          .insert({
-            invoice_id: invoice.id,
-            product_id: productId,
-            product_name: item.productName,
-            category: item.category,
-            batch_number: item.batchNumber,
-            expiry_date: item.expiryDate.toISOString().split('T')[0],
-            quantity: item.quantity,
-            cost_price: item.costPrice,
-            selling_price: item.sellingPrice,
-            total_cost: item.totalCost,
-            barcode: item.barcode,
-          });
+      await Promise.all(itemPromises);
 
-        if (itemError) throw itemError;
-      }
-
-      setLoading(false);
       await refreshData();
       await loadInvoices();
 
-      // Log activity
       await logActivity(
         'INVOICE_CREATED',
         `Created invoice ${invoiceData.invoiceNumber} for supplier ${invoiceData.supplier} - Total: ${formatKES(totalAmount)}, Items: ${invoiceItems.length}`
@@ -278,6 +286,15 @@ const InvoiceManagement: React.FC = () => {
       showAlert({ title: 'Invoice Management', message: 'Invoice saved successfully! Inventory updated.', type: 'success' });
     } catch (error: any) {
       console.error('Error saving invoice:', error);
+
+      if (invoiceId) {
+        try {
+          await supabase.from('invoices').delete().eq('id', invoiceId);
+        } catch (cleanupError) {
+          console.error('Error cleaning up invoice:', cleanupError);
+        }
+      }
+
       showAlert({ title: 'Invoice Management', message: getErrorMessage(error), type: 'error' });
     } finally {
       setLoading(false);
