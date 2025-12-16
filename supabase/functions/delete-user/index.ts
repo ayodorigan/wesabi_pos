@@ -115,9 +115,26 @@ Deno.serve(async (req: Request) => {
     if (!userId) {
       return new Response(
         JSON.stringify({ error: 'Missing userId' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Delete the user profile first (must be done before deleting auth user)
+    const { error: profileDeleteError } = await supabaseAdmin
+      .from('user_profiles')
+      .delete()
+      .eq('user_id', userId);
+
+    if (profileDeleteError) {
+      console.error('Error deleting user profile:', profileDeleteError);
+      return new Response(
+        JSON.stringify({ error: `Failed to delete user profile: ${profileDeleteError.message}` }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
@@ -128,9 +145,9 @@ Deno.serve(async (req: Request) => {
     if (deleteError) {
       return new Response(
         JSON.stringify({ error: deleteError.message }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
