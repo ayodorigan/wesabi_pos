@@ -286,35 +286,39 @@ const InvoiceManagement: React.FC = () => {
   const deleteInvoice = async (invoiceId: string) => {
     const invoiceToDelete = invoices.find(inv => inv.id === invoiceId);
 
-    if (!confirm('Are you sure you want to delete this invoice? This will NOT reverse inventory changes.')) {
-      return;
-    }
+    showAlert({
+      title: 'Delete Invoice',
+      message: 'Are you sure you want to delete this invoice? This will NOT reverse inventory changes.',
+      type: 'confirm',
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        setLoading(true);
+        try {
+          if (!supabase) return;
 
-    setLoading(true);
-    try {
-      if (!supabase) return;
+          const { error } = await supabase
+            .from('invoices')
+            .delete()
+            .eq('id', invoiceId);
 
-      const { error } = await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', invoiceId);
+          if (error) throw error;
 
-      if (error) throw error;
+          // Log activity
+          await logActivity(
+            'INVOICE_DELETED',
+            `Deleted invoice ${invoiceToDelete?.invoiceNumber || invoiceId} - Supplier: ${invoiceToDelete?.supplier || 'Unknown'}`
+          );
 
-      // Log activity
-      await logActivity(
-        'INVOICE_DELETED',
-        `Deleted invoice ${invoiceToDelete?.invoiceNumber || invoiceId} - Supplier: ${invoiceToDelete?.supplier || 'Unknown'}`
-      );
-
-      await loadInvoices();
-      showAlert({ title: 'Invoice Management', message: 'Invoice deleted successfully', type: 'success' });
-    } catch (error: any) {
-      console.error('Error deleting invoice:', error);
-      showAlert({ title: 'Invoice Management', message: `Failed to delete invoice: ${error.message}`, type: 'error' });
-    } finally {
-      setLoading(false);
-    }
+          await loadInvoices();
+          showAlert({ title: 'Invoice Management', message: 'Invoice deleted successfully', type: 'success' });
+        } catch (error: any) {
+          console.error('Error deleting invoice:', error);
+          showAlert({ title: 'Invoice Management', message: `Failed to delete invoice: ${error.message}`, type: 'error' });
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
   };
 
   const viewInvoice = (invoice: Invoice) => {

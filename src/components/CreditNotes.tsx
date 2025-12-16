@@ -278,36 +278,40 @@ const CreditNotes: React.FC = () => {
 
     const creditNoteToDelete = creditNotes.find(cn => cn.id === creditNoteId);
 
-    if (!confirm('Are you sure you want to delete this credit note? This will NOT reverse inventory changes.')) {
-      return;
-    }
+    showAlert({
+      title: 'Delete Credit Note',
+      message: 'Are you sure you want to delete this credit note? This will NOT reverse inventory changes.',
+      type: 'confirm',
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        setLoading(true);
+        try {
+          if (!supabase) return;
 
-    setLoading(true);
-    try {
-      if (!supabase) return;
+          const { error } = await supabase
+            .from('credit_notes')
+            .delete()
+            .eq('id', creditNoteId);
 
-      const { error } = await supabase
-        .from('credit_notes')
-        .delete()
-        .eq('id', creditNoteId);
+          if (error) throw error;
 
-      if (error) throw error;
+          // Log activity
+          await logActivity(
+            'CREDIT_NOTE_DELETED',
+            `Deleted credit note ${creditNoteToDelete?.creditNoteNumber || creditNoteId} - Supplier: ${creditNoteToDelete?.supplier || 'Unknown'}`
+          );
 
-      // Log activity
-      await logActivity(
-        'CREDIT_NOTE_DELETED',
-        `Deleted credit note ${creditNoteToDelete?.creditNoteNumber || creditNoteId} - Supplier: ${creditNoteToDelete?.supplier || 'Unknown'}`
-      );
-
-      await refreshData();
-      await loadCreditNotes();
-      showAlert({ title: 'Credit Notes', message: 'Credit note deleted successfully', type: 'success' });
-    } catch (error: any) {
-      console.error('Error deleting credit note:', error);
-      showAlert({ title: 'Credit Notes', message: `Failed to delete credit note: ${error.message}`, type: 'error' });
-    } finally {
-      setLoading(false);
-    }
+          await refreshData();
+          await loadCreditNotes();
+          showAlert({ title: 'Credit Notes', message: 'Credit note deleted successfully', type: 'success' });
+        } catch (error: any) {
+          console.error('Error deleting credit note:', error);
+          showAlert({ title: 'Credit Notes', message: `Failed to delete credit note: ${error.message}`, type: 'error' });
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
   };
 
   const exportCreditNotesToPDF = () => {

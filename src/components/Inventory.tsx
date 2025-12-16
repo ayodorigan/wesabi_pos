@@ -340,6 +340,24 @@ const Inventory: React.FC = () => {
     });
   };
 
+  const handleDeleteProduct = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    showAlert({
+      title: 'Delete Product',
+      message: `Are you sure you want to delete "${product?.name}"? This action cannot be undone.`,
+      type: 'confirm',
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        try {
+          await deleteProduct(productId);
+          showAlert({ title: 'Inventory', message: 'Product deleted successfully', type: 'success' });
+        } catch (error: any) {
+          showAlert({ title: 'Inventory', message: `Failed to delete product: ${error.message}`, type: 'error' });
+        }
+      }
+    });
+  };
+
   const canManageInventory = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'sales' || user?.role === 'inventory';
 
   return (
@@ -498,7 +516,7 @@ const Inventory: React.FC = () => {
                           </button>
                           {canDeleteProducts() && (
                           <button
-                            onClick={() => deleteProduct(product.id)}
+                            onClick={() => handleDeleteProduct(product.id)}
                             className="text-red-600 hover:text-red-900"
                           >
                             <Trash2 className="h-4 w-4" />

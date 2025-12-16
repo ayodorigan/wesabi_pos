@@ -156,23 +156,30 @@ const StockTake: React.FC = () => {
     const sessionToDelete = sessions.find(s => s.id === sessionId) ||
                            stockTakeSessions.find(s => s.id === sessionId);
 
-    if (confirm('Are you sure you want to delete this stock take session?')) {
-      try {
-        await deleteStockTakeSession(sessionId);
-        await logActivity('DELETE_STOCK_TAKE_SESSION', `Deleted stock take session: ${sessionToDelete?.name || sessionToDelete?.session_name || sessionId}`);
+    showAlert({
+      title: 'Delete Stock Take Session',
+      message: 'Are you sure you want to delete this stock take session?',
+      type: 'confirm',
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        try {
+          await deleteStockTakeSession(sessionId);
+          await logActivity('DELETE_STOCK_TAKE_SESSION', `Deleted stock take session: ${sessionToDelete?.name || sessionToDelete?.session_name || sessionId}`);
 
-        setSessions(prev => prev.filter(session => session.id !== sessionId));
-        localStorage.removeItem(`stockTakeSession_${sessionId}`);
+          setSessions(prev => prev.filter(session => session.id !== sessionId));
+          localStorage.removeItem(`stockTakeSession_${sessionId}`);
 
-        if (activeSession && activeSession.id === sessionId) {
-          setActiveSession(null);
-          setCurrentView('history');
+          if (activeSession && activeSession.id === sessionId) {
+            setActiveSession(null);
+            setCurrentView('history');
+          }
+          showAlert({ title: 'Stock Take', message: 'Session deleted successfully', type: 'success' });
+        } catch (error: any) {
+          console.error('Error deleting session:', error);
+          showAlert({ title: 'Stock Take', message: `Failed to delete session: ${error.message}`, type: 'error' });
         }
-      } catch (error: any) {
-        console.error('Error deleting session:', error);
-        showAlert({ title: 'Stock Take', message: `Failed to delete session: ${error.message}`, type: 'error' });
       }
-    }
+    });
   };
 
   const resumeSession = async (session: StockTakeSession) => {
