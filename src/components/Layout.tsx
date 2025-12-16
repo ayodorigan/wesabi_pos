@@ -51,13 +51,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   const menuItems = allMenuItems.filter(item => canAccessPage(item.id));
 
   const handleSignOut = () => {
+    setShowProfileDropdown(false);
     showAlert({
       title: 'Sign Out',
       message: 'Are you sure you want to sign out?',
       type: 'confirm',
       confirmText: 'Sign Out',
       onConfirm: async () => {
-        await signOut();
+        try {
+          await signOut();
+        } catch (error) {
+          console.error('Sign out error:', error);
+        }
       }
     });
   };
