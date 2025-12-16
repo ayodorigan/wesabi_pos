@@ -82,6 +82,29 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Check if user already exists in auth.users
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+    const existingUser = existingUsers?.users?.find(u => u.email === email);
+
+    if (existingUser) {
+      // Check if they have a profile
+      const { data: existingProfile } = await supabaseAdmin
+        .from('user_profiles')
+        .select('user_id')
+        .eq('user_id', existingUser.id)
+        .maybeSingle();
+
+      if (existingProfile) {
+        return new Response(
+          JSON.stringify({ error: 'A user with this email already exists' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } else {
+        // User exists in auth but not in profiles - delete and recreate
+        await supabaseAdmin.auth.admin.deleteUser(existingUser.id);
+      }
+    }
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -114,6 +137,7 @@ Deno.serve(async (req: Request) => {
       });
 
     if (insertError) {
+      // Clean up: delete the auth user we just created
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return new Response(
         JSON.stringify({ error: `Failed to create user profile: ${insertError.message}` }),
