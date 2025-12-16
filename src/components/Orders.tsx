@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Download, MessageCircle, Search, Filter, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, MessageCircle, Search, Filter, X, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -513,25 +513,32 @@ export default function Orders() {
       const fileName = `Order_${order.order_number}.pdf`;
       pdf.save(fileName);
 
-      setTimeout(() => {
-        const message = `Hi! I'm sharing supplier order ${order.order_number}. The PDF file "${fileName}" has been downloaded to my device. Please find the attached order document with ${items?.length || 0} items for a total quantity of ${items?.reduce((sum, item) => sum + item.order_quantity, 0) || 0} units.`;
-        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
-      }, 500);
+      const message = `Hi! I'm sharing supplier order ${order.order_number}. The PDF file "${fileName}" has been downloaded to my device. Please find the attached order document with ${items?.length || 0} items for a total quantity of ${items?.reduce((sum, item) => sum + item.order_quantity, 0) || 0} units.`;
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 
-      setInfoDialog({
-        isOpen: true,
-        title: 'Opening WhatsApp',
-        message: `Order PDF "${fileName}" has been downloaded. WhatsApp is opening - please attach the downloaded PDF file to your message.`,
-        type: 'success'
-      });
+      setTimeout(() => {
+        window.open(whatsappUrl, '_blank');
+      }, 300);
+
+      showAlert('success', `Order PDF "${fileName}" downloaded. WhatsApp is opening - please attach the PDF to your message.`);
     } catch (error: any) {
-      setInfoDialog({
-        isOpen: true,
-        title: 'Error',
-        message: error.message || 'Failed to generate PDF for sharing',
-        type: 'error'
-      });
+      showAlert('error', error.message || 'Failed to generate PDF for sharing');
+    }
+  };
+
+  const revertOrderStatus = async (order: Order) => {
+    try {
+      const { error } = await supabase
+        .from('supplier_orders')
+        .update({ status: 'pending' })
+        .eq('id', order.id);
+
+      if (error) throw error;
+
+      showAlert('success', `Order ${order.order_number} reverted to pending status`);
+      fetchOrders();
+    } catch (error: any) {
+      showAlert('error', error.message || 'Failed to revert order status');
     }
   };
 
@@ -673,6 +680,20 @@ export default function Orders() {
                         >
                           <MessageCircle className="w-5 h-5" />
                         </button>
+                        {order.status === 'completed' && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              revertOrderStatus(order);
+                            }}
+                            className="text-orange-600 hover:text-orange-800 transition-colors p-1"
+                            title="Revert to Pending"
+                            type="button"
+                          >
+                            <RotateCcw className="w-5 h-5" />
+                          </button>
+                        )}
                         {isAdmin && (
                           <button
                             onClick={(e) => {
