@@ -50,15 +50,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   // Filter menu items based on user permissions
   const menuItems = allMenuItems.filter(item => canAccessPage(item.id));
 
-  const handleSignOut = async () => {
-    try {
-       console.log('Sign out clicked');
-      await signOut();
-       console.log('Sign out completed');
-    } catch (error) {
-      console.error('Error signing out:', error);
-       showAlert({ title: 'Layout', message: 'Error signing out. Please try again.', type: 'error' });
-    }
+  const handleSignOut = () => {
+    showAlert({
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out?',
+      type: 'confirm',
+      confirmText: 'Sign Out',
+      onConfirm: async () => {
+        try {
+          await signOut();
+        } catch (error) {
+          console.error('Error signing out:', error);
+          showAlert({ title: 'Error', message: 'Error signing out. Please try again.', type: 'error' });
+        }
+      }
+    });
   };
 
   return (

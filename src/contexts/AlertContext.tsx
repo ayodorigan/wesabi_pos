@@ -4,7 +4,9 @@ import { AlertDialog } from '../components/AlertDialog';
 interface AlertOptions {
   title: string;
   message: string;
-  type?: 'info' | 'success' | 'error' | 'warning';
+  type?: 'info' | 'success' | 'error' | 'warning' | 'confirm';
+  onConfirm?: () => void | Promise<void>;
+  confirmText?: string;
 }
 
 interface AlertContextType {
@@ -44,6 +46,13 @@ export const AlertProvider: React.FC<AlertProviderProps> = ({ children }) => {
     setAlertState(prev => ({ ...prev, isOpen: false }));
   };
 
+  const handleConfirm = async () => {
+    if (alertState.onConfirm) {
+      await alertState.onConfirm();
+    }
+    closeAlert();
+  };
+
   return (
     <AlertContext.Provider value={{ showAlert }}>
       {children}
@@ -53,6 +62,8 @@ export const AlertProvider: React.FC<AlertProviderProps> = ({ children }) => {
         message={alertState.message}
         type={alertState.type}
         onClose={closeAlert}
+        onConfirm={alertState.type === 'confirm' ? handleConfirm : undefined}
+        confirmText={alertState.confirmText}
       />
     </AlertContext.Provider>
   );

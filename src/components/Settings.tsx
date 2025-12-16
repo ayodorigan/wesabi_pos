@@ -159,6 +159,7 @@ const Settings: React.FC = () => {
       title: 'Delete User',
       message: 'Are you sure you want to delete this user? This action cannot be undone.',
       type: 'confirm',
+      confirmText: 'Delete',
       onConfirm: async () => {
         try {
           await deleteUser(userId);
