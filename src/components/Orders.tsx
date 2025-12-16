@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Download, MessageCircle, Search, Filter, X, RotateCcw, CheckCircle, CheckCheck } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Search, Filter, X, RotateCcw, CheckCircle, CheckCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -95,7 +95,7 @@ export default function Orders() {
       if (error) throw error;
       setOrders(data || []);
     } catch (error: any) {
-      showAlert('error', error.message);
+      showAlert({ title: 'Error', message: error.message, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -111,7 +111,7 @@ export default function Orders() {
       if (error) throw error;
       setAllProducts(data || []);
     } catch (error: any) {
-      showAlert('error', error.message);
+      showAlert({ title: 'Error', message: error.message, type: 'error' });
     }
   };
 
@@ -136,7 +136,7 @@ export default function Orders() {
       }));
       setOrderItems(items);
     } catch (error: any) {
-      showAlert('error', error.message);
+      showAlert({ title: 'Error', message: error.message, type: 'error' });
     }
   };
 
@@ -163,13 +163,13 @@ export default function Orders() {
       setNotes(order.notes || '');
       setShowCreateModal(true);
     } catch (error: any) {
-      showAlert('error', error.message);
+      showAlert({ title: 'Error', message: error.message, type: 'error' });
     }
   };
 
   const handleAddItem = (product: Product) => {
     if (orderItems.some(item => item.product_id === product.id)) {
-      showAlert('warning', 'Item already added to order');
+      showAlert({ title: 'Warning', message: 'Item already added to order', type: 'warning' });
       return;
     }
 
@@ -217,7 +217,7 @@ export default function Orders() {
 
   const handleSaveNewProduct = async () => {
     if (!newProduct.name.trim()) {
-      showAlert('error', 'Please enter a product name');
+      showAlert({ title: 'Error', message: 'Please enter a product name', type: 'error' });
       return;
     }
 
@@ -256,15 +256,15 @@ export default function Orders() {
       setShowAddProductModal(false);
       setSearchProduct('');
       setNewProduct({ name: '', min_stock_level: '10' });
-      showAlert('success', 'Product added successfully');
+      showAlert({ title: 'Success', message: 'Product added successfully', type: 'success' });
     } catch (error: any) {
-      showAlert('error', error.message);
+      showAlert({ title: 'Error', message: error.message, type: 'error' });
     }
   };
 
   const handleSaveOrder = async () => {
     if (orderItems.length === 0) {
-      showAlert('error', 'Please add at least one item to the order');
+      showAlert({ title: 'Error', message: 'Please add at least one item to the order', type: 'error' });
       return;
     }
 
@@ -299,7 +299,7 @@ export default function Orders() {
 
         if (insertError) throw insertError;
 
-        showAlert('success', 'Order updated successfully');
+        showAlert({ title: 'Success', message: 'Order updated successfully', type: 'success' });
       } else {
         const { data: funcData, error: funcError } = await supabase
           .rpc('generate_order_number');
@@ -333,13 +333,13 @@ export default function Orders() {
 
         if (itemsError) throw itemsError;
 
-        showAlert('success', 'Order created successfully');
+        showAlert({ title: 'Success', message: 'Order created successfully', type: 'success' });
       }
 
       setShowCreateModal(false);
       fetchOrders();
     } catch (error: any) {
-      showAlert('error', error.message);
+      showAlert({ title: 'Error', message: error.message, type: 'error' });
     }
   };
 
@@ -500,32 +500,6 @@ export default function Orders() {
     return doc;
   };
 
-  const shareViaWhatsApp = async (order: Order) => {
-    try {
-      const { data: items, error } = await supabase
-        .from('supplier_order_items')
-        .select('*')
-        .eq('order_id', order.id);
-
-      if (error) throw error;
-
-      const pdf = generatePDF(order, items || []);
-      const fileName = `Order_${order.order_number}.pdf`;
-      pdf.save(fileName);
-
-      const message = `Hi! I'm sharing supplier order ${order.order_number}. The PDF file "${fileName}" has been downloaded to my device. Please find the attached order document with ${items?.length || 0} items for a total quantity of ${items?.reduce((sum, item) => sum + item.order_quantity, 0) || 0} units.`;
-      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-
-      setTimeout(() => {
-        window.open(whatsappUrl, '_blank');
-      }, 300);
-
-      showAlert('success', `Order PDF "${fileName}" downloaded. WhatsApp is opening - please attach the PDF to your message.`);
-    } catch (error: any) {
-      showAlert('error', error.message || 'Failed to generate PDF for sharing');
-    }
-  };
-
   const revertOrderStatus = async (order: Order) => {
     try {
       const { error } = await supabase
@@ -535,10 +509,10 @@ export default function Orders() {
 
       if (error) throw error;
 
-      showAlert('success', `Order ${order.order_number} reverted to pending status`);
+      showAlert({ title: 'Success', message: `Order ${order.order_number} reverted to pending status`, type: 'success' });
       fetchOrders();
     } catch (error: any) {
-      showAlert('error', error.message || 'Failed to revert order status');
+      showAlert({ title: 'Error', message: error.message || 'Failed to revert order status', type: 'error' });
     }
   };
 
@@ -551,10 +525,10 @@ export default function Orders() {
 
       if (error) throw error;
 
-      showAlert('success', `Order ${order.order_number} marked as processed`);
+      showAlert({ title: 'Success', message: `Order ${order.order_number} marked as processed`, type: 'success' });
       fetchOrders();
     } catch (error: any) {
-      showAlert('error', error.message || 'Failed to mark order as processed');
+      showAlert({ title: 'Error', message: error.message || 'Failed to mark order as processed', type: 'error' });
     }
   };
 
@@ -567,10 +541,10 @@ export default function Orders() {
 
       if (error) throw error;
 
-      showAlert('success', `Order ${order.order_number} marked as completed`);
+      showAlert({ title: 'Success', message: `Order ${order.order_number} marked as completed`, type: 'success' });
       fetchOrders();
     } catch (error: any) {
-      showAlert('error', error.message || 'Failed to mark order as completed');
+      showAlert({ title: 'Error', message: error.message || 'Failed to mark order as completed', type: 'error' });
     }
   };
 
@@ -678,18 +652,20 @@ export default function Orders() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleEditOrder(order);
-                          }}
-                          className="text-blue-600 hover:text-blue-800 transition-colors p-1"
-                          title="Edit"
-                          type="button"
-                        >
-                          <Edit2 className="w-5 h-5" />
-                        </button>
+                        {order.status !== 'completed' && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleEditOrder(order);
+                            }}
+                            className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                            title="Edit"
+                            type="button"
+                          >
+                            <Edit2 className="w-5 h-5" />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.preventDefault();
@@ -701,18 +677,6 @@ export default function Orders() {
                           type="button"
                         >
                           <Download className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            shareViaWhatsApp(order);
-                          }}
-                          className="text-green-600 hover:text-green-800 transition-colors p-1"
-                          title="Share on WhatsApp"
-                          type="button"
-                        >
-                          <MessageCircle className="w-5 h-5" />
                         </button>
                         {order.status !== 'processed' && order.status !== 'completed' && (
                           <button
