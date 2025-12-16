@@ -137,7 +137,6 @@ const SalesHistory: React.FC = () => {
       <th>Qty</th>
       <th>Cost Price</th>
       <th>Selling Price</th>
-      <th>Revenue</th>
       <th>Profit</th>
       <th>Payment</th>
       <th>Receipt</th>
@@ -150,7 +149,6 @@ const SalesHistory: React.FC = () => {
       <td>${item.quantity}</td>
       <td>${formatKES(item.costPrice)}</td>
       <td>${formatKES(item.sellingPrice)}</td>
-      <td>${formatKES(item.totalRevenue)}</td>
       <td>${formatKES(item.profit)}</td>
       <td>${item.paymentMethod.toUpperCase()}</td>
       <td>${item.receiptNumber}</td>
@@ -288,7 +286,6 @@ const SalesHistory: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost Price</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Receipt</th>
@@ -297,7 +294,7 @@ const SalesHistory: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredHistory.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                     No sales history found
                   </td>
                 </tr>
@@ -324,9 +321,6 @@ const SalesHistory: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatKES(item.sellingPrice)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                      {formatKES(item.totalRevenue)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
                       {formatKES(item.profit)}
