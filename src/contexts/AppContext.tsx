@@ -691,8 +691,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           session_name: name.trim(),
           user_id: user?.user_id || 'demo-user',
           user_name: user?.name || 'Demo User',
-          status: 'active',
-          started_at: new Date().toISOString()
+          status: 'active'
         })
         .select()
         .single();
