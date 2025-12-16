@@ -37,38 +37,28 @@ Deno.serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
+    const { data: { user: requestingUser }, error: authError } = await supabaseAdmin.auth.getUser(
+      authHeader.replace('Bearer ', '')
+    );
+
+    if (authError || !requestingUser) {
       return new Response(
-        JSON.stringify({ error: 'Invalid authorization token' }),
+        JSON.stringify({ error: 'Invalid authorization' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const { data: requesterProfile } = await supabaseAdmin
       .from('user_profiles')
       .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle();
+      .eq('user_id', requestingUser.id)
+      .single();
 
-    if (profileError || !profile) {
+    if (!requesterProfile || !['super_admin', 'admin'].includes(requesterProfile.role)) {
       return new Response(
-        JSON.stringify({ error: 'User profile not found' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!['super_admin', 'admin'].includes(profile.role)) {
-      return new Response(
-        JSON.stringify({ error: 'Insufficient permissions' }),
+        JSON.stringify({ error: 'Insufficient permissions. Only admins can create users.' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -77,24 +67,30 @@ Deno.serve(async (req: Request) => {
 
     if (!email || !password || !name || !role) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
+        JSON.stringify({ error: 'Missing required fields: email, password, name, and role are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Try to create the user - Supabase will handle duplicate email check
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    const validRoles = ['super_admin', 'admin', 'sales', 'inventory', 'stock_take'];
+    if (!validRoles.includes(role)) {
+      return new Response(
+        JSON.stringify({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       user_metadata: { name, phone, role }
     });
 
-    if (authError) {
-      // Provide clearer error messages
-      const errorMessage = authError.message.toLowerCase().includes('already registered')
+    if (createError) {
+      const errorMessage = createError.message.toLowerCase().includes('already')
         ? 'A user with this email already exists'
-        : authError.message;
+        : createError.message;
 
       return new Response(
         JSON.stringify({ error: errorMessage }),
@@ -104,12 +100,12 @@ Deno.serve(async (req: Request) => {
 
     if (!authData.user) {
       return new Response(
-        JSON.stringify({ error: 'Failed to create user' }),
+        JSON.stringify({ error: 'Failed to create authentication user' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const { error: insertError } = await supabaseAdmin
+    const { error: profileError } = await supabaseAdmin
       .from('user_profiles')
       .insert({
         user_id: authData.user.id,
@@ -119,23 +115,33 @@ Deno.serve(async (req: Request) => {
         is_active: true,
       });
 
-    if (insertError) {
-      // Clean up: delete the auth user we just created
+    if (profileError) {
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+
       return new Response(
-        JSON.stringify({ error: `Failed to create user profile: ${insertError.message}` }),
+        JSON.stringify({
+          error: `Failed to create user profile: ${profileError.message}. User creation rolled back.`
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     return new Response(
-      JSON.stringify({ success: true, userId: authData.user.id, email: authData.user.email }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        success: true,
+        user: {
+          id: authData.user.id,
+          email: authData.user.email,
+          name,
+          role
+        }
+      }),
+      { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error in create-user function:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: 'Internal server error. Please try again.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
