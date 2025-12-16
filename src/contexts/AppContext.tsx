@@ -608,37 +608,100 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         throw itemsError;
       }
 
-      // Update product stock
-      for (const item of saleData.items) {
+      // Update product stock and add price history in parallel
+      const stockUpdates = saleData.items.map(item => {
         const product = products.find(p => p.id === item.productId);
         if (product) {
           const newStock = product.currentStock - item.quantity;
-          await supabase
+          return supabase
             .from('products')
             .update({ current_stock: newStock })
             .eq('id', item.productId);
         }
-      }
+        return null;
+      }).filter(Boolean);
 
-      // Add price history entries for all sold items
-      for (const item of saleData.items) {
-        const product = products.find(p => p.id === item.productId);
-        // Only add price history if user is not mock user
-        if (product && user && user.user_id !== '00000000-0000-0000-0000-000000000001' && user.user_id !== 'demo-user') {
-          await supabase
-            .from('price_history')
-            .insert({
+      // Batch insert price history entries
+      const priceHistoryEntries = saleData.items
+        .filter(() => user && user.user_id !== '00000000-0000-0000-0000-000000000001' && user.user_id !== 'demo-user')
+        .map(item => {
+          const product = products.find(p => p.id === item.productId);
+          if (product) {
+            return {
               product_id: item.productId,
               cost_price: product.costPrice,
               selling_price: item.unitPrice,
               user_id: user.user_id,
               user_name: user?.name || 'Demo User',
-            });
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      // Execute all updates in parallel
+      const priceHistoryPromise = priceHistoryEntries.length > 0
+        ? supabase.from('price_history').insert(priceHistoryEntries)
+        : Promise.resolve({ data: null, error: null });
+
+      await Promise.all([
+        ...stockUpdates,
+        priceHistoryPromise,
+        logActivity('SALE', `Sale completed: ${receiptNumber} - ${formatKES(saleData.totalAmount)}`)
+      ]);
+
+      // Update local state instead of full refresh
+      setProducts(prev => prev.map(p => {
+        const soldItem = saleData.items.find(item => item.productId === p.id);
+        if (soldItem) {
+          return {
+            ...p,
+            currentStock: p.currentStock - soldItem.quantity
+          };
         }
-      }
-      await logActivity('SALE', `Sale completed: ${receiptNumber} - ${formatKES(saleData.totalAmount)}`);
-      await refreshData();
-      
+        return p;
+      }));
+
+      // Add the sale to local state
+      const newSale: Sale = {
+        id: saleResult.id,
+        receiptNumber,
+        customerName: saleData.customerName,
+        totalAmount: saleData.totalAmount,
+        paymentMethod: saleData.paymentMethod,
+        salesPersonId: saleData.salesPersonId,
+        salesPersonName: saleData.salesPersonName,
+        items: saleData.items,
+        createdAt: new Date(),
+      };
+      setSales(prev => [newSale, ...prev]);
+
+      // Update sales history
+      const newSalesHistoryItems: SalesHistoryItem[] = saleData.items.map(item => {
+        const product = products.find(p => p.id === item.productId);
+        const costPrice = product?.costPrice || 0;
+        const totalCost = costPrice * item.quantity;
+        const profit = item.totalPrice - totalCost;
+
+        return {
+          id: `${saleResult.id}-${item.productId}`,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          costPrice: costPrice,
+          sellingPrice: item.unitPrice,
+          totalCost: totalCost,
+          totalRevenue: item.totalPrice,
+          profit: profit,
+          paymentMethod: saleData.paymentMethod,
+          customerName: saleData.customerName,
+          salesPersonName: saleData.salesPersonName,
+          receiptNumber: receiptNumber,
+          saleDate: new Date(),
+        };
+      });
+      setSalesHistory(prev => [...newSalesHistoryItems, ...prev]);
+
       return receiptNumber;
     } catch (error) {
       console.error('Error adding sale:', error);
