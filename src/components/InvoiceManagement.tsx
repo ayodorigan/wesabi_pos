@@ -9,7 +9,7 @@ import { useApp } from '../contexts/AppContext';
 
 const InvoiceManagement: React.FC = () => {
   const { user, canDeleteProducts } = useAuth();
-  const { categories, suppliers, addCategory, addSupplier, medicineTemplates, getMedicineByName, refreshData } = useApp();
+  const { categories, suppliers, addCategory, addSupplier, medicineTemplates, getMedicineByName, refreshData, logActivity } = useApp();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -263,6 +263,13 @@ const InvoiceManagement: React.FC = () => {
       setLoading(false);
       await refreshData();
       await loadInvoices();
+
+      // Log activity
+      await logActivity(
+        'INVOICE_CREATED',
+        `Created invoice ${invoiceData.invoiceNumber} for supplier ${invoiceData.supplier} - Total: ${formatKES(totalAmount)}, Items: ${invoiceItems.length}`
+      );
+
       resetForm();
       setShowAddForm(false);
       alert('Invoice saved successfully! Inventory updated.');
@@ -275,6 +282,8 @@ const InvoiceManagement: React.FC = () => {
   };
 
   const deleteInvoice = async (invoiceId: string) => {
+    const invoiceToDelete = invoices.find(inv => inv.id === invoiceId);
+
     if (!confirm('Are you sure you want to delete this invoice? This will NOT reverse inventory changes.')) {
       return;
     }
@@ -289,6 +298,12 @@ const InvoiceManagement: React.FC = () => {
         .eq('id', invoiceId);
 
       if (error) throw error;
+
+      // Log activity
+      await logActivity(
+        'INVOICE_DELETED',
+        `Deleted invoice ${invoiceToDelete?.invoiceNumber || invoiceId} - Supplier: ${invoiceToDelete?.supplier || 'Unknown'}`
+      );
 
       await loadInvoices();
       alert('Invoice deleted successfully');

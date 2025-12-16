@@ -217,6 +217,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
+  const logAuthActivity = async (userId: string, userName: string, action: string, details: string) => {
+    if (!isSupabaseEnabled || !supabase) {
+      return;
+    }
+
+    try {
+      await supabase
+        .from('activity_logs')
+        .insert({
+          user_id: userId,
+          user_name: userName,
+          action,
+          details,
+        });
+    } catch (error) {
+      console.error('Error logging activity:', error);
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     if (!isSupabaseEnabled || !supabase) {
       throw new Error('Authentication not available in demo mode');
@@ -227,13 +246,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error('Email and password are required');
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
       throw error;
+    }
+
+    // Log successful login
+    if (data.user) {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('name')
+        .eq('user_id', data.user.id)
+        .single();
+
+      await logAuthActivity(
+        data.user.id,
+        profile?.name || email.split('@')[0],
+        'USER_LOGIN',
+        `User logged in: ${email}`
+      );
     }
   };
 
@@ -242,6 +277,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (!isSupabaseEnabled || !supabase) {
         setUser(null);
         return;
+      }
+
+      // Log logout before signing out
+      if (user) {
+        await logAuthActivity(
+          user.user_id,
+          user.name,
+          'USER_LOGOUT',
+          `User logged out: ${user.email}`
+        );
       }
 
       const { error } = await supabase.auth.signOut();
@@ -268,6 +313,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error('Not authenticated');
     }
 
+    // Get target user's name
+    const { data: targetProfile } = await supabase
+      .from('user_profiles')
+      .select('name')
+      .eq('user_id', userId)
+      .single();
+
     const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-password`, {
       method: 'POST',
       headers: {
@@ -280,6 +332,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to reset password');
+    }
+
+    // Log password reset
+    if (user) {
+      await logAuthActivity(
+        user.user_id,
+        user.name,
+        'PASSWORD_RESET',
+        `Password reset for user: ${targetProfile?.name || userId}`
+      );
     }
   };
 
@@ -325,12 +387,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!result.userId) {
       throw new Error('Failed to get user ID from response');
     }
+
+    // Log user creation
+    if (user) {
+      await logAuthActivity(
+        user.user_id,
+        user.name,
+        'USER_CREATED',
+        `Created new user: ${userData.name} (${userData.email}) with role: ${userData.role}`
+      );
+    }
   };
 
   const updateUser = async (userId: string, updates: Partial<UserProfile>) => {
     if (!isSupabaseEnabled || !supabase) {
       throw new Error('User updates not available in demo mode');
     }
+
+    // Get user's current name before update
+    const { data: targetProfile } = await supabase
+      .from('user_profiles')
+      .select('name')
+      .eq('user_id', userId)
+      .single();
 
     const { error } = await supabase
       .from('user_profiles')
@@ -339,6 +418,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     if (error) {
       throw error;
+    }
+
+    // Log user update
+    if (user) {
+      const updateDetails = Object.entries(updates)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(', ');
+
+      await logAuthActivity(
+        user.user_id,
+        user.name,
+        'USER_UPDATED',
+        `Updated user: ${targetProfile?.name || userId} - Changes: ${updateDetails}`
+      );
     }
   };
 
@@ -351,6 +444,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       throw new Error('Not authenticated');
+    }
+
+    // Get user's name before deletion for logging
+    const { data: targetProfile } = await supabase
+      .from('user_profiles')
+      .select('name, email')
+      .eq('user_id', userId)
+      .single();
+
+    // Log user deletion before actually deleting
+    if (user) {
+      await logAuthActivity(
+        user.user_id,
+        user.name,
+        'USER_DELETED',
+        `Deleted user: ${targetProfile?.name || userId} (${targetProfile?.email || 'unknown'})`
+      );
     }
 
     // First delete the user profile
