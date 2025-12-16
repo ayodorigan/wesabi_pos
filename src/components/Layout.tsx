@@ -12,7 +12,6 @@ import {
   LogOut,
   Menu,
   X,
-  Pill,
   FileInput,
   FileMinus,
   ClipboardList
@@ -74,9 +73,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       {/* Mobile Header */}
       <div className="lg:hidden bg-white shadow-sm border-b">
         <div className="flex items-center justify-between p-4">
-          <div className="flex items-center space-x-2">
-            <Pill className="h-8 w-8 text-green-600" />
-            <h1 className="text-xl font-bold text-gray-900">Wesabi Pharmacy</h1>
+          <div className="flex items-center">
+            <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-10" />
           </div>
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -96,9 +94,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         `}>
           <div className="flex flex-col h-full">
             {/* Logo */}
-            <div className="hidden lg:flex items-center space-x-2 px-6 py-4 border-b">
-              <Pill className="h-8 w-8 text-green-600" />
-              <h1 className="text-xl font-bold text-gray-900">Wesabi Pharmacy</h1>
+            <div className="hidden lg:flex items-center px-6 py-4 border-b">
+              <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-10" />
             </div>
 
             {/* Navigation */}

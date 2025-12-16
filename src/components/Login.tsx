@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Pill, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -103,9 +103,8 @@ const Login: React.FC = () => {
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center mb-4">
-              <Pill className="h-12 w-12 text-green-600" />
+              <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-16" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Wesabi Pharmacy</h1>
             <p className="text-gray-600 mt-2">Point of Sale System</p>
           </div>
 
@@ -136,9 +135,8 @@ const Login: React.FC = () => {
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
-            <Pill className="h-12 w-12 text-green-600" />
+            <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-16" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Wesabi Pharmacy</h1>
           <p className="text-gray-600 mt-2">Point of Sale System</p>
         </div>
 
