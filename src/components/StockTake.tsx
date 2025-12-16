@@ -14,7 +14,7 @@ interface StockTakeSession {
 }
 
 const StockTake: React.FC = () => {
-  const { products, stockTakes, addStockTake, isSupabaseEnabled, stockTakeSessions } = useApp();
+  const { products, stockTakes, addStockTake, isSupabaseEnabled, stockTakeSessions, updateStockTakeSession, createStockTakeSession, deleteStockTakeSession, logActivity } = useApp();
   const { user } = useAuth();
   const [currentView, setCurrentView] = useState<'history' | 'active'>('history');
   const [activeSession, setActiveSession] = useState<StockTakeSession | null>(null);
@@ -25,6 +25,8 @@ const StockTake: React.FC = () => {
   const [showNameModal, setShowNameModal] = useState(false);
   const [sessionName, setSessionName] = useState('');
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   // Auto-save every 20 seconds for active session
   useEffect(() => {
@@ -78,25 +80,36 @@ const StockTake: React.FC = () => {
     setEditingSessionId(null);
   };
 
-  const createNewSession = () => {
+  const createNewSession = async () => {
     if (!sessionName.trim()) {
       alert('Please enter a name for the stock take session');
       return;
     }
 
-    const newSession: StockTakeSession = {
-      id: `session_${Date.now()}`,
-      name: sessionName.trim(),
-      createdAt: new Date(),
-      isActive: true,
-      products: {}
-    };
+    if (!user) return;
 
-    setSessions(prev => [newSession, ...prev]);
-    setActiveSession(newSession);
-    setCurrentView('active');
-    setShowNameModal(false);
-    setSessionName('');
+    try {
+      const sessionId = await createStockTakeSession(sessionName.trim());
+
+      const newSession: StockTakeSession = {
+        id: sessionId,
+        name: sessionName.trim(),
+        createdAt: new Date(),
+        isActive: true,
+        products: {}
+      };
+
+      setSessions(prev => [newSession, ...prev]);
+      setActiveSession(newSession);
+      setCurrentView('active');
+      setShowNameModal(false);
+      setSessionName('');
+
+      await logActivity('CREATE_STOCK_TAKE_SESSION', `Started stock take session: ${sessionName.trim()}`);
+    } catch (error: any) {
+      console.error('Error creating session:', error);
+      alert(`Failed to create session: ${error.message}`);
+    }
   };
 
   const editSessionName = (sessionId: string, currentName: string) => {
@@ -105,54 +118,89 @@ const StockTake: React.FC = () => {
     setShowNameModal(true);
   };
 
-  const updateSessionName = () => {
+  const updateSessionName = async () => {
     if (!sessionName.trim() || !editingSessionId) {
       alert('Please enter a valid name');
       return;
     }
 
-    setSessions(prev => prev.map(session => 
-      session.id === editingSessionId 
-        ? { ...session, name: sessionName.trim() }
-        : session
-    ));
+    try {
+      await updateStockTakeSession(editingSessionId, {
+        session_name: sessionName.trim()
+      });
 
-    if (activeSession && activeSession.id === editingSessionId) {
-      setActiveSession(prev => prev ? { ...prev, name: sessionName.trim() } : null);
+      setSessions(prev => prev.map(session =>
+        session.id === editingSessionId
+          ? { ...session, name: sessionName.trim() }
+          : session
+      ));
+
+      if (activeSession && activeSession.id === editingSessionId) {
+        setActiveSession(prev => prev ? { ...prev, name: sessionName.trim() } : null);
+      }
+
+      await logActivity('UPDATE_STOCK_TAKE_SESSION', `Renamed stock take session to: ${sessionName.trim()}`);
+
+      setShowNameModal(false);
+      setSessionName('');
+      setEditingSessionId(null);
+    } catch (error: any) {
+      console.error('Error updating session name:', error);
+      alert(`Failed to update session name: ${error.message}`);
     }
-
-    setShowNameModal(false);
-    setSessionName('');
-    setEditingSessionId(null);
   };
 
-  const deleteSession = (sessionId: string) => {
+  const deleteSession = async (sessionId: string) => {
+    const sessionToDelete = sessions.find(s => s.id === sessionId) ||
+                           stockTakeSessions.find(s => s.id === sessionId);
+
     if (confirm('Are you sure you want to delete this stock take session?')) {
-      setSessions(prev => prev.filter(session => session.id !== sessionId));
-      localStorage.removeItem(`stockTakeSession_${sessionId}`);
-      
-      if (activeSession && activeSession.id === sessionId) {
-        setActiveSession(null);
-        setCurrentView('history');
+      try {
+        await deleteStockTakeSession(sessionId);
+        await logActivity('DELETE_STOCK_TAKE_SESSION', `Deleted stock take session: ${sessionToDelete?.name || sessionToDelete?.session_name || sessionId}`);
+
+        setSessions(prev => prev.filter(session => session.id !== sessionId));
+        localStorage.removeItem(`stockTakeSession_${sessionId}`);
+
+        if (activeSession && activeSession.id === sessionId) {
+          setActiveSession(null);
+          setCurrentView('history');
+        }
+      } catch (error: any) {
+        console.error('Error deleting session:', error);
+        alert(`Failed to delete session: ${error.message}`);
       }
     }
   };
 
-  const resumeSession = (session: StockTakeSession) => {
-    // Load saved data for this session
-    const savedData = localStorage.getItem(`stockTakeSession_${session.id}`);
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        setActiveSession({
-          ...parsed,
-          createdAt: new Date(parsed.createdAt)
-        });
-      } catch (error) {
+  const resumeSession = async (session: StockTakeSession) => {
+    // Load progress data from the database session
+    const dbSession = stockTakeSessions.find(s => s.id === session.id);
+
+    if (dbSession && dbSession.progress_data) {
+      setActiveSession({
+        id: dbSession.id,
+        name: dbSession.name,
+        createdAt: new Date(dbSession.createdAt),
+        isActive: true,
+        products: dbSession.progress_data || {}
+      });
+    } else {
+      // Fallback to localStorage if no progress data in database
+      const savedData = localStorage.getItem(`stockTakeSession_${session.id}`);
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData);
+          setActiveSession({
+            ...parsed,
+            createdAt: new Date(parsed.createdAt)
+          });
+        } catch (error) {
+          setActiveSession(session);
+        }
+      } else {
         setActiveSession(session);
       }
-    } else {
-      setActiveSession(session);
     }
     setCurrentView('active');
   };
@@ -170,6 +218,40 @@ const StockTake: React.FC = () => {
         }
       };
     });
+  };
+
+  const saveProgress = async () => {
+    if (!activeSession || !user) return;
+
+    setIsSaving(true);
+    try {
+      await updateStockTakeSession(activeSession.id, {
+        progress_data: activeSession.products,
+        session_name: activeSession.name
+      });
+
+      // Also save to localStorage as backup
+      localStorage.setItem(`stockTakeSession_${activeSession.id}`, JSON.stringify(activeSession));
+
+      setLastSaved(new Date());
+      alert('Progress saved successfully!');
+    } catch (error: any) {
+      console.error('Error saving progress:', error);
+      alert(`Failed to save progress: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveAndExit = async () => {
+    if (!activeSession) return;
+
+    if (Object.keys(activeSession.products).length > 0) {
+      await saveProgress();
+    }
+
+    setActiveSession(null);
+    setCurrentView('history');
   };
 
   const submitStockTake = () => {
@@ -206,17 +288,30 @@ const StockTake: React.FC = () => {
     const savePromises = stockTakeEntries.map(entry => addStockTake(entry));
     
     Promise.all(savePromises)
-      .then(() => {
-        // Mark session as completed
-        setSessions(prev => prev.map(session => 
-          session.id === activeSession.id 
+      .then(async () => {
+        // Mark session as completed in database
+        await updateStockTakeSession(activeSession.id, {
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          progress_data: {}
+        });
+
+        // Log activity
+        await logActivity(
+          'COMPLETE_STOCK_TAKE_SESSION',
+          `Completed stock take session: ${activeSession.name} - ${stockTakeEntries.length} discrepancies found`
+        );
+
+        // Mark session as completed locally
+        setSessions(prev => prev.map(session =>
+          session.id === activeSession.id
             ? { ...session, isActive: false }
             : session
         ));
 
         // Clean up local storage for this session
         localStorage.removeItem(`stockTakeSession_${activeSession.id}`);
-        
+
         setActiveSession(null);
         setCurrentView('history');
         alert('Stock take completed and saved to database successfully!');
@@ -406,23 +501,27 @@ const StockTake: React.FC = () => {
     return (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <div className="flex items-center space-x-2">
+          <div className="flex-1">
+            <div className="flex items-center space-x-2 mb-2">
               <button
-                onClick={() => {
-                  setCurrentView('history');
-                  setActiveSession(null);
-                }}
+                onClick={saveAndExit}
                 className="flex items-center space-x-1 text-blue-600 hover:text-blue-800"
               >
                 <ArrowLeft className="h-4 w-4" />
-                <span>Back to History</span>
+                <span>Save & Exit</span>
               </button>
             </div>
             <h1 className="text-3xl font-bold text-gray-900">{activeSession.name}</h1>
-            <p className="text-gray-600">Wesabi Pharmacy - Physical Stock Verification</p>
+            <div className="flex items-center space-x-4 text-sm text-gray-600">
+              <span>Wesabi Pharmacy - Physical Stock Verification</span>
+              {lastSaved && (
+                <span className="text-green-600">
+                  Last saved: {lastSaved.toLocaleTimeString('en-KE')}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => editSessionName(activeSession.id, activeSession.name)}
               className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -431,11 +530,19 @@ const StockTake: React.FC = () => {
               <span>Rename</span>
             </button>
             <button
+              onClick={saveProgress}
+              disabled={isSaving || Object.keys(activeSession.products).length === 0}
+              className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Save className="h-4 w-4" />
+              <span>{isSaving ? 'Saving...' : 'Save Progress'}</span>
+            </button>
+            <button
               onClick={submitStockTake}
               disabled={Object.keys(activeSession.products).length === 0}
               className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              <Save className="h-4 w-4" />
+              <CheckCircle className="h-4 w-4" />
               <span>Complete Stock Take</span>
             </button>
           </div>
@@ -632,6 +739,10 @@ const StockTake: React.FC = () => {
                       </p>
                       <p className="text-sm text-gray-600">
                         Products checked: {(() => {
+                          const dbSession = stockTakeSessions.find(s => s.id === session.id);
+                          if (dbSession && dbSession.progress_data) {
+                            return Object.keys(dbSession.progress_data).length;
+                          }
                           const saved = localStorage.getItem(`stockTakeSession_${session.id}`);
                           return saved ? Object.keys(JSON.parse(saved).products || {}).length : 0;
                         })()}

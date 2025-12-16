@@ -278,11 +278,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         const formattedSessions = (sessionsData || []).map(session => ({
           id: session.id,
           name: session.session_name,
+          session_name: session.session_name,
           userId: session.user_id || 'demo-user',
           userName: session.user_name,
           status: session.status,
           createdAt: new Date(session.created_at || session.started_at),
           completedAt: session.completed_at ? new Date(session.completed_at) : null,
+          progress_data: session.progress_data || {},
         }));
           setStockTakeSessions(formattedSessions);
         }
