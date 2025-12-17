@@ -7,6 +7,8 @@ import { AlertDialog } from './AlertDialog';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { usePageRefresh } from '../hooks/usePageRefresh';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
 
 interface Product {
   id: string;
@@ -543,6 +545,13 @@ export default function Orders() {
     return matchesSearch && matchesStatus;
   });
 
+  const {
+    currentPage,
+    paginatedItems: paginatedOrders,
+    goToPage,
+    itemsPerPage
+  } = usePagination({ items: filteredOrders, itemsPerPage: 15 });
+
   const filteredProducts = allProducts.filter(product =>
     product.name.toLowerCase().includes(searchProduct.toLowerCase())
   );
@@ -612,7 +621,7 @@ export default function Orders() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredOrders.map((order) => (
+                {paginatedOrders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
                       {order.order_number}
@@ -712,6 +721,14 @@ export default function Orders() {
                 ))}
               </tbody>
             </table>
+
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredOrders.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={goToPage}
+              itemName="orders"
+            />
           </div>
         )}
       </div>

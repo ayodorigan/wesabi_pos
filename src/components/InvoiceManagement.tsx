@@ -9,6 +9,8 @@ import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
 import VATRateInput from './VATRateInput';
 import { useApp } from '../contexts/AppContext';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
 
 const InvoiceManagement: React.FC = () => {
   const { user, canDeleteProducts } = useAuth();
@@ -533,6 +535,10 @@ const InvoiceManagement: React.FC = () => {
           batchNumber: row.batchnumber || '',
           expiryDate: row.expirydate ? new Date(row.expirydate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
           quantity: parseInt(row.quantity) || 0,
+          invoicePrice: invoicePrice || undefined,
+          supplierDiscountPercent: supplierDiscountPercent || undefined,
+          vatRate: vatRate || undefined,
+          otherCharges: otherCharges || undefined,
           costPrice: calculatedCostPrice,
           sellingPrice,
           totalCost: (parseInt(row.quantity) || 0) * calculatedCostPrice,
@@ -614,6 +620,13 @@ const InvoiceManagement: React.FC = () => {
     invoice.supplier.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const {
+    currentPage,
+    paginatedItems: paginatedInvoices,
+    goToPage,
+    itemsPerPage
+  } = usePagination({ items: filteredInvoices, itemsPerPage: 15 });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -658,7 +671,7 @@ const InvoiceManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredInvoices.map((invoice) => (
+              {paginatedInvoices.map((invoice) => (
                 <tr key={invoice.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -707,6 +720,14 @@ const InvoiceManagement: React.FC = () => {
               )}
             </tbody>
           </table>
+
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredInvoices.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={goToPage}
+            itemName="invoices"
+          />
         </div>
       </div>
 

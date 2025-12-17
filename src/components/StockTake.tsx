@@ -7,6 +7,8 @@ import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
 import { usePageRefresh } from '../hooks/usePageRefresh';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
 
 interface StockTakeSession {
   id: string;
@@ -78,6 +80,8 @@ const StockTake: React.FC = () => {
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.barcode.includes(searchTerm)
   );
+
+  const { paginatedItems: paginatedProducts, ...paginationProps } = usePagination(filteredProducts, 20);
 
   const startNewStockTake = () => {
     setShowNameModal(true);
@@ -621,7 +625,7 @@ const StockTake: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredProducts.map((product) => {
+                {paginatedProducts.map((product) => {
                   const stockData = activeSession.products[product.id];
                   const actualStock = stockData?.actualStock;
                   const difference = actualStock !== undefined ? actualStock - product.currentStock : 0;
@@ -709,6 +713,7 @@ const StockTake: React.FC = () => {
               </tbody>
             </table>
           </div>
+          <Pagination {...paginationProps} />
         </div>
       </div>
     );

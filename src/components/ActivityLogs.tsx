@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAlert } from '../contexts/AlertContext';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
 
 const ActivityLogs: React.FC = () => {
   const { activityLogs } = useApp();
@@ -26,9 +28,11 @@ const ActivityLogs: React.FC = () => {
                          log.action.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesAction = actionFilter === 'all' || log.action === actionFilter;
     const matchesUser = userFilter === 'all' || log.userName === userFilter;
-    
+
     return matchesSearch && matchesAction && matchesUser;
   });
+
+  const { paginatedItems, ...paginationProps } = usePagination(filteredLogs, 50);
 
   const getActionLabel = (action: string) => {
     switch (action) {
@@ -257,7 +261,7 @@ const ActivityLogs: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredLogs.map((log) => (
+                paginatedItems.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
@@ -295,6 +299,7 @@ const ActivityLogs: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <Pagination {...paginationProps} />
       </div>
     </div>
   );

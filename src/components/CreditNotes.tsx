@@ -8,6 +8,8 @@ import { formatKES } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
 import { useApp } from '../contexts/AppContext';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
 
 const CreditNotes: React.FC = () => {
   const { user } = useAuth();
@@ -505,6 +507,8 @@ const CreditNotes: React.FC = () => {
     creditNote.supplier.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const { paginatedItems, ...paginationProps } = usePagination(filteredCreditNotes, 20);
+
   const productNames = products.map(p => p.name);
 
   return (
@@ -560,7 +564,7 @@ const CreditNotes: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredCreditNotes.map((creditNote) => (
+              {paginatedItems.map((creditNote) => (
                 <tr key={creditNote.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -605,6 +609,7 @@ const CreditNotes: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <Pagination {...paginationProps} />
       </div>
 
       {showAddForm && (

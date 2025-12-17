@@ -19,6 +19,8 @@ import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
 import VATRateInput from './VATRateInput';
 import { usePageRefresh } from '../hooks/usePageRefresh';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
 
 const Inventory: React.FC = () => {
   const {
@@ -71,6 +73,13 @@ const Inventory: React.FC = () => {
     const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
+
+  const {
+    currentPage,
+    paginatedItems: paginatedProducts,
+    goToPage,
+    itemsPerPage
+  } = usePagination({ items: filteredProducts, itemsPerPage: 20 });
 
   const exportToCSV = () => {
     try {
@@ -515,7 +524,7 @@ const Inventory: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredProducts.map((product) => {
+              {paginatedProducts.map((product) => {
                 const daysToExpiry = Math.ceil((product.expiryDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
                 const isLowStock = product.currentStock <= product.minStockLevel;
                 const isExpiringSoon = daysToExpiry <= 30 && daysToExpiry > 0;
@@ -620,6 +629,14 @@ const Inventory: React.FC = () => {
               })}
             </tbody>
           </table>
+
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredProducts.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={goToPage}
+            itemName="products"
+          />
         </div>
       </div>
 

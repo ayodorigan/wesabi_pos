@@ -11,6 +11,8 @@ import {
 import { useApp } from '../contexts/AppContext';
 import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
 
 const SalesReports: React.FC = () => {
   const { sales, generateReceipt } = useApp();
@@ -65,6 +67,8 @@ const SalesReports: React.FC = () => {
   };
 
   const filteredSales = getFilteredSales();
+
+  const { paginatedItems, ...paginationProps } = usePagination(filteredSales, 20);
 
   // Calculate summary statistics
   const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
@@ -318,7 +322,7 @@ const SalesReports: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredSales.map((sale) => (
+                paginatedItems.map((sale) => (
                   <tr key={sale.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
@@ -358,6 +362,7 @@ const SalesReports: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <Pagination {...paginationProps} />
       </div>
     </div>
   );

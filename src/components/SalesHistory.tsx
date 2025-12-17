@@ -14,6 +14,8 @@ import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { useAuth } from '../contexts/AuthContext';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
 
 const SalesHistory: React.FC = () => {
   const { salesHistory, exportToPDF } = useApp();
@@ -92,6 +94,8 @@ const SalesHistory: React.FC = () => {
   };
 
   const filteredHistory = getFilteredHistory();
+
+  const { paginatedItems, ...paginationProps } = usePagination(filteredHistory, 20);
 
   // Calculate summary statistics
   const totalRevenue = filteredHistory.reduce((sum, item) => sum + item.totalRevenue, 0);
@@ -300,7 +304,7 @@ const SalesHistory: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredHistory.map((item) => (
+                paginatedItems.map((item) => (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
@@ -340,6 +344,7 @@ const SalesHistory: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <Pagination {...paginationProps} />
       </div>
     </div>
   );
