@@ -41,7 +41,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     { id: 'orders', label: 'Orders', icon: ClipboardList },
     { id: 'creditnotes', label: 'Credit Notes', icon: FileMinus },
     { id: 'stocktake', label: 'Stock Take', icon: Package },
-    { id: 'drugsaleshistory', label: 'Drug History', icon: FileText },
+    { id: 'drugsaleshistory', label: 'Sales Report', icon: FileText },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'logs', label: 'Activity Logs', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
