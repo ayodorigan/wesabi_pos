@@ -358,17 +358,20 @@ const InvoiceManagement: React.FC = () => {
         return;
       }
 
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, ''));
 
-      const requiredHeaders = ['productname', 'category', 'batchnumber', 'expirydate', 'quantity', 'costprice'];
+      const requiredHeaders = ['productname', 'category', 'batchnumber', 'expirydate', 'quantity'];
       const hasAllHeaders = requiredHeaders.every(h => headers.includes(h));
 
       if (!hasAllHeaders) {
-        showAlert({ title: 'Invoice Management', message: 'CSV must have columns: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice', type: 'error' });
+        showAlert({ title: 'Invoice Management', message: 'CSV must have columns: ProductName, Category, BatchNumber, ExpiryDate, Quantity, and either InvoicePrice or CostPrice. Optional: InvoiceNumber, Supplier, InvoiceDate', type: 'error' });
         return;
       }
 
       const items: InvoiceItem[] = [];
+      let extractedInvoiceNumber = '';
+      let extractedSupplier = '';
+      let extractedInvoiceDate = '';
 
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map(v => v.trim());
@@ -378,24 +381,85 @@ const InvoiceManagement: React.FC = () => {
           row[header] = values[index] || '';
         });
 
-        if (!row.productname || !row.quantity || !row.costprice) continue;
+        if (!row.productname || !row.quantity) continue;
+        if (!row.invoiceprice && !row.costprice) continue;
 
+        if (i === 1) {
+          extractedInvoiceNumber = row.invoicenumber || row.invoice_number || '';
+          extractedSupplier = row.supplier || '';
+          extractedInvoiceDate = row.invoicedate || row.invoice_date || '';
+        }
+
+        const invoicePrice = parseFloat(row.invoiceprice) || 0;
+        const supplierDiscountPercent = parseFloat(row.supplierdiscountpercent) || 0;
+        const vatRate = parseFloat(row.vatrate) || 16;
+        const otherCharges = parseFloat(row.othercharges) || 0;
         const costPrice = parseFloat(row.costprice) || 0;
+
+        const pricingInputs = {
+          invoicePrice: invoicePrice || undefined,
+          supplierDiscountPercent: supplierDiscountPercent || undefined,
+          vatRate: vatRate || 16,
+          otherCharges: otherCharges || undefined,
+          costPrice: costPrice
+        };
+
+        const calculatedCostPrice = invoicePrice ? calculateNetCost(pricingInputs) : costPrice;
+        const sellingPrice = calculateSellingPrice(pricingInputs);
+
         items.push({
           productName: row.productname,
           category: row.category || 'General',
           batchNumber: row.batchnumber || '',
           expiryDate: row.expirydate ? new Date(row.expirydate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
           quantity: parseInt(row.quantity) || 0,
-          costPrice,
-          sellingPrice: calculateSellingPrice(costPrice),
-          totalCost: (parseInt(row.quantity) || 0) * costPrice,
+          costPrice: calculatedCostPrice,
+          sellingPrice,
+          totalCost: (parseInt(row.quantity) || 0) * calculatedCostPrice,
           barcode: row.barcode || `${Date.now()}-${i}`,
         });
       }
 
       setInvoiceItems(items);
-      showAlert({ title: 'Invoice Management', message: `Imported ${items.length} items from CSV`, type: 'success' });
+
+      if (extractedInvoiceNumber) {
+        setInvoiceData(prev => ({
+          ...prev,
+          invoiceNumber: extractedInvoiceNumber
+        }));
+      }
+
+      if (extractedSupplier) {
+        setInvoiceData(prev => ({
+          ...prev,
+          supplier: extractedSupplier
+        }));
+      }
+
+      if (extractedInvoiceDate) {
+        try {
+          const parsedDate = new Date(extractedInvoiceDate);
+          if (!isNaN(parsedDate.getTime())) {
+            setInvoiceData(prev => ({
+              ...prev,
+              invoiceDate: parsedDate.toISOString().split('T')[0]
+            }));
+          }
+        } catch (err) {
+          console.error('Invalid date format in CSV:', extractedInvoiceDate);
+        }
+      }
+
+      const metadataInfo = [];
+      if (extractedInvoiceNumber) metadataInfo.push(`Invoice #${extractedInvoiceNumber}`);
+      if (extractedSupplier) metadataInfo.push(`Supplier: ${extractedSupplier}`);
+      if (extractedInvoiceDate) metadataInfo.push(`Date: ${extractedInvoiceDate}`);
+
+      const message = metadataInfo.length > 0
+        ? `Imported ${items.length} items. Auto-filled: ${metadataInfo.join(', ')}`
+        : `Imported ${items.length} items from CSV`;
+
+      showAlert({ title: 'Invoice Management', message, type: 'success' });
     };
 
     reader.readAsText(file);
@@ -415,6 +479,10 @@ const InvoiceManagement: React.FC = () => {
       batchNumber: '',
       expiryDate: '',
       quantity: '',
+      invoicePrice: '',
+      supplierDiscountPercent: '0',
+      vatRate: '16',
+      otherCharges: '0',
       costPrice: '',
       sellingPrice: '',
       barcode: '',
@@ -647,7 +715,7 @@ const InvoiceManagement: React.FC = () => {
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  CSV format: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice (Selling price auto-calculated as Cost × 1.33)
+                  CSV format: InvoiceNumber, Supplier, InvoiceDate, ProductName, Category, BatchNumber, ExpiryDate, Quantity, InvoicePrice (or CostPrice), SupplierDiscountPercent, VATRate, OtherCharges. Metadata auto-filled from first row.
                 </p>
               </div>
 
