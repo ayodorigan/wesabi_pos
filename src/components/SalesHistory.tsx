@@ -14,8 +14,6 @@ import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { useAuth } from '../contexts/AuthContext';
-import { usePagination } from '../hooks/usePagination';
-import Pagination from './Pagination';
 
 const SalesHistory: React.FC = () => {
   const { salesHistory, exportToPDF } = useApp();
@@ -92,13 +90,6 @@ const SalesHistory: React.FC = () => {
 
     return filtered;
   }, [salesHistory, searchTerm, paymentFilter, dateRange, startDate, endDate, user, selectedDate]);
-
-  const {
-    currentPage,
-    paginatedItems,
-    goToPage,
-    itemsPerPage
-  } = usePagination({ items: getFilteredHistory, itemsPerPage: 20 });
 
   // Calculate summary statistics
   const totalRevenue = getFilteredHistory.reduce((sum, item) => sum + item.totalRevenue, 0);
@@ -307,7 +298,7 @@ const SalesHistory: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                paginatedItems.map((item) => (
+                getFilteredHistory.map((item) => (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
@@ -347,13 +338,6 @@ const SalesHistory: React.FC = () => {
             </tbody>
           </table>
         </div>
-        <Pagination
-          currentPage={currentPage}
-          totalItems={getFilteredHistory.length}
-          itemsPerPage={itemsPerPage}
-          onPageChange={goToPage}
-          itemName="sales records"
-        />
       </div>
     </div>
   );
