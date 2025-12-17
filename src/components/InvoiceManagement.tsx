@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, FileText, Trash2, Eye, Package, Edit, Upload, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Search, FileText, Eye, Package, Upload, ArrowUp, ArrowDown, RotateCcw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../lib/supabase';
@@ -431,36 +431,94 @@ const InvoiceManagement: React.FC = () => {
     }
   };
 
-  const deleteInvoice = async (invoiceId: string) => {
-    const invoiceToDelete = invoices.find(inv => inv.id === invoiceId);
-
+  const createReversal = async (invoice: Invoice) => {
     showAlert({
-      title: 'Delete Invoice',
-      message: 'Are you sure you want to delete this invoice? This will NOT reverse inventory changes.',
+      title: 'Create Invoice Reversal',
+      message: `Create a reversal for invoice ${invoice.invoiceNumber}? This will remove the items from inventory and create an audit record.`,
       type: 'confirm',
-      confirmText: 'Delete',
+      confirmText: 'Create Reversal',
       onConfirm: async () => {
         setLoading(true);
         try {
-          if (!supabase) return;
+          if (!supabase || !user) return;
 
-          const { error } = await supabase
-            .from('invoices')
-            .delete()
-            .eq('id', invoiceId);
+          const reversalNumber = `REV-${invoice.invoiceNumber}-${Date.now()}`;
 
-          if (error) throw error;
+          const { data: reversal, error: reversalError } = await supabase
+            .from('invoice_reversals')
+            .insert({
+              original_invoice_id: invoice.id,
+              reversal_number: reversalNumber,
+              reversal_type: 'purchase',
+              reversal_date: new Date().toISOString().split('T')[0],
+              total_amount: invoice.totalAmount,
+              reason: 'Invoice reversal',
+              user_id: user.user_id,
+              user_name: user.name,
+            })
+            .select()
+            .single();
 
-          // Log activity
+          if (reversalError) throw reversalError;
+
+          for (const item of invoice.items) {
+            const { data: product } = await supabase
+              .from('products')
+              .select('*')
+              .eq('name', item.productName)
+              .eq('batch_number', item.batchNumber)
+              .maybeSingle();
+
+            if (product) {
+              const newStock = product.current_stock - item.quantity;
+              if (newStock < 0) {
+                throw new Error(`Insufficient stock for ${item.productName}. Available: ${product.current_stock}, Required: ${item.quantity}`);
+              }
+
+              const { error: updateError } = await supabase
+                .from('products')
+                .update({
+                  current_stock: newStock,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', product.id);
+
+              if (updateError) throw updateError;
+            }
+
+            const { error: itemError } = await supabase
+              .from('invoice_reversal_items')
+              .insert({
+                reversal_id: reversal.id,
+                original_invoice_item_id: item.id,
+                product_name: item.productName,
+                category: item.category,
+                batch_number: item.batchNumber,
+                expiry_date: item.expiryDate.toISOString().split('T')[0],
+                quantity: item.quantity,
+                invoice_price: item.invoicePrice,
+                supplier_discount_percent: item.supplierDiscountPercent,
+                vat_rate: item.vatRate,
+                other_charges: item.otherCharges,
+                cost_price: item.costPrice,
+                selling_price: item.sellingPrice,
+                total_cost: item.totalCost,
+                barcode: item.barcode,
+              });
+
+            if (itemError) throw itemError;
+          }
+
           await logActivity(
-            'INVOICE_DELETED',
-            `Deleted invoice ${invoiceToDelete?.invoiceNumber || invoiceId} - Supplier: ${invoiceToDelete?.supplier || 'Unknown'}`
+            'INVOICE_REVERSED',
+            `Created reversal ${reversalNumber} for invoice ${invoice.invoiceNumber} - Total: ${formatKES(invoice.totalAmount)}`
           );
 
+          await refreshData();
           await loadInvoices();
-          showAlert({ title: 'Invoice Management', message: 'Invoice deleted successfully', type: 'success' });
+          showAlert({ title: 'Invoice Management', message: 'Invoice reversal created successfully! Inventory has been adjusted.', type: 'success' });
         } catch (error: any) {
-          console.error('Error deleting invoice:', error);
+          console.error('Error creating reversal:', error);
           showAlert({ title: 'Invoice Management', message: getErrorMessage(error), type: 'error' });
         } finally {
           setLoading(false);
@@ -724,17 +782,17 @@ const InvoiceManagement: React.FC = () => {
                       <button
                         onClick={() => viewInvoice(invoice)}
                         className="text-blue-600 hover:text-blue-800"
-                        title="View"
+                        title="View Invoice"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       {canDeleteProducts() && (
                         <button
-                          onClick={() => deleteInvoice(invoice.id)}
-                          className="text-red-600 hover:text-red-800"
-                          title="Delete"
+                          onClick={() => createReversal(invoice)}
+                          className="text-orange-600 hover:text-orange-800"
+                          title="Create Reversal"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <RotateCcw className="h-4 w-4" />
                         </button>
                       )}
                     </div>

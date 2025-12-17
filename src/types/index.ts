@@ -155,9 +155,56 @@ export interface CreditNote {
   returnDate: Date;
   totalAmount: number;
   reason: string;
+  returnReasonCode?: string;
   userId: string;
   userName: string;
   items: CreditNoteItem[];
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface InvoiceReversalItem {
+  id?: string;
+  originalInvoiceItemId?: string;
+  productId?: string;
+  productName: string;
+  category?: string;
+  batchNumber?: string;
+  expiryDate?: Date;
+  quantity: number;
+  invoicePrice?: number;
+  supplierDiscountPercent?: number;
+  vatRate?: number;
+  otherCharges?: number;
+  costPrice: number;
+  sellingPrice?: number;
+  totalCost: number;
+  barcode?: string;
+}
+
+export interface InvoiceReversal {
+  id: string;
+  originalInvoiceId: string;
+  reversalNumber: string;
+  reversalType: 'purchase' | 'sales';
+  reversalDate: Date;
+  totalAmount: number;
+  reason: string;
+  notes?: string;
+  userId: string;
+  userName: string;
+  items: InvoiceReversalItem[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type ReturnReasonCode = 'excess' | 'expired' | 'near_expiry' | 'not_ordered' | 'damaged' | 'other';
+
+export const RETURN_REASONS: Record<ReturnReasonCode, string> = {
+  excess: 'Excess/Overstocked',
+  expired: 'Expired Product',
+  near_expiry: 'Near Expiry',
+  not_ordered: 'Not Ordered',
+  damaged: 'Damaged/Defective',
+  other: 'Other (Specify)'
+};
