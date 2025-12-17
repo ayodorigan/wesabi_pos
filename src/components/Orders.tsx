@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Edit2, Download, Search, Filter, X, RotateCcw, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Search, Filter, X, RotateCcw, CheckCircle, ArrowUp, ArrowDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -50,6 +50,7 @@ export default function Orders() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchProduct, setSearchProduct] = useState('');
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [newProduct, setNewProduct] = useState({
@@ -545,12 +546,22 @@ export default function Orders() {
     return matchesSearch && matchesStatus;
   });
 
+  const sortedOrders = [...filteredOrders].sort((a, b) => {
+    const dateA = new Date(a.created_at).getTime();
+    const dateB = new Date(b.created_at).getTime();
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+  });
+
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+  };
+
   const {
     currentPage,
     paginatedItems: paginatedOrders,
     goToPage,
     itemsPerPage
-  } = usePagination({ items: filteredOrders, itemsPerPage: 15 });
+  } = usePagination({ items: sortedOrders, itemsPerPage: 15 });
 
   const filteredProducts = allProducts.filter(product =>
     product.name.toLowerCase().includes(searchProduct.toLowerCase())
@@ -613,7 +624,19 @@ export default function Orders() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order #</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={toggleSortOrder}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Date</span>
+                      {sortOrder === 'desc' ? (
+                        <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUp className="h-3 w-3" />
+                      )}
+                    </div>
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Items</th>
@@ -724,7 +747,7 @@ export default function Orders() {
 
             <Pagination
               currentPage={currentPage}
-              totalItems={filteredOrders.length}
+              totalItems={sortedOrders.length}
               itemsPerPage={itemsPerPage}
               onPageChange={goToPage}
               itemName="orders"

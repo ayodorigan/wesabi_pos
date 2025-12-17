@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useEffect } from 'react';
-import { Package, Save, AlertTriangle, CheckCircle, History, Calendar, Download, Edit, Trash2, Plus, ArrowLeft } from 'lucide-react';
+import { Package, Save, AlertTriangle, CheckCircle, History, Calendar, Download, Edit, Trash2, Plus, ArrowLeft, ArrowUp, ArrowDown } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -34,6 +34,7 @@ const StockTake: React.FC = () => {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Auto-save every 20 seconds for active session
   useEffect(() => {
@@ -403,7 +404,15 @@ const StockTake: React.FC = () => {
           return sum + (item.difference * (product?.costPrice || 0));
         }, 0)
       }))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+      });
+  };
+
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
   };
 
   const exportHistoryToPDF = (date: string, items: any[]) => {
@@ -795,11 +804,22 @@ const StockTake: React.FC = () => {
 
       {/* Completed Stock Takes History */}
       <div className="bg-white rounded-lg shadow-sm border">
-        <div className="p-6 border-b">
+        <div className="p-6 border-b flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center">
             <History className="h-5 w-5 mr-2" />
             Completed Stock Takes
           </h2>
+          <button
+            onClick={toggleSortOrder}
+            className="flex items-center space-x-1 px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+          >
+            <span>Sort by Date</span>
+            {sortOrder === 'desc' ? (
+              <ArrowDown className="h-3 w-3" />
+            ) : (
+              <ArrowUp className="h-3 w-3" />
+            )}
+          </button>
         </div>
         <div className="p-6">
           {groupedStockTakes.length === 0 ? (

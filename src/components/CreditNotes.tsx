@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, FileText, Trash2, Download, Eye, Edit } from 'lucide-react';
+import { Plus, Search, FileText, Trash2, Download, Eye, Edit, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../lib/supabase';
@@ -22,6 +22,7 @@ const CreditNotes: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const [creditNoteData, setCreditNoteData] = useState({
     invoiceNumber: '',
@@ -507,7 +508,22 @@ const CreditNotes: React.FC = () => {
     creditNote.supplier.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const { paginatedItems, ...paginationProps } = usePagination(filteredCreditNotes, 20);
+  const sortedCreditNotes = [...filteredCreditNotes].sort((a, b) => {
+    const dateA = new Date(a.returnDate).getTime();
+    const dateB = new Date(b.returnDate).getTime();
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+  });
+
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+  };
+
+  const {
+    currentPage,
+    paginatedItems,
+    goToPage,
+    itemsPerPage
+  } = usePagination({ items: sortedCreditNotes, itemsPerPage: 20 });
 
   const productNames = products.map(p => p.name);
 
@@ -557,7 +573,19 @@ const CreditNotes: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Credit Note #</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice #</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Return Date</th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={toggleSortOrder}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Return Date</span>
+                    {sortOrder === 'desc' ? (
+                      <ArrowDown className="h-3 w-3" />
+                    ) : (
+                      <ArrowUp className="h-3 w-3" />
+                    )}
+                  </div>
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Credit</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -609,7 +637,13 @@ const CreditNotes: React.FC = () => {
             </tbody>
           </table>
         </div>
-        <Pagination {...paginationProps} />
+        <Pagination
+          currentPage={currentPage}
+          totalItems={sortedCreditNotes.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={goToPage}
+          itemName="credit notes"
+        />
       </div>
 
       {showAddForm && (

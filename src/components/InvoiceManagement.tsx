@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, FileText, Trash2, Eye, Package, Edit, Upload } from 'lucide-react';
+import { Plus, Search, FileText, Trash2, Eye, Package, Edit, Upload, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../lib/supabase';
@@ -22,6 +22,7 @@ const InvoiceManagement: React.FC = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const [invoiceData, setInvoiceData] = useState({
     invoiceNumber: '',
@@ -620,12 +621,22 @@ const InvoiceManagement: React.FC = () => {
     invoice.supplier.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const sortedInvoices = [...filteredInvoices].sort((a, b) => {
+    const dateA = new Date(a.invoiceDate).getTime();
+    const dateB = new Date(b.invoiceDate).getTime();
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+  });
+
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+  };
+
   const {
     currentPage,
     paginatedItems: paginatedInvoices,
     goToPage,
     itemsPerPage
-  } = usePagination({ items: filteredInvoices, itemsPerPage: 15 });
+  } = usePagination({ items: sortedInvoices, itemsPerPage: 15 });
 
   return (
     <div className="space-y-6">
@@ -663,7 +674,19 @@ const InvoiceManagement: React.FC = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice #</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={toggleSortOrder}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Date</span>
+                    {sortOrder === 'desc' ? (
+                      <ArrowDown className="h-3 w-3" />
+                    ) : (
+                      <ArrowUp className="h-3 w-3" />
+                    )}
+                  </div>
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Added By</th>
@@ -723,7 +746,7 @@ const InvoiceManagement: React.FC = () => {
 
           <Pagination
             currentPage={currentPage}
-            totalItems={filteredInvoices.length}
+            totalItems={sortedInvoices.length}
             itemsPerPage={itemsPerPage}
             onPageChange={goToPage}
             itemName="invoices"
