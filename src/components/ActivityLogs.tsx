@@ -32,7 +32,12 @@ const ActivityLogs: React.FC = () => {
     return matchesSearch && matchesAction && matchesUser;
   });
 
-  const { paginatedItems, ...paginationProps } = usePagination(filteredLogs, 50);
+  const {
+    currentPage,
+    paginatedItems,
+    goToPage,
+    itemsPerPage
+  } = usePagination({ items: filteredLogs, itemsPerPage: 50 });
 
   const getActionLabel = (action: string) => {
     switch (action) {
@@ -299,7 +304,13 @@ const ActivityLogs: React.FC = () => {
             </tbody>
           </table>
         </div>
-        <Pagination {...paginationProps} />
+        <Pagination
+          currentPage={currentPage}
+          totalItems={filteredLogs.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={goToPage}
+          itemName="activity logs"
+        />
       </div>
     </div>
   );

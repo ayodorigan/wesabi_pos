@@ -95,7 +95,12 @@ const SalesHistory: React.FC = () => {
 
   const filteredHistory = getFilteredHistory();
 
-  const { paginatedItems, ...paginationProps } = usePagination(filteredHistory, 20);
+  const {
+    currentPage,
+    paginatedItems,
+    goToPage,
+    itemsPerPage
+  } = usePagination({ items: filteredHistory, itemsPerPage: 20 });
 
   // Calculate summary statistics
   const totalRevenue = filteredHistory.reduce((sum, item) => sum + item.totalRevenue, 0);
@@ -344,7 +349,13 @@ const SalesHistory: React.FC = () => {
             </tbody>
           </table>
         </div>
-        <Pagination {...paginationProps} />
+        <Pagination
+          currentPage={currentPage}
+          totalItems={filteredHistory.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={goToPage}
+          itemName="sales records"
+        />
       </div>
     </div>
   );
