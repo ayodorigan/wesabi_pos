@@ -87,15 +87,35 @@ CREATE POLICY "Users can update own orders"
   ON supplier_orders
   FOR UPDATE
   TO authenticated
-  USING (created_by = auth.uid() OR is_admin())
-  WITH CHECK (created_by = auth.uid() OR is_admin());
+  USING (
+    created_by = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM public.user_profiles
+      WHERE user_id = auth.uid()
+      AND role IN ('super_admin', 'admin')
+    )
+  )
+  WITH CHECK (
+    created_by = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM public.user_profiles
+      WHERE user_id = auth.uid()
+      AND role IN ('super_admin', 'admin')
+    )
+  );
 
 -- Only admins can delete orders
 CREATE POLICY "Admins can delete orders"
   ON supplier_orders
   FOR DELETE
   TO authenticated
-  USING (is_admin());
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_profiles
+      WHERE user_id = auth.uid()
+      AND role IN ('super_admin', 'admin')
+    )
+  );
 
 -- Policies for supplier_order_items
 
@@ -108,7 +128,14 @@ CREATE POLICY "Users can add items to orders"
     EXISTS (
       SELECT 1 FROM supplier_orders
       WHERE supplier_orders.id = order_id
-      AND (supplier_orders.created_by = auth.uid() OR is_admin())
+      AND (
+        supplier_orders.created_by = auth.uid() OR
+        EXISTS (
+          SELECT 1 FROM public.user_profiles
+          WHERE user_id = auth.uid()
+          AND role IN ('super_admin', 'admin')
+        )
+      )
     )
   );
 
@@ -128,14 +155,28 @@ CREATE POLICY "Users can update own order items"
     EXISTS (
       SELECT 1 FROM supplier_orders
       WHERE supplier_orders.id = order_id
-      AND (supplier_orders.created_by = auth.uid() OR is_admin())
+      AND (
+        supplier_orders.created_by = auth.uid() OR
+        EXISTS (
+          SELECT 1 FROM public.user_profiles
+          WHERE user_id = auth.uid()
+          AND role IN ('super_admin', 'admin')
+        )
+      )
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM supplier_orders
       WHERE supplier_orders.id = order_id
-      AND (supplier_orders.created_by = auth.uid() OR is_admin())
+      AND (
+        supplier_orders.created_by = auth.uid() OR
+        EXISTS (
+          SELECT 1 FROM public.user_profiles
+          WHERE user_id = auth.uid()
+          AND role IN ('super_admin', 'admin')
+        )
+      )
     )
   );
 
@@ -148,7 +189,14 @@ CREATE POLICY "Users can delete own order items"
     EXISTS (
       SELECT 1 FROM supplier_orders
       WHERE supplier_orders.id = order_id
-      AND (supplier_orders.created_by = auth.uid() OR is_admin())
+      AND (
+        supplier_orders.created_by = auth.uid() OR
+        EXISTS (
+          SELECT 1 FROM public.user_profiles
+          WHERE user_id = auth.uid()
+          AND role IN ('super_admin', 'admin')
+        )
+      )
     )
   );
 
