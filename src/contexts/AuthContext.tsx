@@ -60,6 +60,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastActivity, setLastActivity] = useState<number>(Date.now());
 
   useEffect(() => {
     let mounted = true;
@@ -193,8 +194,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setLoading(false);
           }
         } else {
-          // Profile exists, use it
+          // Profile exists, check if user is active
           const profile = profiles[0];
+
+          if (!profile.is_active) {
+            console.log('User account is deactivated');
+            await supabase.auth.signOut();
+            if (mounted) {
+              setUser(null);
+              setLoading(false);
+            }
+            throw new Error('Your account has been deactivated. Please contact your administrator.');
+          }
+
           if (mounted) {
             setUser({
               ...profile,
@@ -218,6 +230,75 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!user || !isSupabaseEnabled || !supabase) return;
+
+    const IDLE_TIMEOUT = 30 * 60 * 1000;
+    const CHECK_INTERVAL = 5 * 60 * 1000;
+
+    const checkUserStatus = async () => {
+      try {
+        const { data: profile, error } = await supabase
+          .from('user_profiles')
+          .select('is_active')
+          .eq('user_id', user.user_id)
+          .single();
+
+        if (error) {
+          console.error('Error checking user status:', error);
+          return;
+        }
+
+        if (!profile.is_active) {
+          console.log('User has been deactivated');
+          await signOut();
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Error in user status check:', error);
+      }
+    };
+
+    const checkIdleTimeout = () => {
+      const now = Date.now();
+      const idleTime = now - lastActivity;
+
+      if (idleTime > IDLE_TIMEOUT) {
+        console.log('Session timeout due to inactivity');
+        signOut().then(() => {
+          window.location.reload();
+        });
+      }
+    };
+
+    const statusCheckInterval = setInterval(checkUserStatus, CHECK_INTERVAL);
+    const idleCheckInterval = setInterval(checkIdleTimeout, 60000);
+
+    return () => {
+      clearInterval(statusCheckInterval);
+      clearInterval(idleCheckInterval);
+    };
+  }, [user, lastActivity]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const updateActivity = () => {
+      setLastActivity(Date.now());
+    };
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach(event => {
+      window.addEventListener(event, updateActivity);
+    });
+
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, updateActivity);
+      });
+    };
+  }, [user]);
 
   const logAuthActivity = async (userId: string, userName: string, action: string, details: string) => {
     if (!isSupabaseEnabled || !supabase) {
@@ -257,13 +338,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw error;
     }
 
-    // Log successful login
     if (data.user) {
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
-        .select('name')
+        .select('name, is_active')
         .eq('user_id', data.user.id)
         .single();
+
+      if (profileError) {
+        await supabase.auth.signOut();
+        throw new Error('Unable to load user profile. Please contact your administrator.');
+      }
+
+      if (!profile.is_active) {
+        await supabase.auth.signOut();
+        throw new Error('Your account has been deactivated. Please contact your administrator.');
+      }
 
       await logAuthActivity(
         data.user.id,
