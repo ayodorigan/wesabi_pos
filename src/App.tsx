@@ -13,7 +13,6 @@ import Settings from './components/Settings';
 import StockTake from './components/StockTake';
 import ActivityLogs from './components/ActivityLogs';
 import SalesHistory from './components/SalesHistory';
-import SalesReports from './components/SalesReports';
 import Profile from './components/Profile';
 import InvoiceManagement from './components/InvoiceManagement';
 import CreditNotes from './components/CreditNotes';
@@ -127,8 +126,6 @@ const AppContent: React.FC = () => {
         return <ActivityLogs />;
       case 'drugsaleshistory':
         return <SalesHistory />;
-      case 'saleshistory':
-        return <SalesReports />;
       case 'profile':
         return <Profile />;
       default:
