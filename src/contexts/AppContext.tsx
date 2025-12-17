@@ -17,6 +17,7 @@ interface AppContextType {
   suppliers: string[];
   medicineTemplates: typeof medicineDatabase;
   loading: boolean;
+  error: Error | null;
   stockTakeSessions: any[];
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceHistory'>) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
@@ -40,6 +41,7 @@ interface AppContextType {
   refreshData: () => Promise<void>;
   getLastSoldPrice: (productId: string) => Promise<number | null>;
   isSupabaseEnabled: boolean;
+  lastRefreshTime: number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -57,7 +59,7 @@ interface AppProviderProps {
 }
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { showAlert } = useAlert();
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -68,11 +70,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [suppliers, setSuppliers] = useState<string[]>(commonSuppliers);
   const [medicineTemplates, setMedicineTemplates] = useState(medicineDatabase);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const [stockTakeSessions, setStockTakeSessions] = useState<any[]>([]);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
 
   // Load data from database
   const refreshData = async () => {
     setLoading(true);
+    setError(null);
     let hasError = false;
 
     try {
@@ -92,7 +97,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
       // Declare variables at function scope
       let formattedProducts: Product[] = [];
-      let formattedSales: Sale[] = [];
       let formattedStockTakes: StockTake[] = [];
       let formattedLogs: ActivityLog[] = [];
 
@@ -163,52 +167,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         hasError = true;
       }
 
-      // Load sales - don't exit early on error
-      try {
-        const { data: salesData, error: salesError } = await supabase
-          .from('sales')
-          .select(`
-            *,
-            sale_items (
-              id,
-              product_id,
-              product_name,
-              quantity,
-              unit_price,
-              total_price,
-              batch_number
-            )
-          `)
-          .order('created_at', { ascending: false });
-
-        if (salesError) {
-          console.error('Error loading sales:', salesError);
-          hasError = true;
-        } else {
-          formattedSales = (salesData || []).map(sale => ({
-          id: sale.id,
-          receiptNumber: sale.receipt_number,
-          customerName: sale.customer_name,
-          totalAmount: parseFloat(sale.total_amount) || 0,
-          paymentMethod: sale.payment_method,
-          salesPersonId: sale.sales_person_id || 'demo-user',
-          salesPersonName: sale.sales_person_name,
-          items: (sale.sale_items || []).map((item: any) => ({
-            productId: item.product_id,
-            productName: item.product_name,
-            quantity: item.quantity,
-            unitPrice: parseFloat(item.unit_price) || 0,
-            totalPrice: parseFloat(item.total_price) || 0,
-            batchNumber: item.batch_number,
-          })),
-          createdAt: new Date(sale.created_at),
-        }));
-          setSales(formattedSales);
-        }
-      } catch (error) {
-        console.error('Error in sales loading block:', error);
-        hasError = true;
-      }
+      // Sales data is loaded on-demand by the SalesHistory component
+      // Not loaded here to improve initial load performance
 
       // Load stock takes
       try {
@@ -296,34 +256,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         hasError = true;
       }
 
-      // Generate sales history from sales data
-      const salesHistoryItems: SalesHistoryItem[] = [];
-      formattedSales.forEach(sale => {
-        sale.items.forEach(item => {
-          const product = formattedProducts.find(p => p.id === item.productId);
-          const costPrice = product?.costPrice || 0;
-          const totalCost = costPrice * item.quantity;
-          const profit = item.totalPrice - totalCost;
-          
-          salesHistoryItems.push({
-            id: `${sale.id}-${item.productId}`,
-            productId: item.productId,
-            productName: item.productName,
-            quantity: item.quantity,
-            costPrice: costPrice,
-            sellingPrice: item.unitPrice,
-            totalCost: totalCost,
-            totalRevenue: item.totalPrice,
-            profit: profit,
-            paymentMethod: sale.paymentMethod,
-            customerName: sale.customerName,
-            salesPersonName: sale.salesPersonName,
-            receiptNumber: sale.receiptNumber,
-            saleDate: sale.createdAt,
-          });
-        });
-      });
-      setSalesHistory(salesHistoryItems);
+      // Sales history is generated on-demand by the SalesHistory component
+      // Not generated here to improve initial load performance
 
       // Update categories and suppliers from loaded data
       const loadedCategories = [...new Set(formattedProducts.map(p => p.category))];
@@ -334,7 +268,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     } catch (error) {
       console.error('Error refreshing data:', error);
-      
+
       // Check if it's a network/fetch error
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         console.warn('Network error detected. Please check:');
@@ -342,27 +276,33 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         console.warn('2. Internet connection is stable');
         console.warn('3. CORS settings in Supabase dashboard allow localhost:5173');
         console.warn('4. No firewall/ad blocker blocking requests to *.supabase.co');
-        
-        // Don't throw the error, just log it and continue in demo mode
+
+        setError(error instanceof Error ? error : new Error('Network error'));
         console.warn('Continuing in demo mode due to network error');
         return;
       }
-      
+
       // For other errors, log but don't crash the app
+      setError(error instanceof Error ? error : new Error('Database error'));
       console.warn('Database error occurred, continuing in demo mode:', error);
     } finally {
       setLoading(false);
+      setLastRefreshTime(Date.now());
     }
   };
 
-  // Initialize data on mount
+  // Initialize data on mount - wait for auth to complete
   useEffect(() => {
-    refreshData();
-  }, []);
+    if (!authLoading && !loading && user) {
+      console.log('[AppContext] Auth complete, loading data for user:', user.email);
+      refreshData();
+    }
+  }, [authLoading]);
 
   // Refresh data when user changes (sign in/out)
   useEffect(() => {
-    if (user) {
+    if (user && !authLoading && !loading) {
+      console.log('[AppContext] User changed, refreshing data for:', user.email);
       refreshData();
     }
   }, [user]);
@@ -425,9 +365,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     console.log('🔄 Starting product addition process...');
     console.log('Product data to insert:', productData);
 
-    // Enforce minimum selling price
-    const enforcedSellingPrice = enforceMinimumSellingPrice(productData.sellingPrice, productData.costPrice);
-    
+    // Enforce minimum selling price with new pricing logic
+    const pricingInputs = {
+      invoicePrice: productData.invoicePrice,
+      supplierDiscountPercent: productData.supplierDiscountPercent,
+      vatRate: productData.vatRate,
+      otherCharges: productData.otherCharges,
+      costPrice: productData.costPrice
+    };
+    const enforcedSellingPrice = enforceMinimumSellingPrice(productData.sellingPrice, pricingInputs);
+
     try {
       console.log('📡 Inserting product into database...');
       const { data, error } = await supabase
@@ -438,6 +385,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           supplier: productData.supplier,
           batch_number: productData.batchNumber,
           expiry_date: productData.expiryDate.toISOString(),
+          invoice_price: productData.invoicePrice || null,
+          supplier_discount_percent: productData.supplierDiscountPercent || null,
+          vat_rate: productData.vatRate || 0,
+          other_charges: productData.otherCharges || null,
           cost_price: productData.costPrice,
           selling_price: enforcedSellingPrice,
           current_stock: productData.currentStock,
@@ -496,18 +447,28 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     try {
       const updateData: any = {};
-      
+
       if (updates.name) updateData.name = updates.name;
       if (updates.category) updateData.category = updates.category;
       if (updates.supplier) updateData.supplier = updates.supplier;
       if (updates.batchNumber) updateData.batch_number = updates.batchNumber;
       if (updates.expiryDate) updateData.expiry_date = updates.expiryDate.toISOString();
+      if (updates.invoicePrice !== undefined) updateData.invoice_price = updates.invoicePrice || null;
+      if (updates.supplierDiscountPercent !== undefined) updateData.supplier_discount_percent = updates.supplierDiscountPercent || null;
+      if (updates.vatRate !== undefined) updateData.vat_rate = updates.vatRate || 0;
+      if (updates.otherCharges !== undefined) updateData.other_charges = updates.otherCharges || null;
       if (updates.costPrice !== undefined) updateData.cost_price = updates.costPrice;
       if (updates.sellingPrice !== undefined) {
-        // Enforce minimum selling price
-        const costPrice = updates.costPrice !== undefined ? updates.costPrice : 
-          products.find(p => p.id === id)?.costPrice || 0;
-        updateData.selling_price = enforceMinimumSellingPrice(updates.sellingPrice, costPrice);
+        // Enforce minimum selling price with new pricing logic
+        const existingProduct = products.find(p => p.id === id);
+        const pricingInputs = {
+          invoicePrice: updates.invoicePrice !== undefined ? updates.invoicePrice : existingProduct?.invoicePrice,
+          supplierDiscountPercent: updates.supplierDiscountPercent !== undefined ? updates.supplierDiscountPercent : existingProduct?.supplierDiscountPercent,
+          vatRate: updates.vatRate !== undefined ? updates.vatRate : existingProduct?.vatRate || 0,
+          otherCharges: updates.otherCharges !== undefined ? updates.otherCharges : existingProduct?.otherCharges,
+          costPrice: updates.costPrice !== undefined ? updates.costPrice : existingProduct?.costPrice || 0
+        };
+        updateData.selling_price = enforceMinimumSellingPrice(updates.sellingPrice, pricingInputs);
       }
       if (updates.currentStock !== undefined) updateData.current_stock = updates.currentStock;
       if (updates.minStockLevel !== undefined) updateData.min_stock_level = updates.minStockLevel;
@@ -650,7 +611,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         logActivity('SALE', `Sale completed: ${receiptNumber} - ${formatKES(saleData.totalAmount)}`)
       ]);
 
-      // Update local state instead of full refresh
+      // Update local product stock
       setProducts(prev => prev.map(p => {
         const soldItem = saleData.items.find(item => item.productId === p.id);
         if (soldItem) {
@@ -661,46 +622,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         }
         return p;
       }));
-
-      // Add the sale to local state
-      const newSale: Sale = {
-        id: saleResult.id,
-        receiptNumber,
-        customerName: saleData.customerName,
-        totalAmount: saleData.totalAmount,
-        paymentMethod: saleData.paymentMethod,
-        salesPersonId: saleData.salesPersonId,
-        salesPersonName: saleData.salesPersonName,
-        items: saleData.items,
-        createdAt: new Date(),
-      };
-      setSales(prev => [newSale, ...prev]);
-
-      // Update sales history
-      const newSalesHistoryItems: SalesHistoryItem[] = saleData.items.map(item => {
-        const product = products.find(p => p.id === item.productId);
-        const costPrice = product?.costPrice || 0;
-        const totalCost = costPrice * item.quantity;
-        const profit = item.totalPrice - totalCost;
-
-        return {
-          id: `${saleResult.id}-${item.productId}`,
-          productId: item.productId,
-          productName: item.productName,
-          quantity: item.quantity,
-          costPrice: costPrice,
-          sellingPrice: item.unitPrice,
-          totalCost: totalCost,
-          totalRevenue: item.totalPrice,
-          profit: profit,
-          paymentMethod: saleData.paymentMethod,
-          customerName: saleData.customerName,
-          salesPersonName: saleData.salesPersonName,
-          receiptNumber: receiptNumber,
-          saleDate: new Date(),
-        };
-      });
-      setSalesHistory(prev => [...newSalesHistoryItems, ...prev]);
 
       return receiptNumber;
     } catch (error) {
@@ -909,19 +830,45 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const importProducts = async (importedProducts: any[]) => {
     try {
-      const productsToInsert = importedProducts.map(item => ({
-        name: item.name || '',
-        category: item.category || '',
-        supplier: item.supplier || '',
-        batch_number: item.batchnumber || `BATCH-${Date.now()}`,
-        expiry_date: item.expirydate ? new Date(item.expirydate).toISOString() : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-        cost_price: parseFloat(item.costprice) || 0,
-        selling_price: parseFloat(item.sellingprice) || 0,
-        current_stock: parseInt(item.currentstock) || 0,
-        min_stock_level: parseInt(item.minstocklevel) || 10,
-        barcode: item.barcode || `${Date.now()}-${Math.random()}`,
-        invoice_number: item.invoicenumber || '',
-      }));
+      const productsToInsert = importedProducts.map(item => {
+        const invoicePrice = parseFloat(item.invoiceprice) || 0;
+        const supplierDiscountPercent = parseFloat(item.supplierdiscountpercent) || 0;
+        const vatRate = parseFloat(item.vatrate) || 0;
+        const otherCharges = parseFloat(item.othercharges) || 0;
+        const costPrice = parseFloat(item.costprice) || 0;
+        let sellingPrice = parseFloat(item.sellingprice) || 0;
+
+        const pricingInputs = {
+          invoicePrice: invoicePrice || undefined,
+          supplierDiscountPercent: supplierDiscountPercent || undefined,
+          vatRate: vatRate || 0,
+          otherCharges: otherCharges || undefined,
+          costPrice: costPrice
+        };
+
+        const minSellingPrice = getMinimumSellingPrice(pricingInputs);
+        if (sellingPrice < minSellingPrice) {
+          sellingPrice = minSellingPrice;
+        }
+
+        return {
+          name: item.name || '',
+          category: item.category || '',
+          supplier: item.supplier || '',
+          batch_number: item.batchnumber || `BATCH-${Date.now()}`,
+          expiry_date: item.expirydate ? new Date(item.expirydate).toISOString() : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+          invoice_price: invoicePrice || null,
+          supplier_discount_percent: supplierDiscountPercent || null,
+          vat_rate: vatRate || 0,
+          other_charges: otherCharges || null,
+          cost_price: costPrice,
+          selling_price: sellingPrice,
+          current_stock: parseInt(item.currentstock) || 0,
+          min_stock_level: parseInt(item.minstocklevel) || 10,
+          barcode: item.barcode || `${Date.now()}-${Math.random()}`,
+          invoice_number: item.invoicenumber || '',
+        };
+      });
 
       const { error } = await supabase
         .from('products')
@@ -1154,6 +1101,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       suppliers,
       medicineTemplates,
       loading,
+      error,
       addProduct,
       updateProduct,
       deleteProduct,
@@ -1176,6 +1124,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       refreshData,
       getLastSoldPrice,
       isSupabaseEnabled,
+      lastRefreshTime,
     }}>
       {children}
     </AppContext.Provider>

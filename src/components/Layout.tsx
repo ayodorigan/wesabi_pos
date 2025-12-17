@@ -12,10 +12,10 @@ import {
   LogOut,
   Menu,
   X,
-  Pill,
   FileInput,
   FileMinus,
-  ClipboardList
+  ClipboardList,
+  Pill
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -42,8 +42,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     { id: 'orders', label: 'Orders', icon: ClipboardList },
     { id: 'creditnotes', label: 'Credit Notes', icon: FileMinus },
     { id: 'stocktake', label: 'Stock Take', icon: Package },
-    { id: 'drugsaleshistory', label: 'Drug History', icon: FileText },
-    { id: 'saleshistory', label: 'Sales History', icon: BarChart3 },
+    { id: 'drugsaleshistory', label: 'Sales Report', icon: FileText },
+    { id: 'drughistory', label: 'Drug History', icon: Pill },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'logs', label: 'Activity Logs', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
@@ -74,9 +74,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       {/* Mobile Header */}
       <div className="lg:hidden bg-white shadow-sm border-b">
         <div className="flex items-center justify-between p-4">
-          <div className="flex items-center space-x-2">
-            <Pill className="h-8 w-8 text-green-600" />
-            <h1 className="text-xl font-bold text-gray-900">Wesabi Pharmacy</h1>
+          <div className="flex items-center">
+            <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-12" />
           </div>
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -96,9 +95,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         `}>
           <div className="flex flex-col h-full">
             {/* Logo */}
-            <div className="hidden lg:flex items-center space-x-2 px-6 py-4 border-b">
-              <Pill className="h-8 w-8 text-green-600" />
-              <h1 className="text-xl font-bold text-gray-900">Wesabi Pharmacy</h1>
+            <div className="hidden lg:flex items-center px-6 py-4 border-b">
+              <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-12" />
             </div>
 
             {/* Navigation */}

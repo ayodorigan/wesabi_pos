@@ -60,6 +60,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastActivity, setLastActivity] = useState<number>(Date.now());
 
   useEffect(() => {
     let mounted = true;
@@ -193,8 +194,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setLoading(false);
           }
         } else {
-          // Profile exists, use it
+          // Profile exists, check if user is active
           const profile = profiles[0];
+
+          if (!profile.is_active) {
+            console.log('User account is deactivated');
+            await supabase.auth.signOut();
+            if (mounted) {
+              setUser(null);
+              setLoading(false);
+            }
+            throw new Error('Your account has been deactivated. Please contact your administrator.');
+          }
+
           if (mounted) {
             setUser({
               ...profile,
@@ -219,6 +231,75 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user || !isSupabaseEnabled || !supabase) return;
+
+    const IDLE_TIMEOUT = 30 * 60 * 1000;
+    const CHECK_INTERVAL = 5 * 60 * 1000;
+
+    const checkUserStatus = async () => {
+      try {
+        const { data: profile, error } = await supabase
+          .from('user_profiles')
+          .select('is_active')
+          .eq('user_id', user.user_id)
+          .single();
+
+        if (error) {
+          console.error('Error checking user status:', error);
+          return;
+        }
+
+        if (!profile.is_active) {
+          console.log('User has been deactivated');
+          await signOut();
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Error in user status check:', error);
+      }
+    };
+
+    const checkIdleTimeout = () => {
+      const now = Date.now();
+      const idleTime = now - lastActivity;
+
+      if (idleTime > IDLE_TIMEOUT) {
+        console.log('Session timeout due to inactivity');
+        signOut().then(() => {
+          window.location.reload();
+        });
+      }
+    };
+
+    const statusCheckInterval = setInterval(checkUserStatus, CHECK_INTERVAL);
+    const idleCheckInterval = setInterval(checkIdleTimeout, 60000);
+
+    return () => {
+      clearInterval(statusCheckInterval);
+      clearInterval(idleCheckInterval);
+    };
+  }, [user, lastActivity]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const updateActivity = () => {
+      setLastActivity(Date.now());
+    };
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach(event => {
+      window.addEventListener(event, updateActivity);
+    });
+
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, updateActivity);
+      });
+    };
+  }, [user]);
+
   const logAuthActivity = async (userId: string, userName: string, action: string, details: string) => {
     if (!isSupabaseEnabled || !supabase) {
       return;
@@ -239,38 +320,73 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signIn = async (email: string, password: string) => {
+    console.log('=== SIGN IN ATTEMPT ===');
+    console.log('Email:', email);
+    console.log('Supabase enabled:', isSupabaseEnabled);
+    console.log('Supabase client available:', !!supabase);
+
     if (!isSupabaseEnabled || !supabase) {
+      console.error('Supabase not available for authentication');
       throw new Error('Authentication not available in demo mode');
     }
 
     // Validate inputs
     if (!email?.trim() || !password?.trim()) {
+      console.error('Email or password is empty');
       throw new Error('Email and password are required');
     }
 
+    console.log('Calling Supabase signInWithPassword...');
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
+    console.log('Sign in response:', { user: data?.user?.id, error });
+
     if (error) {
+      console.error('=== SIGN IN ERROR ===');
+      console.error('Error Code:', error.message);
+      console.error('Error Status:', error.status);
+      console.error('Full error:', error);
       throw error;
     }
 
-    // Log successful login
     if (data.user) {
-      const { data: profile } = await supabase
+      console.log('User authenticated successfully, loading profile...');
+      const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
-        .select('name')
+        .select('name, is_active')
         .eq('user_id', data.user.id)
         .single();
 
+      console.log('Profile query result:', { profile, error: profileError });
+
+      if (profileError) {
+        console.error('=== PROFILE LOAD ERROR ===');
+        console.error('Error Code:', profileError.code);
+        console.error('Error Message:', profileError.message);
+        console.error('Error Details:', profileError.details);
+        console.error('Error Hint:', profileError.hint);
+        await supabase.auth.signOut();
+        throw new Error('Unable to load user profile. Please contact your administrator.');
+      }
+
+      if (!profile.is_active) {
+        console.error('User account is deactivated');
+        await supabase.auth.signOut();
+        throw new Error('Your account has been deactivated. Please contact your administrator.');
+      }
+
+      console.log('Logging auth activity...');
       await logAuthActivity(
         data.user.id,
         profile?.name || email.split('@')[0],
         'USER_LOGIN',
         `User logged in: ${email}`
       );
+
+      console.log('✅ Sign in completed successfully');
     }
   };
 
@@ -599,6 +715,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       case 'stocktake':
         return ['super_admin', 'admin', 'sales', 'stock_take'].includes(role);
       case 'drugsaleshistory':
+        return ['super_admin', 'admin', 'sales'].includes(role);
+      case 'drughistory':
         return ['super_admin', 'admin', 'sales'].includes(role);
       case 'saleshistory':
         return ['super_admin', 'admin', 'sales'].includes(role);

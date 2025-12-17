@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ShoppingCart, 
-  Scan, 
-  Plus, 
-  Minus, 
+import {
+  ShoppingCart,
+  Scan,
+  Plus,
+  Minus,
   Trash2,
   Receipt,
   CreditCard,
@@ -21,11 +21,15 @@ import { Product, SaleItem } from '../types';
 import { formatKES, getMinimumSellingPrice, validateSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
 import { retryDatabaseOperation } from '../utils/retry';
+import { usePageRefresh } from '../hooks/usePageRefresh';
+import { useDataRefresh } from '../contexts/DataRefreshContext';
 
 const POS: React.FC = () => {
   const { products, addSale, getLastSoldPrice } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
+  const { triggerRefresh } = useDataRefresh();
+  usePageRefresh('pos', { refreshOnMount: true, staleTime: 30000 });
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'insurance'>('mpesa');
@@ -197,6 +201,8 @@ const POS: React.FC = () => {
       setShowMpesaModal(false);
       setMpesaPaymentDetails(null);
       setCheckoutRequestId(null);
+
+      triggerRefresh(['sales', 'inventory']);
 
       showAlert({ title: 'Point of Sale', message: `Sale completed! Receipt #${receiptNumber} - Wesabi Pharmacy`, type: 'success' });
     } catch (error) {
@@ -553,6 +559,7 @@ const POS: React.FC = () => {
                       <button
                         onClick={() => savePriceEdit(item.productId)}
                         className="p-1 text-green-600 hover:text-green-800"
+                        title="Confirm price"
                       >
                         <Check className="h-3 w-3" />
                       </button>
@@ -628,6 +635,7 @@ const POS: React.FC = () => {
                 <button
                   onClick={() => updateQuantity(item.productId, item.quantity - 1)}
                   className="p-1 text-gray-400 hover:text-gray-600"
+                  title="Decrease quantity"
                 >
                   <Minus className="h-4 w-4" />
                 </button>
@@ -652,12 +660,14 @@ const POS: React.FC = () => {
                 <button
                   onClick={() => updateQuantity(item.productId, item.quantity + 1)}
                   className="p-1 text-gray-400 hover:text-gray-600"
+                  title="Increase quantity"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => removeFromCart(item.productId)}
                   className="p-1 text-red-400 hover:text-red-600 ml-2"
+                  title="Remove from cart"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

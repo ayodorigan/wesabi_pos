@@ -136,7 +136,7 @@ const Profile: React.FC = () => {
                   </div>
                 )}
               </div>
-              <label className="absolute bottom-0 right-0 bg-white rounded-full p-2 shadow-lg cursor-pointer hover:bg-gray-50">
+              <label className="absolute bottom-0 right-0 bg-white rounded-full p-2 shadow-lg cursor-pointer hover:bg-gray-50" title="Change profile picture">
                 <Camera className="h-4 w-4 text-gray-600" />
                 <input
                   type="file"
@@ -287,6 +287,7 @@ const Profile: React.FC = () => {
                     type="button"
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                     className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                    title="Toggle password visibility"
                   >
                     {showCurrentPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
@@ -308,6 +309,7 @@ const Profile: React.FC = () => {
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
                     className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                    title="Toggle password visibility"
                   >
                     {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
@@ -329,6 +331,7 @@ const Profile: React.FC = () => {
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                    title="Toggle password visibility"
                   >
                     {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>

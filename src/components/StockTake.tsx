@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useEffect } from 'react';
-import { Package, Save, AlertTriangle, CheckCircle, History, Calendar, Download, Edit, Trash2, Plus, ArrowLeft } from 'lucide-react';
+import { Package, Save, AlertTriangle, CheckCircle, History, Calendar, Download, Edit, Trash2, Plus, ArrowLeft, ArrowUp, ArrowDown } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
+import { usePageRefresh } from '../hooks/usePageRefresh';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
 
 interface StockTakeSession {
   id: string;
@@ -19,6 +22,7 @@ const StockTake: React.FC = () => {
   const { products, stockTakes, addStockTake, isSupabaseEnabled, stockTakeSessions, updateStockTakeSession, createStockTakeSession, deleteStockTakeSession, logActivity } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
+  usePageRefresh('stocktake', { refreshOnMount: true, staleTime: 30000 });
   const [currentView, setCurrentView] = useState<'history' | 'active'>('history');
   const [activeSession, setActiveSession] = useState<StockTakeSession | null>(null);
   const [sessions, setSessions] = useState<StockTakeSession[]>([]);
@@ -30,6 +34,7 @@ const StockTake: React.FC = () => {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Auto-save every 20 seconds for active session
   useEffect(() => {
@@ -76,6 +81,8 @@ const StockTake: React.FC = () => {
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.barcode.includes(searchTerm)
   );
+
+  const { paginatedItems: paginatedProducts, ...paginationProps } = usePagination(filteredProducts, 20);
 
   const startNewStockTake = () => {
     setShowNameModal(true);
@@ -397,7 +404,15 @@ const StockTake: React.FC = () => {
           return sum + (item.difference * (product?.costPrice || 0));
         }, 0)
       }))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+      });
+  };
+
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
   };
 
   const exportHistoryToPDF = (date: string, items: any[]) => {
@@ -619,7 +634,7 @@ const StockTake: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredProducts.map((product) => {
+                {paginatedProducts.map((product) => {
                   const stockData = activeSession.products[product.id];
                   const actualStock = stockData?.actualStock;
                   const difference = actualStock !== undefined ? actualStock - product.currentStock : 0;
@@ -707,6 +722,7 @@ const StockTake: React.FC = () => {
               </tbody>
             </table>
           </div>
+          <Pagination {...paginationProps} />
         </div>
       </div>
     );
@@ -788,11 +804,22 @@ const StockTake: React.FC = () => {
 
       {/* Completed Stock Takes History */}
       <div className="bg-white rounded-lg shadow-sm border">
-        <div className="p-6 border-b">
+        <div className="p-6 border-b flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center">
             <History className="h-5 w-5 mr-2" />
             Completed Stock Takes
           </h2>
+          <button
+            onClick={toggleSortOrder}
+            className="flex items-center space-x-1 px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+          >
+            <span>Sort by Date</span>
+            {sortOrder === 'desc' ? (
+              <ArrowDown className="h-3 w-3" />
+            ) : (
+              <ArrowUp className="h-3 w-3" />
+            )}
+          </button>
         </div>
         <div className="p-6">
           {groupedStockTakes.length === 0 ? (

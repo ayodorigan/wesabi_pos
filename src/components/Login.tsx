@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Pill, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -23,25 +23,46 @@ const Login: React.FC = () => {
 
   const checkIfUsersExist = async () => {
     try {
+      console.log('=== CHECKING IF USERS EXIST ===');
+      console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+      console.log('Environment:', import.meta.env.VITE_ENV);
+      console.log('Supabase client available:', !!supabase);
+
       if (!supabase) {
+        console.error('Supabase client not available');
         setShowSignUpOption(false);
         return;
       }
+
+      console.log('Calling has_any_users RPC function...');
 
       // Call the database function to check if any users exist in auth.users
       const { data, error } = await supabase.rpc('has_any_users');
 
+      console.log('RPC Response:', { data, error });
+
       if (error) {
-        console.error('Error checking users:', error);
+        console.error('=== ERROR CHECKING USERS ===');
+        console.error('Error Code:', error.code);
+        console.error('Error Message:', error.message);
+        console.error('Error Details:', error.details);
+        console.error('Error Hint:', error.hint);
+        console.error('Full Error Object:', JSON.stringify(error, null, 2));
         setShowSignUpOption(false);
+        setError(`Database error querying schema: ${error.message || 'Unknown error'}`);
         return;
       }
 
+      console.log('Users exist check result:', data);
       // Show sign-up option only if NO users exist
       setShowSignUpOption(data === false);
-    } catch (error) {
-      console.error('Error checking users:', error);
+    } catch (error: any) {
+      console.error('=== EXCEPTION CHECKING USERS ===');
+      console.error('Exception message:', error?.message);
+      console.error('Exception stack:', error?.stack);
+      console.error('Full exception:', error);
       setShowSignUpOption(false);
+      setError(`Error: ${error?.message || 'Unknown error'}`);
     }
   };
 
@@ -103,9 +124,8 @@ const Login: React.FC = () => {
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center mb-4">
-              <Pill className="h-12 w-12 text-green-600" />
+              <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-16" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Wesabi Pharmacy</h1>
             <p className="text-gray-600 mt-2">Point of Sale System</p>
           </div>
 
@@ -136,9 +156,8 @@ const Login: React.FC = () => {
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
-            <Pill className="h-12 w-12 text-green-600" />
+            <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-16" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Wesabi Pharmacy</h1>
           <p className="text-gray-600 mt-2">Point of Sale System</p>
         </div>
 

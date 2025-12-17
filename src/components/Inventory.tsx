@@ -17,6 +17,10 @@ import { Product } from '../types';
 import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
+import VATRateInput from './VATRateInput';
+import { usePageRefresh } from '../hooks/usePageRefresh';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
 
 const Inventory: React.FC = () => {
   const {
@@ -35,6 +39,7 @@ const Inventory: React.FC = () => {
   } = useApp();
   const { user, canManagePricing, canDeleteProducts } = useAuth();
   const { showAlert } = useAlert();
+  usePageRefresh('inventory', { refreshOnMount: true, staleTime: 30000 });
   
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -48,6 +53,10 @@ const Inventory: React.FC = () => {
     batchNumber: '',
     expiryDate: '',
     invoiceNumber: '',
+    invoicePrice: '',
+    supplierDiscountPercent: '0',
+    vatRate: '0',
+    otherCharges: '0',
     costPrice: '',
     sellingPrice: '',
     currentStock: '',
@@ -64,6 +73,13 @@ const Inventory: React.FC = () => {
     const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
+
+  const {
+    currentPage,
+    paginatedItems: paginatedProducts,
+    goToPage,
+    itemsPerPage
+  } = usePagination({ items: filteredProducts, itemsPerPage: 20 });
 
   const exportToCSV = () => {
     try {
@@ -103,6 +119,9 @@ const Inventory: React.FC = () => {
       <th>Supplier</th>
       <th>Batch Number</th>
       <th>Expiry Date</th>
+      <th>Invoice Price</th>
+      <th>Discount %</th>
+      <th>VAT %</th>
       <th>Cost Price</th>
       <th>Selling Price</th>
       <th>Stock</th>
@@ -116,6 +135,9 @@ const Inventory: React.FC = () => {
       <td>${product.supplier}</td>
       <td>${product.batchNumber || '-'}</td>
       <td>${product.expiryDate.toLocaleDateString('en-KE')}</td>
+      <td>${product.invoicePrice ? formatKES(product.invoicePrice) : '-'}</td>
+      <td>${product.supplierDiscountPercent || '0'}%</td>
+      <td>${product.vatRate || '0'}%</td>
       <td>${formatKES(product.costPrice)}</td>
       <td>${formatKES(product.sellingPrice)}</td>
       <td>${product.currentStock}</td>
@@ -179,6 +201,10 @@ const Inventory: React.FC = () => {
       batchNumber: '',
       expiryDate: '',
       invoiceNumber: '',
+      invoicePrice: '',
+      supplierDiscountPercent: '0',
+      vatRate: '0',
+      otherCharges: '0',
       costPrice: '',
       sellingPrice: '',
       currentStock: '',
@@ -205,8 +231,15 @@ const Inventory: React.FC = () => {
 
   const handleCostPriceChange = (value: string) => {
     const costPrice = parseFloat(value) || 0;
-    const autoSellingPrice = calculateSellingPrice(costPrice);
-    
+    const pricingInputs = {
+      invoicePrice: parseFloat(formData.invoicePrice) || undefined,
+      supplierDiscountPercent: parseFloat(formData.supplierDiscountPercent) || undefined,
+      vatRate: parseFloat(formData.vatRate) || 0,
+      otherCharges: parseFloat(formData.otherCharges) || undefined,
+      costPrice: costPrice
+    };
+    const autoSellingPrice = calculateSellingPrice(pricingInputs);
+
     setFormData(prev => ({
       ...prev,
       costPrice: value,
@@ -251,24 +284,41 @@ const Inventory: React.FC = () => {
     }
 
     // Validate selling price against minimum
+    const invoicePrice = parseFloat(formData.invoicePrice) || 0;
+    const supplierDiscountPercent = parseFloat(formData.supplierDiscountPercent) || 0;
+    const vatRate = parseFloat(formData.vatRate) || 0;
+    const otherCharges = parseFloat(formData.otherCharges) || 0;
     const costPrice = parseFloat(formData.costPrice) || 0;
     const sellingPrice = parseFloat(formData.sellingPrice) || 0;
-    const minSellingPrice = getMinimumSellingPrice(costPrice);
+
+    const pricingInputs = {
+      invoicePrice: invoicePrice || undefined,
+      supplierDiscountPercent: supplierDiscountPercent || undefined,
+      vatRate: vatRate || 0,
+      otherCharges: otherCharges || undefined,
+      costPrice: costPrice
+    };
+
+    const minSellingPrice = getMinimumSellingPrice(pricingInputs);
 
     if (sellingPrice < minSellingPrice) {
-      showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × cost price)`, type: 'error' });
+      showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × net cost)`, type: 'error' });
       return;
     }
-    
+
     const productData = {
       name: formData.name,
       category: formData.category || 'General',
       supplier: formData.supplier || 'Unknown Supplier',
       batchNumber: formData.batchNumber || '',
-      expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now if not specified
+      expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       invoiceNumber: formData.invoiceNumber,
-      costPrice: parseFloat(formData.costPrice) || 0,
-      sellingPrice: enforceMinimumSellingPrice(parseFloat(formData.sellingPrice) || 0, parseFloat(formData.costPrice) || 0),
+      invoicePrice: invoicePrice || undefined,
+      supplierDiscountPercent: supplierDiscountPercent || undefined,
+      vatRate: vatRate || 0,
+      otherCharges: otherCharges || undefined,
+      costPrice: costPrice,
+      sellingPrice: enforceMinimumSellingPrice(sellingPrice, pricingInputs),
       currentStock: parseInt(formData.currentStock) || 0,
       minStockLevel: parseInt(formData.minStockLevel) || 10,
       barcode: formData.barcode || `${Date.now()}`,
@@ -294,12 +344,25 @@ const Inventory: React.FC = () => {
     if (!editingProduct) return;
 
     // Validate selling price against minimum
+    const invoicePrice = parseFloat(formData.invoicePrice) || 0;
+    const supplierDiscountPercent = parseFloat(formData.supplierDiscountPercent) || 0;
+    const vatRate = parseFloat(formData.vatRate) || 0;
+    const otherCharges = parseFloat(formData.otherCharges) || 0;
     const costPrice = parseFloat(formData.costPrice) || 0;
     const sellingPrice = parseFloat(formData.sellingPrice) || 0;
-    const minSellingPrice = getMinimumSellingPrice(costPrice);
+
+    const pricingInputs = {
+      invoicePrice: invoicePrice || undefined,
+      supplierDiscountPercent: supplierDiscountPercent || undefined,
+      vatRate: vatRate || 0,
+      otherCharges: otherCharges || undefined,
+      costPrice: costPrice
+    };
+
+    const minSellingPrice = getMinimumSellingPrice(pricingInputs);
 
     if (sellingPrice < minSellingPrice) {
-      showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × cost price)`, type: 'error' });
+      showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minSellingPrice)} (1.33 × net cost)`, type: 'error' });
       return;
     }
 
@@ -312,8 +375,12 @@ const Inventory: React.FC = () => {
       batchNumber: formData.batchNumber || editingProduct.batchNumber,
       expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : editingProduct.expiryDate,
       invoiceNumber: formData.invoiceNumber || editingProduct.invoiceNumber,
-      costPrice: parseFloat(formData.costPrice) || 0,
-      sellingPrice: enforceMinimumSellingPrice(parseFloat(formData.sellingPrice) || 0, parseFloat(formData.costPrice) || 0),
+      invoicePrice: invoicePrice || undefined,
+      supplierDiscountPercent: supplierDiscountPercent || undefined,
+      vatRate: vatRate || 0,
+      otherCharges: otherCharges || undefined,
+      costPrice: costPrice,
+      sellingPrice: enforceMinimumSellingPrice(sellingPrice, pricingInputs),
       currentStock: totalUnits,
       minStockLevel: parseInt(formData.minStockLevel) || 10,
       barcode: formData.barcode || editingProduct.barcode,
@@ -333,6 +400,10 @@ const Inventory: React.FC = () => {
       batchNumber: product.batchNumber,
       expiryDate: product.expiryDate ? product.expiryDate.toISOString().split('T')[0] : '',
       invoiceNumber: product.invoiceNumber || '',
+      invoicePrice: product.invoicePrice?.toString() || '',
+      supplierDiscountPercent: product.supplierDiscountPercent?.toString() || '0',
+      vatRate: product.vatRate?.toString() || '0',
+      otherCharges: product.otherCharges?.toString() || '0',
       costPrice: product.costPrice.toString(),
       sellingPrice: product.sellingPrice.toString(),
       currentStock: product.currentStock.toString(),
@@ -437,7 +508,13 @@ const Inventory: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
                 {canManagePricing && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                  <>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount %</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VAT %</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
+                  </>
                 )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -447,7 +524,7 @@ const Inventory: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredProducts.map((product) => {
+              {paginatedProducts.map((product) => {
                 const daysToExpiry = Math.ceil((product.expiryDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
                 const isLowStock = product.currentStock <= product.minStockLevel;
                 const isExpiringSoon = daysToExpiry <= 30 && daysToExpiry > 0;
@@ -471,10 +548,29 @@ const Inventory: React.FC = () => {
                       <div className="text-sm text-gray-500">Min: {product.minStockLevel}</div>
                     </td>
                     {canManagePricing && (
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{formatKES(product.sellingPrice)}</div>
-                      <div className="text-sm text-gray-500">Cost: {formatKES(product.costPrice)}</div>
-                    </td>
+                      <>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {product.invoicePrice ? formatKES(product.invoicePrice) : '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {product.supplierDiscountPercent ? `${product.supplierDiscountPercent}%` : '0%'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {product.vatRate ? `${product.vatRate}%` : '0%'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{formatKES(product.costPrice)}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{formatKES(product.sellingPrice)}</div>
+                        </td>
+                      </>
                     )}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
@@ -512,6 +608,7 @@ const Inventory: React.FC = () => {
                           <button
                             onClick={() => startEdit(product)}
                             className="text-indigo-600 hover:text-indigo-900"
+                            title="Edit product"
                           >
                             <Edit className="h-4 w-4" />
                           </button>
@@ -519,6 +616,7 @@ const Inventory: React.FC = () => {
                           <button
                             onClick={() => handleDeleteProduct(product.id)}
                             className="text-red-600 hover:text-red-900"
+                            title="Delete product"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -531,6 +629,14 @@ const Inventory: React.FC = () => {
               })}
             </tbody>
           </table>
+
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredProducts.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={goToPage}
+            itemName="products"
+          />
         </div>
       </div>
 
@@ -608,6 +714,53 @@ const Inventory: React.FC = () => {
 
                 {canManagePricing && (
                   <>
+                    <div className="col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-blue-900 mb-3">Pricing Calculation</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Price (KES)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={formData.invoicePrice}
+                            onChange={(e) => setFormData({ ...formData, invoicePrice: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Original price from supplier"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Discount (%)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={formData.supplierDiscountPercent}
+                            onChange={(e) => setFormData({ ...formData, supplierDiscountPercent: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <VATRateInput
+                          value={formData.vatRate}
+                          onChange={(value) => setFormData({ ...formData, vatRate: value })}
+                        />
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Other Charges (KES)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={formData.otherCharges}
+                            onChange={(e) => setFormData({ ...formData, otherCharges: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Shipping, handling, etc."
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-2">
+                        Net Cost = (Invoice Price - Supplier Discount) + VAT + Other Charges
+                      </p>
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price (KES)</label>
                       <input
@@ -623,21 +776,29 @@ const Inventory: React.FC = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none"
                         style={{ MozAppearance: 'textfield' }}
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Use this if not using invoice-based pricing above
+                      </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (KES)</label>
                       <input
                         type="number"
                         step="0.01"
-                        min={formData.costPrice ? getMinimumSellingPrice(parseFloat(formData.costPrice)).toString() : "0"}
                         value={formData.sellingPrice}
                         onChange={(e) => {
                           const value = parseFloat(e.target.value) || 0;
-                          const costPrice = parseFloat(formData.costPrice) || 0;
-                          const minPrice = getMinimumSellingPrice(costPrice);
+                          const pricingInputs = {
+                            invoicePrice: parseFloat(formData.invoicePrice) || undefined,
+                            supplierDiscountPercent: parseFloat(formData.supplierDiscountPercent) || undefined,
+                            vatRate: parseFloat(formData.vatRate) || 0,
+                            otherCharges: parseFloat(formData.otherCharges) || undefined,
+                            costPrice: parseFloat(formData.costPrice) || 0
+                          };
+                          const minPrice = getMinimumSellingPrice(pricingInputs);
 
-                          if (value < minPrice && costPrice > 0) {
-                            showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minPrice)} (1.33 × cost price)`, type: 'error' });
+                          if (value < minPrice && (pricingInputs.costPrice > 0 || pricingInputs.invoicePrice)) {
+                            showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minPrice)} (1.33 × net cost)`, type: 'error' });
                             return;
                           }
 
@@ -645,9 +806,15 @@ const Inventory: React.FC = () => {
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
-                      {formData.costPrice && (
+                      {(formData.costPrice || formData.invoicePrice) && (
                         <p className="text-xs text-gray-500 mt-1">
-                          Minimum: {formatKES(getMinimumSellingPrice(parseFloat(formData.costPrice)))}
+                          Minimum: {formatKES(getMinimumSellingPrice({
+                            invoicePrice: parseFloat(formData.invoicePrice) || undefined,
+                            supplierDiscountPercent: parseFloat(formData.supplierDiscountPercent) || undefined,
+                            vatRate: parseFloat(formData.vatRate) || 0,
+                            otherCharges: parseFloat(formData.otherCharges) || undefined,
+                            costPrice: parseFloat(formData.costPrice) || 0
+                          }))}
                         </p>
                       )}
                     </div>
@@ -775,6 +942,53 @@ const Inventory: React.FC = () => {
 
                 {canManagePricing && (
                   <>
+                    <div className="col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-blue-900 mb-3">Pricing Calculation</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Price (KES)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={formData.invoicePrice}
+                            onChange={(e) => setFormData({ ...formData, invoicePrice: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Original price from supplier"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Discount (%)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={formData.supplierDiscountPercent}
+                            onChange={(e) => setFormData({ ...formData, supplierDiscountPercent: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <VATRateInput
+                          value={formData.vatRate}
+                          onChange={(value) => setFormData({ ...formData, vatRate: value })}
+                        />
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Other Charges (KES)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={formData.otherCharges}
+                            onChange={(e) => setFormData({ ...formData, otherCharges: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Shipping, handling, etc."
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-2">
+                        Net Cost = (Invoice Price - Supplier Discount) + VAT + Other Charges
+                      </p>
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price (KES)</label>
                       <input
@@ -784,21 +998,29 @@ const Inventory: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Use this if not using invoice-based pricing above
+                      </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (KES)</label>
                       <input
                         type="number"
                         step="0.1"
-                        min={formData.costPrice ? getMinimumSellingPrice(parseFloat(formData.costPrice)).toString() : "0"}
                         value={formData.sellingPrice}
                         onChange={(e) => {
                           const value = parseFloat(e.target.value) || 0;
-                          const costPrice = parseFloat(formData.costPrice) || 0;
-                          const minPrice = getMinimumSellingPrice(costPrice);
+                          const pricingInputs = {
+                            invoicePrice: parseFloat(formData.invoicePrice) || undefined,
+                            supplierDiscountPercent: parseFloat(formData.supplierDiscountPercent) || undefined,
+                            vatRate: parseFloat(formData.vatRate) || 0,
+                            otherCharges: parseFloat(formData.otherCharges) || undefined,
+                            costPrice: parseFloat(formData.costPrice) || 0
+                          };
+                          const minPrice = getMinimumSellingPrice(pricingInputs);
 
-                          if (value < minPrice && costPrice > 0) {
-                            showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minPrice)} (1.33 × cost price)`, type: 'error' });
+                          if (value < minPrice && (pricingInputs.costPrice > 0 || pricingInputs.invoicePrice)) {
+                            showAlert({ title: 'Inventory', message: `Selling price cannot be less than ${formatKES(minPrice)} (1.33 × net cost)`, type: 'error' });
                             return;
                           }
 
@@ -806,9 +1028,15 @@ const Inventory: React.FC = () => {
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
-                      {formData.costPrice && (
+                      {(formData.costPrice || formData.invoicePrice) && (
                         <p className="text-xs text-gray-500 mt-1">
-                          Minimum: {formatKES(getMinimumSellingPrice(parseFloat(formData.costPrice)))}
+                          Minimum: {formatKES(getMinimumSellingPrice({
+                            invoicePrice: parseFloat(formData.invoicePrice) || undefined,
+                            supplierDiscountPercent: parseFloat(formData.supplierDiscountPercent) || undefined,
+                            vatRate: parseFloat(formData.vatRate) || 0,
+                            otherCharges: parseFloat(formData.otherCharges) || undefined,
+                            costPrice: parseFloat(formData.costPrice) || 0
+                          }))}
                         </p>
                       )}
                     </div>

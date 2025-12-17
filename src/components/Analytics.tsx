@@ -12,10 +12,12 @@ import { useApp } from '../contexts/AppContext';
 import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 import SalesChart from './SalesChart';
+import { usePageRefresh } from '../hooks/usePageRefresh';
 
 const Analytics: React.FC = () => {
   const { sales, products, salesHistory } = useApp();
   const { showAlert } = useAlert();
+  usePageRefresh('analytics', { refreshOnMount: true, staleTime: 30000 });
   const [dateRange, setDateRange] = useState('7days');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [salesPeriod, setSalesPeriod] = useState<'day' | 'week' | 'month' | 'year'>('week');

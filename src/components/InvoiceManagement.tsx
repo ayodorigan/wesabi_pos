@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, FileText, Trash2, Eye, Package, Edit, Upload } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Search, FileText, Eye, Package, Upload, ArrowUp, ArrowDown, RotateCcw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../lib/supabase';
 import { Invoice, InvoiceItem } from '../types';
-import { formatKES, calculateSellingPrice } from '../utils/currency';
+import { formatKES, calculateSellingPrice, calculateNetCost } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
+import VATRateInput from './VATRateInput';
 import { useApp } from '../contexts/AppContext';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
+import { useAutoRefresh } from '../contexts/DataRefreshContext';
 
 const InvoiceManagement: React.FC = () => {
   const { user, canDeleteProducts } = useAuth();
@@ -19,6 +23,7 @@ const InvoiceManagement: React.FC = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const [invoiceData, setInvoiceData] = useState({
     invoiceNumber: '',
@@ -27,12 +32,17 @@ const InvoiceManagement: React.FC = () => {
   });
 
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
+  const [savingProgress, setSavingProgress] = useState<{ current: number; total: number; message: string } | null>(null);
   const [currentItem, setCurrentItem] = useState({
     productName: '',
     category: '',
     batchNumber: '',
     expiryDate: '',
     quantity: '',
+    invoicePrice: '',
+    supplierDiscountPercent: '0',
+    vatRate: '0',
+    otherCharges: '0',
     costPrice: '',
     sellingPrice: '',
     barcode: '',
@@ -40,9 +50,15 @@ const InvoiceManagement: React.FC = () => {
 
   const medicineNames = medicineTemplates.map(med => med.name);
 
+  const loadInvoicesCallback = useCallback(() => {
+    loadInvoices();
+  }, [user]);
+
   useEffect(() => {
     loadInvoices();
   }, [user]);
+
+  useAutoRefresh('invoices', loadInvoicesCallback);
 
   const loadInvoices = async () => {
     setLoading(true);
@@ -80,6 +96,10 @@ const InvoiceManagement: React.FC = () => {
               batchNumber: item.batch_number,
               expiryDate: new Date(item.expiry_date),
               quantity: item.quantity,
+              invoicePrice: item.invoice_price ? parseFloat(item.invoice_price) : undefined,
+              supplierDiscountPercent: item.supplier_discount_percent ? parseFloat(item.supplier_discount_percent) : undefined,
+              vatRate: item.vat_rate ? parseFloat(item.vat_rate) : undefined,
+              otherCharges: item.other_charges ? parseFloat(item.other_charges) : undefined,
               costPrice: parseFloat(item.cost_price),
               sellingPrice: parseFloat(item.selling_price),
               totalCost: parseFloat(item.total_cost),
@@ -115,20 +135,52 @@ const InvoiceManagement: React.FC = () => {
     }
   };
 
-  const handleCostPriceChange = (value: string) => {
-    const costPrice = parseFloat(value) || 0;
-    const autoSellingPrice = calculateSellingPrice(costPrice);
+  const handlePricingChange = (field: string, value: string) => {
+    setCurrentItem(prev => {
+      const updated = { ...prev, [field]: value };
 
-    setCurrentItem(prev => ({
-      ...prev,
-      costPrice: value,
-      sellingPrice: autoSellingPrice.toString()
-    }));
+      const invoicePrice = parseFloat(updated.invoicePrice) || 0;
+      const supplierDiscountPercent = parseFloat(updated.supplierDiscountPercent) || 0;
+      const vatRate = parseFloat(updated.vatRate) || 0;
+      const otherCharges = parseFloat(updated.otherCharges) || 0;
+      const costPrice = parseFloat(updated.costPrice) || 0;
+
+      const pricingInputs = {
+        invoicePrice: invoicePrice || undefined,
+        supplierDiscountPercent: supplierDiscountPercent || undefined,
+        vatRate: vatRate || 0,
+        otherCharges: otherCharges || undefined,
+        costPrice: costPrice
+      };
+
+      if (invoicePrice > 0) {
+        const calculatedCostPrice = calculateNetCost(pricingInputs);
+        const calculatedSellingPrice = calculateSellingPrice(pricingInputs);
+        return {
+          ...updated,
+          costPrice: calculatedCostPrice.toString(),
+          sellingPrice: calculatedSellingPrice.toString()
+        };
+      } else if (field === 'costPrice' && costPrice > 0) {
+        const calculatedSellingPrice = calculateSellingPrice(costPrice);
+        return {
+          ...updated,
+          sellingPrice: calculatedSellingPrice.toString()
+        };
+      }
+
+      return updated;
+    });
   };
 
   const addItemToInvoice = () => {
-    if (!currentItem.productName || !currentItem.quantity || !currentItem.costPrice) {
-      showAlert({ title: 'Invoice Management', message: 'Please fill in all required fields for the item', type: 'error' });
+    if (!currentItem.productName || !currentItem.quantity) {
+      showAlert({ title: 'Invoice Management', message: 'Please fill in product name and quantity', type: 'error' });
+      return;
+    }
+
+    if (!currentItem.invoicePrice && !currentItem.costPrice) {
+      showAlert({ title: 'Invoice Management', message: 'Please fill in either Invoice Price or Cost Price', type: 'error' });
       return;
     }
 
@@ -143,10 +195,14 @@ const InvoiceManagement: React.FC = () => {
       batchNumber: currentItem.batchNumber || '',
       expiryDate: currentItem.expiryDate ? new Date(currentItem.expiryDate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       quantity,
+      invoicePrice: parseFloat(currentItem.invoicePrice) || undefined,
+      supplierDiscountPercent: parseFloat(currentItem.supplierDiscountPercent) || undefined,
+      vatRate: parseFloat(currentItem.vatRate) || undefined,
+      otherCharges: parseFloat(currentItem.otherCharges) || undefined,
       costPrice,
       sellingPrice,
       totalCost,
-      barcode: currentItem.barcode || `${Date.now()}`,
+      barcode: currentItem.barcode || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     };
 
     setInvoiceItems([newItem, ...invoiceItems]);
@@ -157,6 +213,10 @@ const InvoiceManagement: React.FC = () => {
       batchNumber: '',
       expiryDate: '',
       quantity: '',
+      invoicePrice: '',
+      supplierDiscountPercent: '0',
+      vatRate: '0',
+      otherCharges: '0',
       costPrice: '',
       sellingPrice: '',
       barcode: '',
@@ -181,7 +241,10 @@ const InvoiceManagement: React.FC = () => {
     if (!user || !supabase) return;
 
     setLoading(true);
+    setSavingProgress({ current: 0, total: invoiceItems.length + 2, message: 'Creating invoice...' });
+
     let invoiceId: string | null = null;
+    const processedProducts: Array<{ id: string; originalStock: number }> = [];
 
     try {
       const totalAmount = invoiceItems.reduce((sum, item) => sum + item.totalCost, 0);
@@ -202,76 +265,123 @@ const InvoiceManagement: React.FC = () => {
       if (invoiceError) throw invoiceError;
       invoiceId = invoice.id;
 
-      const itemPromises = invoiceItems.map(async (item) => {
-        try {
-          const { data: existingProduct } = await supabase
+      setSavingProgress({ current: 1, total: invoiceItems.length + 2, message: 'Processing products...' });
+
+      const invoiceItemsToInsert: Array<any> = [];
+      let processedCount = 0;
+
+      for (const item of invoiceItems) {
+        processedCount++;
+        setSavingProgress({
+          current: processedCount + 1,
+          total: invoiceItems.length + 2,
+          message: `Processing ${item.productName} (${processedCount}/${invoiceItems.length})...`
+        });
+
+        const { data: existingProduct } = await supabase
+          .from('products')
+          .select('*')
+          .eq('name', item.productName)
+          .eq('batch_number', item.batchNumber)
+          .maybeSingle();
+
+        let productId = existingProduct?.id;
+
+        if (existingProduct) {
+          processedProducts.push({
+            id: existingProduct.id,
+            originalStock: existingProduct.current_stock
+          });
+
+          const { error: updateError } = await supabase
             .from('products')
-            .select('*')
-            .eq('name', item.productName)
-            .eq('batch_number', item.batchNumber)
-            .maybeSingle();
-
-          let productId = existingProduct?.id;
-
-          if (existingProduct) {
-            const { error: updateError } = await supabase
-              .from('products')
-              .update({
-                current_stock: existingProduct.current_stock + item.quantity,
-                cost_price: item.costPrice,
-                selling_price: item.sellingPrice,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', existingProduct.id);
-
-            if (updateError) throw updateError;
-          } else {
-            const { data: newProduct, error: productError } = await supabase
-              .from('products')
-              .insert({
-                name: item.productName,
-                category: item.category,
-                supplier: invoiceData.supplier,
-                batch_number: item.batchNumber,
-                expiry_date: item.expiryDate.toISOString().split('T')[0],
-                cost_price: item.costPrice,
-                selling_price: item.sellingPrice,
-                current_stock: item.quantity,
-                min_stock_level: 10,
-                barcode: item.barcode,
-                invoice_number: invoiceData.invoiceNumber,
-              })
-              .select()
-              .single();
-
-            if (productError) throw productError;
-            productId = newProduct.id;
-          }
-
-          const { error: itemError } = await supabase
-            .from('invoice_items')
-            .insert({
-              invoice_id: invoiceId,
-              product_id: productId,
-              product_name: item.productName,
-              category: item.category,
-              batch_number: item.batchNumber,
-              expiry_date: item.expiryDate.toISOString().split('T')[0],
-              quantity: item.quantity,
+            .update({
+              current_stock: existingProduct.current_stock + item.quantity,
               cost_price: item.costPrice,
               selling_price: item.sellingPrice,
-              total_cost: item.totalCost,
-              barcode: item.barcode,
-            });
+              invoice_price: item.invoicePrice,
+              supplier_discount_percent: item.supplierDiscountPercent,
+              vat_rate: item.vatRate,
+              other_charges: item.otherCharges,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingProduct.id);
 
-          if (itemError) throw itemError;
-        } catch (itemError) {
-          console.error(`Error processing item ${item.productName}:`, itemError);
-          throw itemError;
+          if (updateError) {
+            console.error(`Error updating product ${item.productName}:`, updateError);
+            throw new Error(`Failed to update product ${item.productName}: ${updateError.message}`);
+          }
+        } else {
+          const { data: newProduct, error: productError } = await supabase
+            .from('products')
+            .insert({
+              name: item.productName,
+              category: item.category,
+              supplier: invoiceData.supplier,
+              batch_number: item.batchNumber,
+              expiry_date: item.expiryDate.toISOString().split('T')[0],
+              invoice_price: item.invoicePrice,
+              supplier_discount_percent: item.supplierDiscountPercent,
+              vat_rate: item.vatRate,
+              other_charges: item.otherCharges,
+              cost_price: item.costPrice,
+              selling_price: item.sellingPrice,
+              current_stock: item.quantity,
+              min_stock_level: 10,
+              barcode: item.barcode,
+              invoice_number: invoiceData.invoiceNumber,
+            })
+            .select()
+            .single();
+
+          if (productError) {
+            console.error(`Error creating product ${item.productName}:`, productError);
+            throw new Error(`Failed to create product ${item.productName}: ${productError.message}`);
+          }
+
+          productId = newProduct.id;
+          processedProducts.push({ id: newProduct.id, originalStock: 0 });
         }
+
+        invoiceItemsToInsert.push({
+          invoice_id: invoiceId,
+          product_id: productId,
+          product_name: item.productName,
+          category: item.category,
+          batch_number: item.batchNumber,
+          expiry_date: item.expiryDate.toISOString().split('T')[0],
+          quantity: item.quantity,
+          invoice_price: item.invoicePrice,
+          supplier_discount_percent: item.supplierDiscountPercent,
+          vat_rate: item.vatRate,
+          other_charges: item.otherCharges,
+          cost_price: item.costPrice,
+          selling_price: item.sellingPrice,
+          total_cost: item.totalCost,
+          barcode: item.barcode,
+        });
+      }
+
+      setSavingProgress({
+        current: invoiceItems.length + 1,
+        total: invoiceItems.length + 2,
+        message: 'Saving invoice items...'
       });
 
-      await Promise.all(itemPromises);
+      const { error: batchInsertError } = await supabase
+        .from('invoice_items')
+        .insert(invoiceItemsToInsert);
+
+      if (batchInsertError) {
+        console.error('Error batch inserting invoice items:', batchInsertError);
+        throw new Error(`Failed to save invoice items: ${batchInsertError.message}`);
+      }
+
+      setSavingProgress({
+        current: invoiceItems.length + 2,
+        total: invoiceItems.length + 2,
+        message: 'Finalizing...'
+      });
 
       await refreshData();
       await loadInvoices();
@@ -283,9 +393,12 @@ const InvoiceManagement: React.FC = () => {
 
       resetForm();
       setShowAddForm(false);
+      setSavingProgress(null);
       showAlert({ title: 'Invoice Management', message: 'Invoice saved successfully! Inventory updated.', type: 'success' });
     } catch (error: any) {
       console.error('Error saving invoice:', error);
+
+      setSavingProgress({ current: 0, total: 1, message: 'Rolling back changes...' });
 
       if (invoiceId) {
         try {
@@ -295,42 +408,117 @@ const InvoiceManagement: React.FC = () => {
         }
       }
 
-      showAlert({ title: 'Invoice Management', message: getErrorMessage(error), type: 'error' });
+      for (const product of processedProducts) {
+        try {
+          await supabase
+            .from('products')
+            .update({ current_stock: product.originalStock })
+            .eq('id', product.id);
+        } catch (rollbackError) {
+          console.error('Error rolling back product stock:', rollbackError);
+        }
+      }
+
+      setSavingProgress(null);
+      showAlert({
+        title: 'Invoice Management',
+        message: getErrorMessage(error) || 'Failed to save invoice. Changes have been rolled back.',
+        type: 'error'
+      });
     } finally {
       setLoading(false);
+      setSavingProgress(null);
     }
   };
 
-  const deleteInvoice = async (invoiceId: string) => {
-    const invoiceToDelete = invoices.find(inv => inv.id === invoiceId);
-
+  const createReversal = async (invoice: Invoice) => {
     showAlert({
-      title: 'Delete Invoice',
-      message: 'Are you sure you want to delete this invoice? This will NOT reverse inventory changes.',
+      title: 'Create Invoice Reversal',
+      message: `Create a reversal for invoice ${invoice.invoiceNumber}? This will remove the items from inventory and create an audit record.`,
       type: 'confirm',
-      confirmText: 'Delete',
+      confirmText: 'Create Reversal',
       onConfirm: async () => {
         setLoading(true);
         try {
-          if (!supabase) return;
+          if (!supabase || !user) return;
 
-          const { error } = await supabase
-            .from('invoices')
-            .delete()
-            .eq('id', invoiceId);
+          const reversalNumber = `REV-${invoice.invoiceNumber}-${Date.now()}`;
 
-          if (error) throw error;
+          const { data: reversal, error: reversalError } = await supabase
+            .from('invoice_reversals')
+            .insert({
+              original_invoice_id: invoice.id,
+              reversal_number: reversalNumber,
+              reversal_type: 'purchase',
+              reversal_date: new Date().toISOString().split('T')[0],
+              total_amount: invoice.totalAmount,
+              reason: 'Invoice reversal',
+              user_id: user.user_id,
+              user_name: user.name,
+            })
+            .select()
+            .single();
 
-          // Log activity
+          if (reversalError) throw reversalError;
+
+          for (const item of invoice.items) {
+            const { data: product } = await supabase
+              .from('products')
+              .select('*')
+              .eq('name', item.productName)
+              .eq('batch_number', item.batchNumber)
+              .maybeSingle();
+
+            if (product) {
+              const newStock = product.current_stock - item.quantity;
+              if (newStock < 0) {
+                throw new Error(`Insufficient stock for ${item.productName}. Available: ${product.current_stock}, Required: ${item.quantity}`);
+              }
+
+              const { error: updateError } = await supabase
+                .from('products')
+                .update({
+                  current_stock: newStock,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', product.id);
+
+              if (updateError) throw updateError;
+            }
+
+            const { error: itemError } = await supabase
+              .from('invoice_reversal_items')
+              .insert({
+                reversal_id: reversal.id,
+                original_invoice_item_id: item.id,
+                product_name: item.productName,
+                category: item.category,
+                batch_number: item.batchNumber,
+                expiry_date: item.expiryDate.toISOString().split('T')[0],
+                quantity: item.quantity,
+                invoice_price: item.invoicePrice,
+                supplier_discount_percent: item.supplierDiscountPercent,
+                vat_rate: item.vatRate,
+                other_charges: item.otherCharges,
+                cost_price: item.costPrice,
+                selling_price: item.sellingPrice,
+                total_cost: item.totalCost,
+                barcode: item.barcode,
+              });
+
+            if (itemError) throw itemError;
+          }
+
           await logActivity(
-            'INVOICE_DELETED',
-            `Deleted invoice ${invoiceToDelete?.invoiceNumber || invoiceId} - Supplier: ${invoiceToDelete?.supplier || 'Unknown'}`
+            'INVOICE_REVERSED',
+            `Created reversal ${reversalNumber} for invoice ${invoice.invoiceNumber} - Total: ${formatKES(invoice.totalAmount)}`
           );
 
+          await refreshData();
           await loadInvoices();
-          showAlert({ title: 'Invoice Management', message: 'Invoice deleted successfully', type: 'success' });
+          showAlert({ title: 'Invoice Management', message: 'Invoice reversal created successfully! Inventory has been adjusted.', type: 'success' });
         } catch (error: any) {
-          console.error('Error deleting invoice:', error);
+          console.error('Error creating reversal:', error);
           showAlert({ title: 'Invoice Management', message: getErrorMessage(error), type: 'error' });
         } finally {
           setLoading(false);
@@ -358,17 +546,20 @@ const InvoiceManagement: React.FC = () => {
         return;
       }
 
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, ''));
 
-      const requiredHeaders = ['productname', 'category', 'batchnumber', 'expirydate', 'quantity', 'costprice'];
+      const requiredHeaders = ['productname', 'category', 'batchnumber', 'expirydate', 'quantity'];
       const hasAllHeaders = requiredHeaders.every(h => headers.includes(h));
 
       if (!hasAllHeaders) {
-        showAlert({ title: 'Invoice Management', message: 'CSV must have columns: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice', type: 'error' });
+        showAlert({ title: 'Invoice Management', message: 'CSV must have columns: ProductName, Category, BatchNumber, ExpiryDate, Quantity, and either InvoicePrice or CostPrice. Optional: InvoiceNumber, Supplier, InvoiceDate', type: 'error' });
         return;
       }
 
       const items: InvoiceItem[] = [];
+      let extractedInvoiceNumber = '';
+      let extractedSupplier = '';
+      let extractedInvoiceDate = '';
 
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map(v => v.trim());
@@ -378,24 +569,89 @@ const InvoiceManagement: React.FC = () => {
           row[header] = values[index] || '';
         });
 
-        if (!row.productname || !row.quantity || !row.costprice) continue;
+        if (!row.productname || !row.quantity) continue;
+        if (!row.invoiceprice && !row.costprice) continue;
 
+        if (i === 1) {
+          extractedInvoiceNumber = row.invoicenumber || row.invoice_number || '';
+          extractedSupplier = row.supplier || '';
+          extractedInvoiceDate = row.invoicedate || row.invoice_date || '';
+        }
+
+        const invoicePrice = parseFloat(row.invoiceprice) || 0;
+        const supplierDiscountPercent = parseFloat(row.supplierdiscountpercent) || 0;
+        const vatRate = parseFloat(row.vatrate) || 0;
+        const otherCharges = parseFloat(row.othercharges) || 0;
         const costPrice = parseFloat(row.costprice) || 0;
+
+        const pricingInputs = {
+          invoicePrice: invoicePrice || undefined,
+          supplierDiscountPercent: supplierDiscountPercent || undefined,
+          vatRate: vatRate || 0,
+          otherCharges: otherCharges || undefined,
+          costPrice: costPrice
+        };
+
+        const calculatedCostPrice = invoicePrice ? calculateNetCost(pricingInputs) : costPrice;
+        const sellingPrice = calculateSellingPrice(pricingInputs);
+
         items.push({
           productName: row.productname,
           category: row.category || 'General',
           batchNumber: row.batchnumber || '',
           expiryDate: row.expirydate ? new Date(row.expirydate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
           quantity: parseInt(row.quantity) || 0,
-          costPrice,
-          sellingPrice: calculateSellingPrice(costPrice),
-          totalCost: (parseInt(row.quantity) || 0) * costPrice,
+          invoicePrice: invoicePrice || undefined,
+          supplierDiscountPercent: supplierDiscountPercent || undefined,
+          vatRate: vatRate || undefined,
+          otherCharges: otherCharges || undefined,
+          costPrice: calculatedCostPrice,
+          sellingPrice,
+          totalCost: (parseInt(row.quantity) || 0) * calculatedCostPrice,
           barcode: row.barcode || `${Date.now()}-${i}`,
         });
       }
 
       setInvoiceItems(items);
-      showAlert({ title: 'Invoice Management', message: `Imported ${items.length} items from CSV`, type: 'success' });
+
+      if (extractedInvoiceNumber) {
+        setInvoiceData(prev => ({
+          ...prev,
+          invoiceNumber: extractedInvoiceNumber
+        }));
+      }
+
+      if (extractedSupplier) {
+        setInvoiceData(prev => ({
+          ...prev,
+          supplier: extractedSupplier
+        }));
+      }
+
+      if (extractedInvoiceDate) {
+        try {
+          const parsedDate = new Date(extractedInvoiceDate);
+          if (!isNaN(parsedDate.getTime())) {
+            setInvoiceData(prev => ({
+              ...prev,
+              invoiceDate: parsedDate.toISOString().split('T')[0]
+            }));
+          }
+        } catch (err) {
+          console.error('Invalid date format in CSV:', extractedInvoiceDate);
+        }
+      }
+
+      const metadataInfo = [];
+      if (extractedInvoiceNumber) metadataInfo.push(`Invoice #${extractedInvoiceNumber}`);
+      if (extractedSupplier) metadataInfo.push(`Supplier: ${extractedSupplier}`);
+      if (extractedInvoiceDate) metadataInfo.push(`Date: ${extractedInvoiceDate}`);
+
+      const message = metadataInfo.length > 0
+        ? `Imported ${items.length} items. Auto-filled: ${metadataInfo.join(', ')}`
+        : `Imported ${items.length} items from CSV`;
+
+      showAlert({ title: 'Invoice Management', message, type: 'success' });
     };
 
     reader.readAsText(file);
@@ -415,6 +671,10 @@ const InvoiceManagement: React.FC = () => {
       batchNumber: '',
       expiryDate: '',
       quantity: '',
+      invoicePrice: '',
+      supplierDiscountPercent: '0',
+      vatRate: '0',
+      otherCharges: '0',
       costPrice: '',
       sellingPrice: '',
       barcode: '',
@@ -425,6 +685,23 @@ const InvoiceManagement: React.FC = () => {
     invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     invoice.supplier.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const sortedInvoices = [...filteredInvoices].sort((a, b) => {
+    const dateA = new Date(a.invoiceDate).getTime();
+    const dateB = new Date(b.invoiceDate).getTime();
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+  });
+
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+  };
+
+  const {
+    currentPage,
+    paginatedItems: paginatedInvoices,
+    goToPage,
+    itemsPerPage
+  } = usePagination({ items: sortedInvoices, itemsPerPage: 15 });
 
   return (
     <div className="space-y-6">
@@ -462,7 +739,19 @@ const InvoiceManagement: React.FC = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice #</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={toggleSortOrder}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Date</span>
+                    {sortOrder === 'desc' ? (
+                      <ArrowDown className="h-3 w-3" />
+                    ) : (
+                      <ArrowUp className="h-3 w-3" />
+                    )}
+                  </div>
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Added By</th>
@@ -470,7 +759,7 @@ const InvoiceManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredInvoices.map((invoice) => (
+              {paginatedInvoices.map((invoice) => (
                 <tr key={invoice.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -493,17 +782,17 @@ const InvoiceManagement: React.FC = () => {
                       <button
                         onClick={() => viewInvoice(invoice)}
                         className="text-blue-600 hover:text-blue-800"
-                        title="View"
+                        title="View Invoice"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       {canDeleteProducts() && (
                         <button
-                          onClick={() => deleteInvoice(invoice.id)}
-                          className="text-red-600 hover:text-red-800"
-                          title="Delete"
+                          onClick={() => createReversal(invoice)}
+                          className="text-orange-600 hover:text-orange-800"
+                          title="Create Reversal"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <RotateCcw className="h-4 w-4" />
                         </button>
                       )}
                     </div>
@@ -519,6 +808,14 @@ const InvoiceManagement: React.FC = () => {
               )}
             </tbody>
           </table>
+
+          <Pagination
+            currentPage={currentPage}
+            totalItems={sortedInvoices.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={goToPage}
+            itemName="invoices"
+          />
         </div>
       </div>
 
@@ -556,6 +853,9 @@ const InvoiceManagement: React.FC = () => {
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT %</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
@@ -567,6 +867,9 @@ const InvoiceManagement: React.FC = () => {
                         <td className="px-3 py-2 text-sm">{item.productName}</td>
                         <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
                         <td className="px-3 py-2 text-sm">{item.quantity}</td>
+                        <td className="px-3 py-2 text-sm">{item.invoicePrice ? formatKES(item.invoicePrice) : '-'}</td>
+                        <td className="px-3 py-2 text-sm">{item.supplierDiscountPercent || '0'}%</td>
+                        <td className="px-3 py-2 text-sm">{item.vatRate || '0'}%</td>
                         <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
                         <td className="px-3 py-2 text-sm">{formatKES(item.sellingPrice)}</td>
                         <td className="px-3 py-2 text-sm font-medium">{formatKES(item.totalCost)}</td>
@@ -647,7 +950,7 @@ const InvoiceManagement: React.FC = () => {
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  CSV format: ProductName, Category, BatchNumber, ExpiryDate, Quantity, CostPrice (Selling price auto-calculated as Cost × 1.33)
+                  CSV format: InvoiceNumber, Supplier, InvoiceDate, ProductName, Category, BatchNumber, ExpiryDate, Quantity, InvoicePrice (or CostPrice), SupplierDiscountPercent, VATRate, OtherCharges. Metadata auto-filled from first row.
                 </p>
               </div>
 
@@ -705,13 +1008,54 @@ const InvoiceManagement: React.FC = () => {
                   </div>
 
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Price (KES)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={currentItem.invoicePrice}
+                      onChange={(e) => handlePricingChange('invoicePrice', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="Supplier price"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Discount %</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={currentItem.supplierDiscountPercent}
+                      onChange={(e) => handlePricingChange('supplierDiscountPercent', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <VATRateInput
+                    value={currentItem.vatRate}
+                    onChange={(value) => handlePricingChange('vatRate', value)}
+                  />
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Other Charges (KES)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={currentItem.otherCharges}
+                      onChange={(e) => handlePricingChange('otherCharges', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="Shipping, etc."
+                    />
+                  </div>
+
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price (KES)</label>
                     <input
                       type="number"
                       step="0.01"
                       value={currentItem.costPrice}
-                      onChange={(e) => handleCostPriceChange(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      onChange={(e) => handlePricingChange('costPrice', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-gray-50"
+                      placeholder="Auto-calculated"
                     />
                   </div>
 
@@ -721,8 +1065,9 @@ const InvoiceManagement: React.FC = () => {
                       type="number"
                       step="0.01"
                       value={currentItem.sellingPrice}
-                      onChange={(e) => setCurrentItem({ ...currentItem, sellingPrice: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                      placeholder="Auto-calculated"
                     />
                   </div>
 
@@ -748,6 +1093,9 @@ const InvoiceManagement: React.FC = () => {
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT %</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
@@ -760,6 +1108,9 @@ const InvoiceManagement: React.FC = () => {
                             <td className="px-3 py-2 text-sm">{item.productName}</td>
                             <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
                             <td className="px-3 py-2 text-sm">{item.quantity}</td>
+                            <td className="px-3 py-2 text-sm">{item.invoicePrice ? formatKES(item.invoicePrice) : '-'}</td>
+                            <td className="px-3 py-2 text-sm">{item.supplierDiscountPercent || '0'}%</td>
+                            <td className="px-3 py-2 text-sm">{item.vatRate || '0'}%</td>
                             <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
                             <td className="px-3 py-2 text-sm">{formatKES(item.sellingPrice)}</td>
                             <td className="px-3 py-2 text-sm font-medium">{formatKES(item.totalCost)}</td>
@@ -782,6 +1133,23 @@ const InvoiceManagement: React.FC = () => {
                         </tr>
                       </tbody>
                     </table>
+                  </div>
+                </div>
+              )}
+
+              {savingProgress && (
+                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-blue-900">{savingProgress.message}</span>
+                    <span className="text-sm text-blue-700">
+                      {savingProgress.current}/{savingProgress.total}
+                    </span>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(savingProgress.current / savingProgress.total) * 100}%` }}
+                    ></div>
                   </div>
                 </div>
               )}

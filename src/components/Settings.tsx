@@ -15,6 +15,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import type { UserProfile } from '../contexts/AuthContext';
 import { getErrorMessage } from '../utils/errorMessages';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
 
 const Settings: React.FC = () => {
   const {
@@ -213,6 +215,13 @@ const Settings: React.FC = () => {
 
   const canManageAdmins = user?.role === 'super_admin';
 
+  const {
+    currentPage,
+    paginatedItems: paginatedUsers,
+    goToPage,
+    itemsPerPage
+  } = usePagination({ items: users, itemsPerPage: 20 });
+
   if (!canManageUsers) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -272,7 +281,7 @@ const Settings: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((userItem) => (
+                  {paginatedUsers.map((userItem) => (
                     <tr key={userItem.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -305,6 +314,7 @@ const Settings: React.FC = () => {
                           <button
                             onClick={() => startEdit(userItem)}
                             className="text-indigo-600 hover:text-indigo-900"
+                            title="Edit user"
                           >
                             <Edit className="h-4 w-4" />
                           </button>
@@ -331,6 +341,7 @@ const Settings: React.FC = () => {
                             <button
                               onClick={() => handleDeleteUser(userItem.user_id)}
                               className="text-red-600 hover:text-red-900"
+                              title="Delete user"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -341,6 +352,14 @@ const Settings: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+
+              <Pagination
+                currentPage={currentPage}
+                totalItems={users.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={goToPage}
+                itemName="users"
+              />
             </div>
           )}
         </div>

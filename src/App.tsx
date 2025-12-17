@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
 import { AlertProvider } from './contexts/AlertContext';
+import { DataRefreshProvider } from './contexts/DataRefreshContext';
 import Login from './components/Login';
 import Layout from './components/Layout';
 import LoadingScreen from './components/LoadingScreen';
@@ -13,7 +14,7 @@ import Settings from './components/Settings';
 import StockTake from './components/StockTake';
 import ActivityLogs from './components/ActivityLogs';
 import SalesHistory from './components/SalesHistory';
-import SalesReports from './components/SalesReports';
+import DrugHistory from './components/DrugHistory';
 import Profile from './components/Profile';
 import InvoiceManagement from './components/InvoiceManagement';
 import CreditNotes from './components/CreditNotes';
@@ -127,8 +128,8 @@ const AppContent: React.FC = () => {
         return <ActivityLogs />;
       case 'drugsaleshistory':
         return <SalesHistory />;
-      case 'saleshistory':
-        return <SalesReports />;
+      case 'drughistory':
+        return <DrugHistory />;
       case 'profile':
         return <Profile />;
       default:
@@ -147,9 +148,11 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <AlertProvider>
-        <AppProvider>
-          <AppContent />
-        </AppProvider>
+        <DataRefreshProvider>
+          <AppProvider>
+            <AppContent />
+          </AppProvider>
+        </DataRefreshProvider>
       </AlertProvider>
     </AuthProvider>
   );

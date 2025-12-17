@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Download, Search, Filter, X, RotateCcw, CheckCircle, CheckCheck } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Trash2, Edit2, Download, Search, Filter, X, RotateCcw, CheckCircle, ArrowUp, ArrowDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { AlertDialog } from './AlertDialog';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { usePageRefresh } from '../hooks/usePageRefresh';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './Pagination';
+import { useAutoRefresh } from '../contexts/DataRefreshContext';
 
 interface Product {
   id: string;
@@ -47,6 +51,7 @@ export default function Orders() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchProduct, setSearchProduct] = useState('');
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [newProduct, setNewProduct] = useState({
@@ -74,12 +79,7 @@ export default function Orders() {
     type: 'info'
   });
 
-  useEffect(() => {
-    fetchOrders();
-    fetchProducts();
-  }, []);
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -99,9 +99,9 @@ export default function Orders() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showAlert]);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('products')
@@ -113,7 +113,19 @@ export default function Orders() {
     } catch (error: any) {
       showAlert({ title: 'Error', message: error.message, type: 'error' });
     }
-  };
+  }, [showAlert]);
+
+  usePageRefresh('orders', {
+    refreshOnMount: true,
+    staleTime: 30000
+  });
+
+  useEffect(() => {
+    fetchOrders();
+    fetchProducts();
+  }, [fetchOrders, fetchProducts]);
+
+  useAutoRefresh('orders', fetchOrders);
 
   const loadLowStockItems = async () => {
     try {
@@ -445,13 +457,12 @@ export default function Orders() {
     const tableData = items.map((item, index) => [
       (index + 1).toString(),
       item.product_name,
-      item.current_quantity.toString(),
       item.order_quantity.toString()
     ]);
 
     autoTable(doc, {
       startY: 68,
-      head: [['#', 'Product Name', 'Current Stock', 'Order Quantity']],
+      head: [['#', 'Product Name', 'Order Quantity']],
       body: tableData,
       theme: 'grid',
       headStyles: {
@@ -465,9 +476,8 @@ export default function Orders() {
       },
       columnStyles: {
         0: { cellWidth: 15, halign: 'center' },
-        1: { cellWidth: 95 },
-        2: { cellWidth: 35, halign: 'center' },
-        3: { cellWidth: 40, halign: 'center' }
+        1: { cellWidth: 130 },
+        2: { cellWidth: 40, halign: 'center' }
       },
       margin: { left: 15, right: 15 },
       didDrawPage: (data) => {
@@ -516,22 +526,6 @@ export default function Orders() {
     }
   };
 
-  const markAsProcessed = async (order: Order) => {
-    try {
-      const { error } = await supabase
-        .from('supplier_orders')
-        .update({ status: 'processed' })
-        .eq('id', order.id);
-
-      if (error) throw error;
-
-      showAlert({ title: 'Success', message: `Order ${order.order_number} marked as processed`, type: 'success' });
-      fetchOrders();
-    } catch (error: any) {
-      showAlert({ title: 'Error', message: error.message || 'Failed to mark order as processed', type: 'error' });
-    }
-  };
-
   const markAsCompleted = async (order: Order) => {
     try {
       const { error } = await supabase
@@ -554,6 +548,23 @@ export default function Orders() {
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const sortedOrders = [...filteredOrders].sort((a, b) => {
+    const dateA = new Date(a.created_at).getTime();
+    const dateB = new Date(b.created_at).getTime();
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+  });
+
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+  };
+
+  const {
+    currentPage,
+    paginatedItems: paginatedOrders,
+    goToPage,
+    itemsPerPage
+  } = usePagination({ items: sortedOrders, itemsPerPage: 15 });
 
   const filteredProducts = allProducts.filter(product =>
     product.name.toLowerCase().includes(searchProduct.toLowerCase())
@@ -596,7 +607,6 @@ export default function Orders() {
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
-              <option value="processed">Processed</option>
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </select>
@@ -617,7 +627,19 @@ export default function Orders() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order #</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={toggleSortOrder}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Date</span>
+                      {sortOrder === 'desc' ? (
+                        <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUp className="h-3 w-3" />
+                      )}
+                    </div>
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Items</th>
@@ -625,7 +647,7 @@ export default function Orders() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredOrders.map((order) => (
+                {paginatedOrders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
                       {order.order_number}
@@ -640,7 +662,6 @@ export default function Orders() {
                       <span className={`px-2 py-1 text-xs rounded-full ${
                         order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                         order.status === 'approved' ? 'bg-blue-100 text-blue-800' :
-                        order.status === 'processed' ? 'bg-teal-100 text-teal-800' :
                         order.status === 'completed' ? 'bg-green-100 text-green-800' :
                         'bg-red-100 text-red-800'
                       }`}>
@@ -678,20 +699,6 @@ export default function Orders() {
                         >
                           <Download className="w-5 h-5" />
                         </button>
-                        {order.status !== 'processed' && order.status !== 'completed' && (
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              markAsProcessed(order);
-                            }}
-                            className="text-teal-600 hover:text-teal-800 transition-colors p-1"
-                            title="Mark as Processed"
-                            type="button"
-                          >
-                            <CheckCheck className="w-5 h-5" />
-                          </button>
-                        )}
                         {order.status !== 'completed' && (
                           <button
                             onClick={(e) => {
@@ -706,7 +713,7 @@ export default function Orders() {
                             <CheckCircle className="w-5 h-5" />
                           </button>
                         )}
-                        {(order.status === 'completed' || order.status === 'processed') && (
+                        {order.status === 'completed' && (
                           <button
                             onClick={(e) => {
                               e.preventDefault();
@@ -740,6 +747,14 @@ export default function Orders() {
                 ))}
               </tbody>
             </table>
+
+            <Pagination
+              currentPage={currentPage}
+              totalItems={sortedOrders.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={goToPage}
+              itemName="orders"
+            />
           </div>
         )}
       </div>

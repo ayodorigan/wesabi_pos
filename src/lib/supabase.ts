@@ -1,38 +1,54 @@
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseConfig, config, isProduction, isDevelopment } from '../config/environment';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseConfig = getSupabaseConfig();
 
-// Check if Supabase environment variables are properly configured
+console.log('=== SUPABASE INITIALIZATION ===');
+console.log('Environment:', config.env);
+console.log('Supabase URL:', supabaseConfig.url);
+console.log('Anon Key (first 20 chars):', supabaseConfig.anonKey?.substring(0, 20) + '...');
+
 const isSupabaseConfigured = Boolean(
-  supabaseUrl && 
-  supabaseAnonKey && 
-  supabaseUrl !== 'https://placeholder.supabase.co' && 
-  supabaseAnonKey !== 'placeholder-key' &&
-  supabaseUrl !== 'your-supabase-url' &&
-  supabaseAnonKey !== 'your-supabase-anon-key' &&
-  supabaseUrl.startsWith('https://') &&
-  supabaseUrl.includes('.supabase.co')
+  supabaseConfig.url &&
+  supabaseConfig.anonKey &&
+  supabaseConfig.url !== 'https://placeholder.supabase.co' &&
+  supabaseConfig.anonKey !== 'placeholder-key' &&
+  !supabaseConfig.url.includes('your-') &&
+  !supabaseConfig.anonKey.includes('your-') &&
+  supabaseConfig.url.startsWith('https://') &&
+  supabaseConfig.url.includes('.supabase.co')
 );
 
+console.log('Is Supabase Configured:', isSupabaseConfigured);
+
 if (!isSupabaseConfigured) {
-  console.warn('⚠️  Supabase not configured - Running in demo mode');
-  console.warn('To enable database features:');
-  console.warn('1. Create a .env file in the project root');
-  console.warn('2. Add: VITE_SUPABASE_URL=https://your-project.supabase.co');
-  console.warn('3. Add: VITE_SUPABASE_ANON_KEY=your-anon-key');
-  console.warn('4. Restart the development server');
+  console.error('❌ Supabase not configured properly');
+  console.error('Please check your environment variables in .env.' + config.env);
+  throw new Error('Supabase configuration is required');
 }
 
-// Create Supabase client only if properly configured
-export const supabase = isSupabaseConfigured ? createClient(
-  supabaseUrl!,
-  supabaseAnonKey!,
-  {
+if (isProduction()) {
+  if (supabaseConfig.url.includes('localhost') || supabaseConfig.url.includes('127.0.0.1')) {
+    throw new Error('CRITICAL: Production environment cannot use localhost database!');
   }
-) : null;
+  console.log('🔒 Production database connection initialized');
+} else if (isDevelopment()) {
+  console.log('🔧 Development database connection initialized');
+}
 
-// Export configuration status
+export const supabase = createClient(
+  supabaseConfig.url,
+  supabaseConfig.anonKey,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  }
+);
+
+console.log('✅ Supabase client created successfully');
+
 export const isSupabaseEnabled = isSupabaseConfigured;
 
 // Database types
