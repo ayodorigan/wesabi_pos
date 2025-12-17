@@ -170,6 +170,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
       // Load sales - don't exit early on error
       try {
+        console.log('[SalesHistory] Loading sales data...');
         const { data: salesData, error: salesError } = await supabase
           .from('sales')
           .select(`
@@ -187,9 +188,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           .order('created_at', { ascending: false });
 
         if (salesError) {
-          console.error('Error loading sales:', salesError);
+          console.error('[SalesHistory] Error loading sales:', salesError);
+          console.error('[SalesHistory] Error details:', {
+            message: salesError.message,
+            code: salesError.code,
+            details: salesError.details,
+            hint: salesError.hint
+          });
           hasError = true;
         } else {
+          console.log('[SalesHistory] Sales data loaded:', salesData?.length || 0, 'records');
+          console.log('[SalesHistory] Raw sales data:', salesData);
           formattedSales = (salesData || []).map(sale => ({
           id: sale.id,
           receiptNumber: sale.receipt_number,
@@ -208,10 +217,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           })),
           createdAt: new Date(sale.created_at),
         }));
+          console.log('[SalesHistory] Formatted sales:', formattedSales.length, 'records');
           setSales(formattedSales);
         }
       } catch (error) {
-        console.error('Error in sales loading block:', error);
+        console.error('[SalesHistory] Error in sales loading block:', error);
+        if (error instanceof Error) {
+          console.error('[SalesHistory] Error stack:', error.stack);
+        }
         hasError = true;
       }
 
@@ -302,33 +315,51 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
 
       // Generate sales history from sales data
-      const salesHistoryItems: SalesHistoryItem[] = [];
-      formattedSales.forEach(sale => {
-        sale.items.forEach(item => {
-          const product = formattedProducts.find(p => p.id === item.productId);
-          const costPrice = product?.costPrice || 0;
-          const totalCost = costPrice * item.quantity;
-          const profit = item.totalPrice - totalCost;
+      try {
+        console.log('[SalesHistory] Generating sales history...');
+        console.log('[SalesHistory] formattedSales:', formattedSales.length, 'sales');
+        console.log('[SalesHistory] formattedProducts:', formattedProducts.length, 'products');
 
-          salesHistoryItems.push({
-            id: `${sale.id}-${item.productId}`,
-            productId: item.productId,
-            productName: item.productName,
-            quantity: item.quantity,
-            costPrice: costPrice,
-            sellingPrice: item.unitPrice,
-            totalCost: totalCost,
-            totalRevenue: item.totalPrice,
-            profit: profit,
-            paymentMethod: sale.paymentMethod,
-            customerName: sale.customerName,
-            salesPersonName: sale.salesPersonName,
-            receiptNumber: sale.receiptNumber,
-            saleDate: sale.createdAt,
+        const salesHistoryItems: SalesHistoryItem[] = [];
+        formattedSales.forEach(sale => {
+          console.log('[SalesHistory] Processing sale:', sale.id, 'with', sale.items?.length || 0, 'items');
+          sale.items.forEach(item => {
+            const product = formattedProducts.find(p => p.id === item.productId);
+            const costPrice = product?.costPrice || 0;
+            const totalCost = costPrice * item.quantity;
+            const profit = item.totalPrice - totalCost;
+
+            const historyItem = {
+              id: `${sale.id}-${item.productId}`,
+              productId: item.productId,
+              productName: item.productName,
+              quantity: item.quantity,
+              costPrice: costPrice,
+              sellingPrice: item.unitPrice,
+              totalCost: totalCost,
+              totalRevenue: item.totalPrice,
+              profit: profit,
+              paymentMethod: sale.paymentMethod,
+              customerName: sale.customerName,
+              salesPersonName: sale.salesPersonName,
+              receiptNumber: sale.receiptNumber,
+              saleDate: sale.createdAt,
+            };
+            console.log('[SalesHistory] Adding history item:', historyItem);
+            salesHistoryItems.push(historyItem);
           });
         });
-      });
-      setSalesHistory(salesHistoryItems);
+
+        console.log('[SalesHistory] Total sales history items generated:', salesHistoryItems.length);
+        console.log('[SalesHistory] Sales history items:', salesHistoryItems);
+        setSalesHistory(salesHistoryItems);
+        console.log('[SalesHistory] Sales history state updated');
+      } catch (error) {
+        console.error('[SalesHistory] Error generating sales history:', error);
+        if (error instanceof Error) {
+          console.error('[SalesHistory] Error stack:', error.stack);
+        }
+      }
 
       // Update categories and suppliers from loaded data
       const loadedCategories = [...new Set(formattedProducts.map(p => p.category))];

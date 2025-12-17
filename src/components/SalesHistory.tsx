@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   History,
   Download,
@@ -20,9 +20,19 @@ const SalesHistory: React.FC = () => {
   const { user } = useAuth();
   const { showAlert } = useAlert();
   usePageRefresh('drugsaleshistory', { refreshOnMount: true, staleTime: 30000 });
-  
+
+  console.log('[SalesHistory Component] Rendered with salesHistory:', salesHistory?.length || 0, 'items');
+  console.log('[SalesHistory Component] salesHistory data:', salesHistory);
+
+  useEffect(() => {
+    console.log('[SalesHistory Component] salesHistory changed:', {
+      count: salesHistory?.length || 0,
+      data: salesHistory
+    });
+  }, [salesHistory]);
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateRange, setDateRange] = useState('7days');
+  const [dateRange, setDateRange] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -30,7 +40,19 @@ const SalesHistory: React.FC = () => {
 
   // Filter sales history
   const getFilteredHistory = useMemo(() => {
+    console.log('[SalesHistory Filter] Starting filter with:', {
+      salesHistoryCount: salesHistory?.length || 0,
+      searchTerm,
+      paymentFilter,
+      dateRange,
+      startDate,
+      endDate,
+      userRole: user?.role,
+      selectedDate
+    });
+
     let filtered = [...(salesHistory || [])];
+    console.log('[SalesHistory Filter] Initial filtered count:', filtered.length);
 
     // Search filter
     if (searchTerm) {
@@ -39,11 +61,13 @@ const SalesHistory: React.FC = () => {
         item.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.salesPersonName.toLowerCase().includes(searchTerm.toLowerCase())
       );
+      console.log('[SalesHistory Filter] After search filter:', filtered.length);
     }
 
     // Payment method filter
     if (paymentFilter !== 'all') {
       filtered = filtered.filter(item => item.paymentMethod === paymentFilter);
+      console.log('[SalesHistory Filter] After payment filter:', filtered.length);
     }
 
     // Date range filter
@@ -57,6 +81,7 @@ const SalesHistory: React.FC = () => {
         const itemDate = new Date(item.saleDate);
         return itemDate >= selected && itemDate < nextDay;
       });
+      console.log('[SalesHistory Filter] After specific date filter:', filtered.length);
     } else if (dateRange === 'custom' && startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
@@ -66,6 +91,7 @@ const SalesHistory: React.FC = () => {
         const itemDate = new Date(item.saleDate);
         return itemDate >= start && itemDate <= end;
       });
+      console.log('[SalesHistory Filter] After custom date filter:', filtered.length);
     } else if (dateRange !== 'all') {
       const now = new Date();
       const filterDate = new Date();
@@ -85,9 +111,24 @@ const SalesHistory: React.FC = () => {
           break;
       }
 
-      filtered = filtered.filter(item => new Date(item.saleDate) >= filterDate);
+      console.log('[SalesHistory Filter] Filtering by date range:', dateRange, 'filterDate:', filterDate);
+      const beforeFilter = filtered.length;
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.saleDate);
+        const passes = itemDate >= filterDate;
+        if (!passes) {
+          console.log('[SalesHistory Filter] Item filtered out - date too old:', {
+            itemDate,
+            filterDate,
+            productName: item.productName
+          });
+        }
+        return passes;
+      });
+      console.log('[SalesHistory Filter] After date range filter:', filtered.length, '(removed', beforeFilter - filtered.length, 'items)');
     }
 
+    console.log('[SalesHistory Filter] Final filtered count:', filtered.length);
     return filtered;
   }, [salesHistory, searchTerm, paymentFilter, dateRange, startDate, endDate, user, selectedDate]);
 
