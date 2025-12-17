@@ -21,10 +21,7 @@ const SalesHistory: React.FC = () => {
   const { showAlert } = useAlert();
   usePageRefresh('drugsaleshistory', { refreshOnMount: true, staleTime: 30000 });
 
-  console.log('[SalesHistory Component] Rendered');
-  console.log('[SalesHistory Component] - salesHistory:', salesHistory?.length || 0, 'items');
-  console.log('[SalesHistory Component] - loading:', loading);
-  console.log('[SalesHistory Component] - salesHistory array:', salesHistory);
+  console.log('[SalesHistory Component] Rendered with salesHistory:', salesHistory?.length || 0, 'items');
 
   useEffect(() => {
     console.log('[SalesHistory Component] salesHistory changed:', {
@@ -135,11 +132,9 @@ const SalesHistory: React.FC = () => {
   }, [salesHistory, searchTerm, paymentFilter, dateRange, startDate, endDate, user, selectedDate]);
 
   // Calculate summary statistics
-  console.log('[SalesHistory Stats] getFilteredHistory length:', getFilteredHistory.length);
   const totalRevenue = getFilteredHistory.reduce((sum, item) => sum + item.totalRevenue, 0);
   const totalProfit = getFilteredHistory.reduce((sum, item) => sum + item.profit, 0);
   const totalItems = getFilteredHistory.reduce((sum, item) => sum + item.quantity, 0);
-  console.log('[SalesHistory Stats] Calculated stats:', { totalRevenue, totalProfit, totalItems });
 
   const exportReport = () => {
     try {

@@ -74,10 +74,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [stockTakeSessions, setStockTakeSessions] = useState<any[]>([]);
   const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
 
-  useEffect(() => {
-    console.log('[AppContext State] salesHistory state changed:', salesHistory?.length || 0, 'items');
-  }, [salesHistory]);
-
   // Load data from database
   const refreshData = async () => {
     setLoading(true);
@@ -355,10 +351,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         });
 
         console.log('[SalesHistory] Total sales history items generated:', salesHistoryItems.length);
-        console.log('[SalesHistory] Sales history items:', salesHistoryItems);
-        console.log('[SalesHistory] About to call setSalesHistory with:', salesHistoryItems.length, 'items');
         setSalesHistory(salesHistoryItems);
-        console.log('[SalesHistory] setSalesHistory called');
+        console.log('[SalesHistory] Sales history state updated');
       } catch (error) {
         console.error('[SalesHistory] Error generating sales history:', error);
         if (error instanceof Error) {
@@ -400,12 +394,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // Initialize data on mount
   useEffect(() => {
-    refreshData();
+    if (!loading) {
+      refreshData();
+    }
   }, []);
 
   // Refresh data when user changes (sign in/out)
   useEffect(() => {
-    if (user) {
+    if (user && !loading) {
       refreshData();
     }
   }, [user]);
@@ -1231,8 +1227,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       return null;
     }
   };
-
-  console.log('[AppContext Provider] Rendering with salesHistory:', salesHistory?.length || 0, 'items');
 
   return (
     <AppContext.Provider value={{
