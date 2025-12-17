@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   History,
   Download,
@@ -31,7 +31,7 @@ const SalesHistory: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Filter sales history
-  const getFilteredHistory = () => {
+  const getFilteredHistory = useMemo(() => {
     let filtered = [...(salesHistory || [])];
 
     // Search filter
@@ -91,25 +91,23 @@ const SalesHistory: React.FC = () => {
     }
 
     return filtered;
-  };
-
-  const filteredHistory = getFilteredHistory();
+  }, [salesHistory, searchTerm, paymentFilter, dateRange, startDate, endDate, user, selectedDate]);
 
   const {
     currentPage,
     paginatedItems,
     goToPage,
     itemsPerPage
-  } = usePagination({ items: filteredHistory, itemsPerPage: 20 });
+  } = usePagination({ items: getFilteredHistory, itemsPerPage: 20 });
 
   // Calculate summary statistics
-  const totalRevenue = filteredHistory.reduce((sum, item) => sum + item.totalRevenue, 0);
-  const totalProfit = filteredHistory.reduce((sum, item) => sum + item.profit, 0);
-  const totalItems = filteredHistory.reduce((sum, item) => sum + item.quantity, 0);
+  const totalRevenue = getFilteredHistory.reduce((sum, item) => sum + item.totalRevenue, 0);
+  const totalProfit = getFilteredHistory.reduce((sum, item) => sum + item.profit, 0);
+  const totalItems = getFilteredHistory.reduce((sum, item) => sum + item.quantity, 0);
 
   const exportReport = () => {
     try {
-      if (filteredHistory.length === 0) {
+      if (getFilteredHistory.length === 0) {
         showAlert({ title: 'Sales History', message: 'No sales history to export', type: 'warning' });
         return;
       }
@@ -135,7 +133,7 @@ const SalesHistory: React.FC = () => {
   <h1>WESABI PHARMACY - DRUG SALES HISTORY</h1>
   <div class="summary">
     <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
-    <p><strong>Total Records:</strong> ${filteredHistory.length}</p>
+    <p><strong>Total Records:</strong> ${getFilteredHistory.length}</p>
     <p><strong>Total Revenue:</strong> ${formatKES(totalRevenue)}</p>
     <p><strong>Total Profit:</strong> ${formatKES(totalProfit)}</p>
   </div>
@@ -152,7 +150,7 @@ const SalesHistory: React.FC = () => {
       <th>Receipt</th>
       <th>Sales Person</th>
     </tr>
-    ${filteredHistory.map(item => `
+    ${getFilteredHistory.map(item => `
     <tr>
       <td>${item.saleDate.toLocaleDateString('en-KE')}</td>
       <td>${item.productName}</td>
@@ -302,7 +300,7 @@ const SalesHistory: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredHistory.length === 0 ? (
+              {getFilteredHistory.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                     No sales history found
@@ -351,7 +349,7 @@ const SalesHistory: React.FC = () => {
         </div>
         <Pagination
           currentPage={currentPage}
-          totalItems={filteredHistory.length}
+          totalItems={getFilteredHistory.length}
           itemsPerPage={itemsPerPage}
           onPageChange={goToPage}
           itemName="sales records"

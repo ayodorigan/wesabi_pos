@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Clock,
   User,
@@ -19,18 +19,26 @@ const ActivityLogs: React.FC = () => {
   const [userFilter, setUserFilter] = useState('all');
 
   // Get unique actions and users for filters
-  const uniqueActions = Array.from(new Set((activityLogs || []).map(log => log.action))).sort();
-  const uniqueUsers = Array.from(new Set((activityLogs || []).map(log => log.userName))).sort();
+  const uniqueActions = useMemo(() =>
+    Array.from(new Set((activityLogs || []).map(log => log.action))).sort(),
+    [activityLogs]
+  );
+  const uniqueUsers = useMemo(() =>
+    Array.from(new Set((activityLogs || []).map(log => log.userName))).sort(),
+    [activityLogs]
+  );
 
   // Filter logs
-  const filteredLogs = (activityLogs || []).filter(log => {
-    const matchesSearch = log.details.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         log.action.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesAction = actionFilter === 'all' || log.action === actionFilter;
-    const matchesUser = userFilter === 'all' || log.userName === userFilter;
+  const filteredLogs = useMemo(() => {
+    return (activityLogs || []).filter(log => {
+      const matchesSearch = log.details.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           log.action.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesAction = actionFilter === 'all' || log.action === actionFilter;
+      const matchesUser = userFilter === 'all' || log.userName === userFilter;
 
-    return matchesSearch && matchesAction && matchesUser;
-  });
+      return matchesSearch && matchesAction && matchesUser;
+    });
+  }, [activityLogs, searchTerm, actionFilter, userFilter]);
 
   const {
     currentPage,

@@ -22,7 +22,7 @@ export function usePagination<T>({
 }: UsePaginationProps<T>): UsePaginationReturn<T> {
   const [currentPage, setCurrentPage] = useState(1);
 
-  const safeItems = items || [];
+  const safeItems = useMemo(() => items || [], [items]);
   const totalPages = Math.ceil(safeItems.length / itemsPerPage);
 
   const paginatedItems = useMemo(() => {
