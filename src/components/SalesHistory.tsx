@@ -32,7 +32,7 @@ const SalesHistory: React.FC = () => {
 
   // Filter sales history
   const getFilteredHistory = () => {
-    let filtered = [...salesHistory];
+    let filtered = [...(salesHistory || [])];
 
     // Search filter
     if (searchTerm) {

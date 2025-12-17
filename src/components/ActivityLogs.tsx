@@ -19,11 +19,11 @@ const ActivityLogs: React.FC = () => {
   const [userFilter, setUserFilter] = useState('all');
 
   // Get unique actions and users for filters
-  const uniqueActions = Array.from(new Set(activityLogs.map(log => log.action))).sort();
-  const uniqueUsers = Array.from(new Set(activityLogs.map(log => log.userName))).sort();
+  const uniqueActions = Array.from(new Set((activityLogs || []).map(log => log.action))).sort();
+  const uniqueUsers = Array.from(new Set((activityLogs || []).map(log => log.userName))).sort();
 
   // Filter logs
-  const filteredLogs = activityLogs.filter(log => {
+  const filteredLogs = (activityLogs || []).filter(log => {
     const matchesSearch = log.details.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          log.action.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesAction = actionFilter === 'all' || log.action === actionFilter;

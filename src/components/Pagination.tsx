@@ -16,9 +16,13 @@ const Pagination: React.FC<PaginationProps> = ({
   onPageChange,
   itemName = 'items',
 }) => {
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
-  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+  const safeTotalItems = totalItems || 0;
+  const safeItemsPerPage = itemsPerPage || 10;
+  const safeCurrentPage = currentPage || 1;
+
+  const totalPages = Math.ceil(safeTotalItems / safeItemsPerPage);
+  const startItem = safeTotalItems === 0 ? 0 : (safeCurrentPage - 1) * safeItemsPerPage + 1;
+  const endItem = Math.min(safeCurrentPage * safeItemsPerPage, safeTotalItems);
 
   if (totalPages <= 1) return null;
 
@@ -59,13 +63,13 @@ const Pagination: React.FC<PaginationProps> = ({
       <div className="flex items-center text-sm text-gray-700">
         Showing <span className="font-medium mx-1">{startItem}</span> to{' '}
         <span className="font-medium mx-1">{endItem}</span> of{' '}
-        <span className="font-medium mx-1">{totalItems}</span> {itemName}
+        <span className="font-medium mx-1">{safeTotalItems}</span> {itemName}
       </div>
 
       <div className="flex items-center space-x-2">
         <button
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
+          onClick={() => onPageChange(safeCurrentPage - 1)}
+          disabled={safeCurrentPage === 1}
           className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
         >
           <ChevronLeft className="h-4 w-4 mr-1" />
@@ -81,7 +85,7 @@ const Pagination: React.FC<PaginationProps> = ({
                 <button
                   onClick={() => onPageChange(page as number)}
                   className={`px-3 py-1 border rounded-md text-sm font-medium ${
-                    currentPage === page
+                    safeCurrentPage === page
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                   }`}
@@ -94,8 +98,8 @@ const Pagination: React.FC<PaginationProps> = ({
         </div>
 
         <button
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
+          onClick={() => onPageChange(safeCurrentPage + 1)}
+          disabled={safeCurrentPage === totalPages}
           className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
         >
           Next
