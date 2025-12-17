@@ -19,7 +19,7 @@ const SalesHistory: React.FC = () => {
   const { salesHistory, exportToPDF, loading } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  usePageRefresh('drugsaleshistory', { refreshOnMount: true, staleTime: 30000 });
+  usePageRefresh('saleshistory', { refreshOnMount: true, staleTime: 30000 });
 
   console.log('[SalesHistory Component] Rendered with salesHistory:', salesHistory?.length || 0, 'items');
 
@@ -146,7 +146,7 @@ const SalesHistory: React.FC = () => {
       const content = `<!DOCTYPE html>
 <html>
 <head>
-  <title>Drug Sales History - ${new Date().toLocaleDateString('en-KE')}</title>
+  <title>Sales History - ${new Date().toLocaleDateString('en-KE')}</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.4; }
     table { width: 100%; border-collapse: collapse; margin: 20px 0; }
@@ -161,7 +161,7 @@ const SalesHistory: React.FC = () => {
   </style>
 </head>
 <body>
-  <h1>WESABI PHARMACY - DRUG SALES HISTORY</h1>
+  <h1>WESABI PHARMACY - SALES HISTORY</h1>
   <div class="summary">
     <p><strong>Generated:</strong> ${new Date().toLocaleDateString('en-KE')} at ${new Date().toLocaleTimeString('en-KE')}</p>
     <p><strong>Total Records:</strong> ${getFilteredHistory.length}</p>
@@ -213,7 +213,7 @@ const SalesHistory: React.FC = () => {
         showAlert({ title: 'Sales History', message: 'Please allow popups to export PDF reports', type: 'warning' });
       }
     } catch (error) {
-      console.error('Error exporting drug sales history:', error);
+      console.error('Error exporting sales history:', error);
       showAlert({ title: 'Sales History', message: 'Error generating PDF report. Please try again.', type: 'error' });
     }
   };
@@ -224,8 +224,8 @@ const SalesHistory: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Drug History</h1>
-          <p className="text-gray-600">Wesabi Pharmacy - Drug Sales Tracking</p>
+          <h1 className="text-3xl font-bold text-gray-900">Sales History</h1>
+          <p className="text-gray-600">Wesabi Pharmacy - Sales Tracking</p>
         </div>
         <button
           onClick={exportReport}
