@@ -305,6 +305,7 @@ const Settings: React.FC = () => {
                           <button
                             onClick={() => startEdit(userItem)}
                             className="text-indigo-600 hover:text-indigo-900"
+                            title="Edit user"
                           >
                             <Edit className="h-4 w-4" />
                           </button>
@@ -331,6 +332,7 @@ const Settings: React.FC = () => {
                             <button
                               onClick={() => handleDeleteUser(userItem.user_id)}
                               className="text-red-600 hover:text-red-900"
+                              title="Delete user"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>

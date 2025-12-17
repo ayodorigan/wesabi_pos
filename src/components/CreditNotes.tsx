@@ -748,6 +748,7 @@ const CreditNotes: React.FC = () => {
                               <button
                                 onClick={() => removeItemFromCreditNote(index)}
                                 className="text-red-600 hover:text-red-800"
+                                title="Remove item"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>

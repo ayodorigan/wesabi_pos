@@ -555,6 +555,7 @@ const POS: React.FC = () => {
                       <button
                         onClick={() => savePriceEdit(item.productId)}
                         className="p-1 text-green-600 hover:text-green-800"
+                        title="Confirm price"
                       >
                         <Check className="h-3 w-3" />
                       </button>
@@ -630,6 +631,7 @@ const POS: React.FC = () => {
                 <button
                   onClick={() => updateQuantity(item.productId, item.quantity - 1)}
                   className="p-1 text-gray-400 hover:text-gray-600"
+                  title="Decrease quantity"
                 >
                   <Minus className="h-4 w-4" />
                 </button>
@@ -654,12 +656,14 @@ const POS: React.FC = () => {
                 <button
                   onClick={() => updateQuantity(item.productId, item.quantity + 1)}
                   className="p-1 text-gray-400 hover:text-gray-600"
+                  title="Increase quantity"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => removeFromCart(item.productId)}
                   className="p-1 text-red-400 hover:text-red-600 ml-2"
+                  title="Remove from cart"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

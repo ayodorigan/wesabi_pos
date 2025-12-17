@@ -514,6 +514,7 @@ const Inventory: React.FC = () => {
                           <button
                             onClick={() => startEdit(product)}
                             className="text-indigo-600 hover:text-indigo-900"
+                            title="Edit product"
                           >
                             <Edit className="h-4 w-4" />
                           </button>
@@ -521,6 +522,7 @@ const Inventory: React.FC = () => {
                           <button
                             onClick={() => handleDeleteProduct(product.id)}
                             className="text-red-600 hover:text-red-900"
+                            title="Delete product"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
