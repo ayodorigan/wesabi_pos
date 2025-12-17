@@ -111,6 +111,10 @@ export interface InvoiceItem {
   batchNumber: string;
   expiryDate: Date;
   quantity: number;
+  invoicePrice?: number;
+  supplierDiscountPercent?: number;
+  vatRate?: number;
+  otherCharges?: number;
   costPrice: number;
   sellingPrice: number;
   totalCost: number;

@@ -110,6 +110,9 @@ const Inventory: React.FC = () => {
       <th>Supplier</th>
       <th>Batch Number</th>
       <th>Expiry Date</th>
+      <th>Invoice Price</th>
+      <th>Discount %</th>
+      <th>VAT %</th>
       <th>Cost Price</th>
       <th>Selling Price</th>
       <th>Stock</th>
@@ -123,6 +126,9 @@ const Inventory: React.FC = () => {
       <td>${product.supplier}</td>
       <td>${product.batchNumber || '-'}</td>
       <td>${product.expiryDate.toLocaleDateString('en-KE')}</td>
+      <td>${product.invoicePrice ? formatKES(product.invoicePrice) : '-'}</td>
+      <td>${product.supplierDiscountPercent || '0'}%</td>
+      <td>${product.vatRate || '0'}%</td>
       <td>${formatKES(product.costPrice)}</td>
       <td>${formatKES(product.sellingPrice)}</td>
       <td>${product.currentStock}</td>
@@ -493,7 +499,13 @@ const Inventory: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
                 {canManagePricing && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                  <>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount %</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VAT %</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
+                  </>
                 )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -527,10 +539,29 @@ const Inventory: React.FC = () => {
                       <div className="text-sm text-gray-500">Min: {product.minStockLevel}</div>
                     </td>
                     {canManagePricing && (
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{formatKES(product.sellingPrice)}</div>
-                      <div className="text-sm text-gray-500">Cost: {formatKES(product.costPrice)}</div>
-                    </td>
+                      <>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {product.invoicePrice ? formatKES(product.invoicePrice) : '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {product.supplierDiscountPercent ? `${product.supplierDiscountPercent}%` : '0%'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {product.vatRate ? `${product.vatRate}%` : '0%'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{formatKES(product.costPrice)}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{formatKES(product.sellingPrice)}</div>
+                        </td>
+                      </>
                     )}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">

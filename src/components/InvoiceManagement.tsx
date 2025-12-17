@@ -85,6 +85,10 @@ const InvoiceManagement: React.FC = () => {
               batchNumber: item.batch_number,
               expiryDate: new Date(item.expiry_date),
               quantity: item.quantity,
+              invoicePrice: item.invoice_price ? parseFloat(item.invoice_price) : undefined,
+              supplierDiscountPercent: item.supplier_discount_percent ? parseFloat(item.supplier_discount_percent) : undefined,
+              vatRate: item.vat_rate ? parseFloat(item.vat_rate) : undefined,
+              otherCharges: item.other_charges ? parseFloat(item.other_charges) : undefined,
               costPrice: parseFloat(item.cost_price),
               sellingPrice: parseFloat(item.selling_price),
               totalCost: parseFloat(item.total_cost),
@@ -180,10 +184,14 @@ const InvoiceManagement: React.FC = () => {
       batchNumber: currentItem.batchNumber || '',
       expiryDate: currentItem.expiryDate ? new Date(currentItem.expiryDate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       quantity,
+      invoicePrice: parseFloat(currentItem.invoicePrice) || undefined,
+      supplierDiscountPercent: parseFloat(currentItem.supplierDiscountPercent) || undefined,
+      vatRate: parseFloat(currentItem.vatRate) || undefined,
+      otherCharges: parseFloat(currentItem.otherCharges) || undefined,
       costPrice,
       sellingPrice,
       totalCost,
-      barcode: currentItem.barcode || `${Date.now()}`,
+      barcode: currentItem.barcode || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     };
 
     setInvoiceItems([newItem, ...invoiceItems]);
@@ -243,7 +251,7 @@ const InvoiceManagement: React.FC = () => {
       if (invoiceError) throw invoiceError;
       invoiceId = invoice.id;
 
-      const itemPromises = invoiceItems.map(async (item) => {
+      for (const item of invoiceItems) {
         try {
           const { data: existingProduct } = await supabase
             .from('products')
@@ -299,6 +307,10 @@ const InvoiceManagement: React.FC = () => {
               batch_number: item.batchNumber,
               expiry_date: item.expiryDate.toISOString().split('T')[0],
               quantity: item.quantity,
+              invoice_price: item.invoicePrice,
+              supplier_discount_percent: item.supplierDiscountPercent,
+              vat_rate: item.vatRate,
+              other_charges: item.otherCharges,
               cost_price: item.costPrice,
               selling_price: item.sellingPrice,
               total_cost: item.totalCost,
@@ -310,9 +322,7 @@ const InvoiceManagement: React.FC = () => {
           console.error(`Error processing item ${item.productName}:`, itemError);
           throw itemError;
         }
-      });
-
-      await Promise.all(itemPromises);
+      }
 
       await refreshData();
       await loadInvoices();
@@ -665,6 +675,9 @@ const InvoiceManagement: React.FC = () => {
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT %</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
@@ -676,6 +689,9 @@ const InvoiceManagement: React.FC = () => {
                         <td className="px-3 py-2 text-sm">{item.productName}</td>
                         <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
                         <td className="px-3 py-2 text-sm">{item.quantity}</td>
+                        <td className="px-3 py-2 text-sm">{item.invoicePrice ? formatKES(item.invoicePrice) : '-'}</td>
+                        <td className="px-3 py-2 text-sm">{item.supplierDiscountPercent || '0'}%</td>
+                        <td className="px-3 py-2 text-sm">{item.vatRate || '0'}%</td>
                         <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
                         <td className="px-3 py-2 text-sm">{formatKES(item.sellingPrice)}</td>
                         <td className="px-3 py-2 text-sm font-medium">{formatKES(item.totalCost)}</td>
@@ -899,6 +915,9 @@ const InvoiceManagement: React.FC = () => {
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT %</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
@@ -911,6 +930,9 @@ const InvoiceManagement: React.FC = () => {
                             <td className="px-3 py-2 text-sm">{item.productName}</td>
                             <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
                             <td className="px-3 py-2 text-sm">{item.quantity}</td>
+                            <td className="px-3 py-2 text-sm">{item.invoicePrice ? formatKES(item.invoicePrice) : '-'}</td>
+                            <td className="px-3 py-2 text-sm">{item.supplierDiscountPercent || '0'}%</td>
+                            <td className="px-3 py-2 text-sm">{item.vatRate || '0'}%</td>
                             <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
                             <td className="px-3 py-2 text-sm">{formatKES(item.sellingPrice)}</td>
                             <td className="px-3 py-2 text-sm font-medium">{formatKES(item.totalCost)}</td>
