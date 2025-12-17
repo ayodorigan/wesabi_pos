@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Package, Calendar, DollarSign, FileText, ChevronDown } from 'lucide-react';
+import { Search, Package, Calendar, ChevronDown } from 'lucide-react';
 import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 import { supabase } from '../lib/supabase';
@@ -131,9 +131,6 @@ const DrugHistory: React.FC = () => {
   const endIndex = startIndex + itemsPerPage;
   const paginatedSales = filteredSales.slice(startIndex, endIndex);
 
-  const totalSales = filteredSales.reduce((sum, sale) => sum + sale.total_price, 0);
-  const totalQuantity = filteredSales.reduce((sum, sale) => sum + sale.quantity, 0);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -148,44 +145,6 @@ const DrugHistory: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-800">Drug History</h2>
         <div className="text-sm text-gray-600">
           Total Records: {filteredSales.length}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Sales</p>
-              <p className="text-2xl font-bold text-gray-800">{formatKES(totalSales)}</p>
-            </div>
-            <div className="bg-green-100 p-3 rounded-full">
-              <DollarSign className="h-6 w-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Units Sold</p>
-              <p className="text-2xl font-bold text-gray-800">{totalQuantity}</p>
-            </div>
-            <div className="bg-blue-100 p-3 rounded-full">
-              <Package className="h-6 w-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Transactions</p>
-              <p className="text-2xl font-bold text-gray-800">{filteredSales.length}</p>
-            </div>
-            <div className="bg-orange-100 p-3 rounded-full">
-              <FileText className="h-6 w-6 text-orange-600" />
-            </div>
-          </div>
         </div>
       </div>
 
