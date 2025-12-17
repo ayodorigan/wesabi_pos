@@ -309,7 +309,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           const costPrice = product?.costPrice || 0;
           const totalCost = costPrice * item.quantity;
           const profit = item.totalPrice - totalCost;
-          
+
           salesHistoryItems.push({
             id: `${sale.id}-${item.productId}`,
             productId: item.productId,
