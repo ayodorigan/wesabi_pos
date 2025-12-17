@@ -14,7 +14,8 @@ import {
   X,
   FileInput,
   FileMinus,
-  ClipboardList
+  ClipboardList,
+  Pill
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -42,6 +43,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     { id: 'creditnotes', label: 'Credit Notes', icon: FileMinus },
     { id: 'stocktake', label: 'Stock Take', icon: Package },
     { id: 'drugsaleshistory', label: 'Sales Report', icon: FileText },
+    { id: 'drughistory', label: 'Drug History', icon: Pill },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'logs', label: 'Activity Logs', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
