@@ -97,7 +97,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
       // Declare variables at function scope
       let formattedProducts: Product[] = [];
-      let formattedSales: Sale[] = [];
       let formattedStockTakes: StockTake[] = [];
       let formattedLogs: ActivityLog[] = [];
 
@@ -168,65 +167,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         hasError = true;
       }
 
-      // Load sales - don't exit early on error
-      try {
-        console.log('[SalesHistory] Loading sales data...');
-        const { data: salesData, error: salesError } = await supabase
-          .from('sales')
-          .select(`
-            *,
-            sale_items (
-              id,
-              product_id,
-              product_name,
-              quantity,
-              unit_price,
-              total_price,
-              batch_number
-            )
-          `)
-          .order('created_at', { ascending: false });
-
-        if (salesError) {
-          console.error('[SalesHistory] Error loading sales:', salesError);
-          console.error('[SalesHistory] Error details:', {
-            message: salesError.message,
-            code: salesError.code,
-            details: salesError.details,
-            hint: salesError.hint
-          });
-          hasError = true;
-        } else {
-          console.log('[SalesHistory] Sales data loaded:', salesData?.length || 0, 'records');
-          console.log('[SalesHistory] Raw sales data:', salesData);
-          formattedSales = (salesData || []).map(sale => ({
-          id: sale.id,
-          receiptNumber: sale.receipt_number,
-          customerName: sale.customer_name,
-          totalAmount: parseFloat(sale.total_amount) || 0,
-          paymentMethod: sale.payment_method,
-          salesPersonId: sale.sales_person_id || 'demo-user',
-          salesPersonName: sale.sales_person_name,
-          items: (sale.sale_items || []).map((item: any) => ({
-            productId: item.product_id,
-            productName: item.product_name,
-            quantity: item.quantity,
-            unitPrice: parseFloat(item.unit_price) || 0,
-            totalPrice: parseFloat(item.total_price) || 0,
-            batchNumber: item.batch_number,
-          })),
-          createdAt: new Date(sale.created_at),
-        }));
-          console.log('[SalesHistory] Formatted sales:', formattedSales.length, 'records');
-          setSales(formattedSales);
-        }
-      } catch (error) {
-        console.error('[SalesHistory] Error in sales loading block:', error);
-        if (error instanceof Error) {
-          console.error('[SalesHistory] Error stack:', error.stack);
-        }
-        hasError = true;
-      }
+      // Sales data is loaded on-demand by the SalesHistory component
+      // Not loaded here to improve initial load performance
 
       // Load stock takes
       try {
@@ -314,51 +256,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         hasError = true;
       }
 
-      // Generate sales history from sales data
-      try {
-        console.log('[SalesHistory] Generating sales history...');
-        console.log('[SalesHistory] formattedSales:', formattedSales.length, 'sales');
-        console.log('[SalesHistory] formattedProducts:', formattedProducts.length, 'products');
-
-        const salesHistoryItems: SalesHistoryItem[] = [];
-        formattedSales.forEach(sale => {
-          console.log('[SalesHistory] Processing sale:', sale.id, 'with', sale.items?.length || 0, 'items');
-          sale.items.forEach(item => {
-            const product = formattedProducts.find(p => p.id === item.productId);
-            const costPrice = product?.costPrice || 0;
-            const totalCost = costPrice * item.quantity;
-            const profit = item.totalPrice - totalCost;
-
-            const historyItem = {
-              id: `${sale.id}-${item.productId}`,
-              productId: item.productId,
-              productName: item.productName,
-              quantity: item.quantity,
-              costPrice: costPrice,
-              sellingPrice: item.unitPrice,
-              totalCost: totalCost,
-              totalRevenue: item.totalPrice,
-              profit: profit,
-              paymentMethod: sale.paymentMethod,
-              customerName: sale.customerName,
-              salesPersonName: sale.salesPersonName,
-              receiptNumber: sale.receiptNumber,
-              saleDate: sale.createdAt,
-            };
-            console.log('[SalesHistory] Adding history item:', historyItem);
-            salesHistoryItems.push(historyItem);
-          });
-        });
-
-        console.log('[SalesHistory] Total sales history items generated:', salesHistoryItems.length);
-        setSalesHistory(salesHistoryItems);
-        console.log('[SalesHistory] Sales history state updated');
-      } catch (error) {
-        console.error('[SalesHistory] Error generating sales history:', error);
-        if (error instanceof Error) {
-          console.error('[SalesHistory] Error stack:', error.stack);
-        }
-      }
+      // Sales history is generated on-demand by the SalesHistory component
+      // Not generated here to improve initial load performance
 
       // Update categories and suppliers from loaded data
       const loadedCategories = [...new Set(formattedProducts.map(p => p.category))];
@@ -712,7 +611,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         logActivity('SALE', `Sale completed: ${receiptNumber} - ${formatKES(saleData.totalAmount)}`)
       ]);
 
-      // Update local state instead of full refresh
+      // Update local product stock
       setProducts(prev => prev.map(p => {
         const soldItem = saleData.items.find(item => item.productId === p.id);
         if (soldItem) {
@@ -723,46 +622,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         }
         return p;
       }));
-
-      // Add the sale to local state
-      const newSale: Sale = {
-        id: saleResult.id,
-        receiptNumber,
-        customerName: saleData.customerName,
-        totalAmount: saleData.totalAmount,
-        paymentMethod: saleData.paymentMethod,
-        salesPersonId: saleData.salesPersonId,
-        salesPersonName: saleData.salesPersonName,
-        items: saleData.items,
-        createdAt: new Date(),
-      };
-      setSales(prev => [newSale, ...prev]);
-
-      // Update sales history
-      const newSalesHistoryItems: SalesHistoryItem[] = saleData.items.map(item => {
-        const product = products.find(p => p.id === item.productId);
-        const costPrice = product?.costPrice || 0;
-        const totalCost = costPrice * item.quantity;
-        const profit = item.totalPrice - totalCost;
-
-        return {
-          id: `${saleResult.id}-${item.productId}`,
-          productId: item.productId,
-          productName: item.productName,
-          quantity: item.quantity,
-          costPrice: costPrice,
-          sellingPrice: item.unitPrice,
-          totalCost: totalCost,
-          totalRevenue: item.totalPrice,
-          profit: profit,
-          paymentMethod: saleData.paymentMethod,
-          customerName: saleData.customerName,
-          salesPersonName: saleData.salesPersonName,
-          receiptNumber: receiptNumber,
-          saleDate: new Date(),
-        };
-      });
-      setSalesHistory(prev => [...newSalesHistoryItems, ...prev]);
 
       return receiptNumber;
     } catch (error) {
