@@ -12,13 +12,14 @@ import {
 import { useApp } from '../contexts/AppContext';
 import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
-
+import { usePageRefresh } from '../hooks/usePageRefresh';
 import { useAuth } from '../contexts/AuthContext';
 
 const SalesHistory: React.FC = () => {
   const { salesHistory, exportToPDF } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
+  usePageRefresh('drugsaleshistory', { refreshOnMount: true, staleTime: 30000 });
   
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('7days');

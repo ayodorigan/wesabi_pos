@@ -17,6 +17,7 @@ interface AppContextType {
   suppliers: string[];
   medicineTemplates: typeof medicineDatabase;
   loading: boolean;
+  error: Error | null;
   stockTakeSessions: any[];
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'priceHistory'>) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
@@ -40,6 +41,7 @@ interface AppContextType {
   refreshData: () => Promise<void>;
   getLastSoldPrice: (productId: string) => Promise<number | null>;
   isSupabaseEnabled: boolean;
+  lastRefreshTime: number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -68,11 +70,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [suppliers, setSuppliers] = useState<string[]>(commonSuppliers);
   const [medicineTemplates, setMedicineTemplates] = useState(medicineDatabase);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const [stockTakeSessions, setStockTakeSessions] = useState<any[]>([]);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
 
   // Load data from database
   const refreshData = async () => {
     setLoading(true);
+    setError(null);
     let hasError = false;
 
     try {
@@ -334,7 +339,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     } catch (error) {
       console.error('Error refreshing data:', error);
-      
+
       // Check if it's a network/fetch error
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         console.warn('Network error detected. Please check:');
@@ -342,16 +347,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         console.warn('2. Internet connection is stable');
         console.warn('3. CORS settings in Supabase dashboard allow localhost:5173');
         console.warn('4. No firewall/ad blocker blocking requests to *.supabase.co');
-        
-        // Don't throw the error, just log it and continue in demo mode
+
+        setError(error instanceof Error ? error : new Error('Network error'));
         console.warn('Continuing in demo mode due to network error');
         return;
       }
-      
+
       // For other errors, log but don't crash the app
+      setError(error instanceof Error ? error : new Error('Database error'));
       console.warn('Database error occurred, continuing in demo mode:', error);
     } finally {
       setLoading(false);
+      setLastRefreshTime(Date.now());
     }
   };
 
@@ -1154,6 +1161,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       suppliers,
       medicineTemplates,
       loading,
+      error,
       addProduct,
       updateProduct,
       deleteProduct,
@@ -1176,6 +1184,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       refreshData,
       getLastSoldPrice,
       isSupabaseEnabled,
+      lastRefreshTime,
     }}>
       {children}
     </AppContext.Provider>

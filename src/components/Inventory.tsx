@@ -17,6 +17,7 @@ import { Product } from '../types';
 import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
+import { usePageRefresh } from '../hooks/usePageRefresh';
 
 const Inventory: React.FC = () => {
   const {
@@ -35,6 +36,7 @@ const Inventory: React.FC = () => {
   } = useApp();
   const { user, canManagePricing, canDeleteProducts } = useAuth();
   const { showAlert } = useAlert();
+  usePageRefresh('inventory', { refreshOnMount: true, staleTime: 30000 });
   
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');

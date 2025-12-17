@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Edit2, Download, Search, Filter, X, RotateCcw, CheckCircle, CheckCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -6,6 +6,7 @@ import { useAlert } from '../contexts/AlertContext';
 import { AlertDialog } from './AlertDialog';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { usePageRefresh } from '../hooks/usePageRefresh';
 
 interface Product {
   id: string;
@@ -74,12 +75,7 @@ export default function Orders() {
     type: 'info'
   });
 
-  useEffect(() => {
-    fetchOrders();
-    fetchProducts();
-  }, []);
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -99,9 +95,9 @@ export default function Orders() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showAlert]);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('products')
@@ -113,7 +109,17 @@ export default function Orders() {
     } catch (error: any) {
       showAlert({ title: 'Error', message: error.message, type: 'error' });
     }
-  };
+  }, [showAlert]);
+
+  usePageRefresh('orders', {
+    refreshOnMount: true,
+    staleTime: 30000
+  });
+
+  useEffect(() => {
+    fetchOrders();
+    fetchProducts();
+  }, [fetchOrders, fetchProducts]);
 
   const loadLowStockItems = async () => {
     try {

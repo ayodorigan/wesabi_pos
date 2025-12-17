@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
+import { usePageRefresh } from '../hooks/usePageRefresh';
 
 interface StockTakeSession {
   id: string;
@@ -19,6 +20,7 @@ const StockTake: React.FC = () => {
   const { products, stockTakes, addStockTake, isSupabaseEnabled, stockTakeSessions, updateStockTakeSession, createStockTakeSession, deleteStockTakeSession, logActivity } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
+  usePageRefresh('stocktake', { refreshOnMount: true, staleTime: 30000 });
   const [currentView, setCurrentView] = useState<'history' | 'active'>('history');
   const [activeSession, setActiveSession] = useState<StockTakeSession | null>(null);
   const [sessions, setSessions] = useState<StockTakeSession[]>([]);

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ShoppingCart, 
-  Scan, 
-  Plus, 
-  Minus, 
+import {
+  ShoppingCart,
+  Scan,
+  Plus,
+  Minus,
   Trash2,
   Receipt,
   CreditCard,
@@ -21,11 +21,13 @@ import { Product, SaleItem } from '../types';
 import { formatKES, getMinimumSellingPrice, validateSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
 import { retryDatabaseOperation } from '../utils/retry';
+import { usePageRefresh } from '../hooks/usePageRefresh';
 
 const POS: React.FC = () => {
   const { products, addSale, getLastSoldPrice } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
+  usePageRefresh('pos', { refreshOnMount: true, staleTime: 30000 });
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'insurance'>('mpesa');

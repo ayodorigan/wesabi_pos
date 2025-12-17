@@ -14,9 +14,11 @@ import { formatKES } from '../utils/currency';
 import SalesChart from './SalesChart';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { usePageRefresh } from '../hooks/usePageRefresh';
 
 const Dashboard: React.FC = () => {
   const { products, sales, getStockAlerts, salesHistory } = useApp();
+  usePageRefresh('dashboard', { refreshOnMount: true, staleTime: 30000 });
   const alerts = getStockAlerts();
   const [salesPeriod, setSalesPeriod] = useState<'day' | 'week' | 'month' | 'year'>('week');
   const [showAllAlertsDialog, setShowAllAlertsDialog] = useState(false);
