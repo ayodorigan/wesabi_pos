@@ -12,20 +12,51 @@ export const parseKES = (value: string): number => {
   return parseFloat(cleaned) || 0;
 };
 
-export const calculateSellingPrice = (costPrice: number): number => {
-  return Math.round(costPrice * 1.33 * 100) / 100; // 2 decimal places
+interface PricingInputs {
+  invoicePrice?: number;
+  supplierDiscountPercent?: number;
+  vatRate?: number;
+  otherCharges?: number;
+  costPrice?: number;
+}
+
+export const calculateNetCost = (inputs: PricingInputs): number => {
+  const invoicePrice = inputs.invoicePrice ?? inputs.costPrice ?? 0;
+  const supplierDiscountPercent = inputs.supplierDiscountPercent ?? 0;
+  const vatRate = inputs.vatRate ?? 16;
+  const otherCharges = inputs.otherCharges ?? 0;
+
+  const discountedAmount = invoicePrice - (invoicePrice * supplierDiscountPercent / 100);
+  const vatAmount = discountedAmount * (vatRate / 100);
+  const netCost = discountedAmount + vatAmount + otherCharges;
+
+  return Math.round(netCost * 100) / 100;
 };
 
-export const getMinimumSellingPrice = (costPrice: number): number => {
-  return calculateSellingPrice(costPrice);
+export const calculateSellingPrice = (inputs: PricingInputs | number): number => {
+  const netCost = typeof inputs === 'number'
+    ? inputs
+    : calculateNetCost(inputs);
+
+  return Math.round(netCost * 1.33 * 100) / 100;
 };
 
-export const validateSellingPrice = (sellingPrice: number, costPrice: number): boolean => {
-  const minPrice = getMinimumSellingPrice(costPrice);
+export const getMinimumSellingPrice = (inputs: PricingInputs | number): number => {
+  return calculateSellingPrice(inputs);
+};
+
+export const validateSellingPrice = (
+  sellingPrice: number,
+  inputs: PricingInputs | number
+): boolean => {
+  const minPrice = getMinimumSellingPrice(inputs);
   return sellingPrice >= minPrice;
 };
 
-export const enforceMinimumSellingPrice = (sellingPrice: number, costPrice: number): number => {
-  const minPrice = getMinimumSellingPrice(costPrice);
+export const enforceMinimumSellingPrice = (
+  sellingPrice: number,
+  inputs: PricingInputs | number
+): number => {
+  const minPrice = getMinimumSellingPrice(inputs);
   return Math.max(sellingPrice, minPrice);
 };

@@ -22,6 +22,10 @@ export interface Product {
   minStockLevel: number;
   barcode: string;
   invoiceNumber?: string;
+  invoicePrice?: number;
+  supplierDiscountPercent?: number;
+  vatRate?: number;
+  otherCharges?: number;
   priceHistory: PriceHistory[];
   createdAt: Date;
   updatedAt: Date;

@@ -432,9 +432,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     console.log('🔄 Starting product addition process...');
     console.log('Product data to insert:', productData);
 
-    // Enforce minimum selling price
-    const enforcedSellingPrice = enforceMinimumSellingPrice(productData.sellingPrice, productData.costPrice);
-    
+    // Enforce minimum selling price with new pricing logic
+    const pricingInputs = {
+      invoicePrice: productData.invoicePrice,
+      supplierDiscountPercent: productData.supplierDiscountPercent,
+      vatRate: productData.vatRate,
+      otherCharges: productData.otherCharges,
+      costPrice: productData.costPrice
+    };
+    const enforcedSellingPrice = enforceMinimumSellingPrice(productData.sellingPrice, pricingInputs);
+
     try {
       console.log('📡 Inserting product into database...');
       const { data, error } = await supabase
@@ -445,6 +452,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           supplier: productData.supplier,
           batch_number: productData.batchNumber,
           expiry_date: productData.expiryDate.toISOString(),
+          invoice_price: productData.invoicePrice || null,
+          supplier_discount_percent: productData.supplierDiscountPercent || null,
+          vat_rate: productData.vatRate || 16,
+          other_charges: productData.otherCharges || null,
           cost_price: productData.costPrice,
           selling_price: enforcedSellingPrice,
           current_stock: productData.currentStock,
@@ -503,18 +514,28 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     try {
       const updateData: any = {};
-      
+
       if (updates.name) updateData.name = updates.name;
       if (updates.category) updateData.category = updates.category;
       if (updates.supplier) updateData.supplier = updates.supplier;
       if (updates.batchNumber) updateData.batch_number = updates.batchNumber;
       if (updates.expiryDate) updateData.expiry_date = updates.expiryDate.toISOString();
+      if (updates.invoicePrice !== undefined) updateData.invoice_price = updates.invoicePrice || null;
+      if (updates.supplierDiscountPercent !== undefined) updateData.supplier_discount_percent = updates.supplierDiscountPercent || null;
+      if (updates.vatRate !== undefined) updateData.vat_rate = updates.vatRate || 16;
+      if (updates.otherCharges !== undefined) updateData.other_charges = updates.otherCharges || null;
       if (updates.costPrice !== undefined) updateData.cost_price = updates.costPrice;
       if (updates.sellingPrice !== undefined) {
-        // Enforce minimum selling price
-        const costPrice = updates.costPrice !== undefined ? updates.costPrice : 
-          products.find(p => p.id === id)?.costPrice || 0;
-        updateData.selling_price = enforceMinimumSellingPrice(updates.sellingPrice, costPrice);
+        // Enforce minimum selling price with new pricing logic
+        const existingProduct = products.find(p => p.id === id);
+        const pricingInputs = {
+          invoicePrice: updates.invoicePrice !== undefined ? updates.invoicePrice : existingProduct?.invoicePrice,
+          supplierDiscountPercent: updates.supplierDiscountPercent !== undefined ? updates.supplierDiscountPercent : existingProduct?.supplierDiscountPercent,
+          vatRate: updates.vatRate !== undefined ? updates.vatRate : existingProduct?.vatRate || 16,
+          otherCharges: updates.otherCharges !== undefined ? updates.otherCharges : existingProduct?.otherCharges,
+          costPrice: updates.costPrice !== undefined ? updates.costPrice : existingProduct?.costPrice || 0
+        };
+        updateData.selling_price = enforceMinimumSellingPrice(updates.sellingPrice, pricingInputs);
       }
       if (updates.currentStock !== undefined) updateData.current_stock = updates.currentStock;
       if (updates.minStockLevel !== undefined) updateData.min_stock_level = updates.minStockLevel;
@@ -916,19 +937,45 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const importProducts = async (importedProducts: any[]) => {
     try {
-      const productsToInsert = importedProducts.map(item => ({
-        name: item.name || '',
-        category: item.category || '',
-        supplier: item.supplier || '',
-        batch_number: item.batchnumber || `BATCH-${Date.now()}`,
-        expiry_date: item.expirydate ? new Date(item.expirydate).toISOString() : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-        cost_price: parseFloat(item.costprice) || 0,
-        selling_price: parseFloat(item.sellingprice) || 0,
-        current_stock: parseInt(item.currentstock) || 0,
-        min_stock_level: parseInt(item.minstocklevel) || 10,
-        barcode: item.barcode || `${Date.now()}-${Math.random()}`,
-        invoice_number: item.invoicenumber || '',
-      }));
+      const productsToInsert = importedProducts.map(item => {
+        const invoicePrice = parseFloat(item.invoiceprice) || 0;
+        const supplierDiscountPercent = parseFloat(item.supplierdiscountpercent) || 0;
+        const vatRate = parseFloat(item.vatrate) || 16;
+        const otherCharges = parseFloat(item.othercharges) || 0;
+        const costPrice = parseFloat(item.costprice) || 0;
+        let sellingPrice = parseFloat(item.sellingprice) || 0;
+
+        const pricingInputs = {
+          invoicePrice: invoicePrice || undefined,
+          supplierDiscountPercent: supplierDiscountPercent || undefined,
+          vatRate: vatRate || 16,
+          otherCharges: otherCharges || undefined,
+          costPrice: costPrice
+        };
+
+        const minSellingPrice = getMinimumSellingPrice(pricingInputs);
+        if (sellingPrice < minSellingPrice) {
+          sellingPrice = minSellingPrice;
+        }
+
+        return {
+          name: item.name || '',
+          category: item.category || '',
+          supplier: item.supplier || '',
+          batch_number: item.batchnumber || `BATCH-${Date.now()}`,
+          expiry_date: item.expirydate ? new Date(item.expirydate).toISOString() : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+          invoice_price: invoicePrice || null,
+          supplier_discount_percent: supplierDiscountPercent || null,
+          vat_rate: vatRate || 16,
+          other_charges: otherCharges || null,
+          cost_price: costPrice,
+          selling_price: sellingPrice,
+          current_stock: parseInt(item.currentstock) || 0,
+          min_stock_level: parseInt(item.minstocklevel) || 10,
+          barcode: item.barcode || `${Date.now()}-${Math.random()}`,
+          invoice_number: item.invoicenumber || '',
+        };
+      });
 
       const { error } = await supabase
         .from('products')
