@@ -451,13 +451,12 @@ export default function Orders() {
     const tableData = items.map((item, index) => [
       (index + 1).toString(),
       item.product_name,
-      item.current_quantity.toString(),
       item.order_quantity.toString()
     ]);
 
     autoTable(doc, {
       startY: 68,
-      head: [['#', 'Product Name', 'Current Stock', 'Order Quantity']],
+      head: [['#', 'Product Name', 'Order Quantity']],
       body: tableData,
       theme: 'grid',
       headStyles: {
@@ -471,9 +470,8 @@ export default function Orders() {
       },
       columnStyles: {
         0: { cellWidth: 15, halign: 'center' },
-        1: { cellWidth: 95 },
-        2: { cellWidth: 35, halign: 'center' },
-        3: { cellWidth: 40, halign: 'center' }
+        1: { cellWidth: 130 },
+        2: { cellWidth: 40, halign: 'center' }
       },
       margin: { left: 15, right: 15 },
       didDrawPage: (data) => {
