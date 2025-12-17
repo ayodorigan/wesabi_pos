@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../lib/supabase';
 import { Invoice, InvoiceItem } from '../types';
-import { formatKES, calculateSellingPrice } from '../utils/currency';
+import { formatKES, calculateSellingPrice, calculateNetCost } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
 import { useApp } from '../contexts/AppContext';
@@ -33,6 +33,10 @@ const InvoiceManagement: React.FC = () => {
     batchNumber: '',
     expiryDate: '',
     quantity: '',
+    invoicePrice: '',
+    supplierDiscountPercent: '0',
+    vatRate: '16',
+    otherCharges: '0',
     costPrice: '',
     sellingPrice: '',
     barcode: '',
@@ -115,20 +119,52 @@ const InvoiceManagement: React.FC = () => {
     }
   };
 
-  const handleCostPriceChange = (value: string) => {
-    const costPrice = parseFloat(value) || 0;
-    const autoSellingPrice = calculateSellingPrice(costPrice);
+  const handlePricingChange = (field: string, value: string) => {
+    setCurrentItem(prev => {
+      const updated = { ...prev, [field]: value };
 
-    setCurrentItem(prev => ({
-      ...prev,
-      costPrice: value,
-      sellingPrice: autoSellingPrice.toString()
-    }));
+      const invoicePrice = parseFloat(updated.invoicePrice) || 0;
+      const supplierDiscountPercent = parseFloat(updated.supplierDiscountPercent) || 0;
+      const vatRate = parseFloat(updated.vatRate) || 16;
+      const otherCharges = parseFloat(updated.otherCharges) || 0;
+      const costPrice = parseFloat(updated.costPrice) || 0;
+
+      const pricingInputs = {
+        invoicePrice: invoicePrice || undefined,
+        supplierDiscountPercent: supplierDiscountPercent || undefined,
+        vatRate: vatRate || 16,
+        otherCharges: otherCharges || undefined,
+        costPrice: costPrice
+      };
+
+      if (invoicePrice > 0) {
+        const calculatedCostPrice = calculateNetCost(pricingInputs);
+        const calculatedSellingPrice = calculateSellingPrice(pricingInputs);
+        return {
+          ...updated,
+          costPrice: calculatedCostPrice.toString(),
+          sellingPrice: calculatedSellingPrice.toString()
+        };
+      } else if (field === 'costPrice' && costPrice > 0) {
+        const calculatedSellingPrice = calculateSellingPrice(costPrice);
+        return {
+          ...updated,
+          sellingPrice: calculatedSellingPrice.toString()
+        };
+      }
+
+      return updated;
+    });
   };
 
   const addItemToInvoice = () => {
-    if (!currentItem.productName || !currentItem.quantity || !currentItem.costPrice) {
-      showAlert({ title: 'Invoice Management', message: 'Please fill in all required fields for the item', type: 'error' });
+    if (!currentItem.productName || !currentItem.quantity) {
+      showAlert({ title: 'Invoice Management', message: 'Please fill in product name and quantity', type: 'error' });
+      return;
+    }
+
+    if (!currentItem.invoicePrice && !currentItem.costPrice) {
+      showAlert({ title: 'Invoice Management', message: 'Please fill in either Invoice Price or Cost Price', type: 'error' });
       return;
     }
 
@@ -157,6 +193,10 @@ const InvoiceManagement: React.FC = () => {
       batchNumber: '',
       expiryDate: '',
       quantity: '',
+      invoicePrice: '',
+      supplierDiscountPercent: '0',
+      vatRate: '16',
+      otherCharges: '0',
       costPrice: '',
       sellingPrice: '',
       barcode: '',
@@ -773,13 +813,60 @@ const InvoiceManagement: React.FC = () => {
                   </div>
 
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Price (KES)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={currentItem.invoicePrice}
+                      onChange={(e) => handlePricingChange('invoicePrice', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="Supplier price"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Discount %</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={currentItem.supplierDiscountPercent}
+                      onChange={(e) => handlePricingChange('supplierDiscountPercent', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">VAT Rate %</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={currentItem.vatRate}
+                      onChange={(e) => handlePricingChange('vatRate', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Other Charges (KES)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={currentItem.otherCharges}
+                      onChange={(e) => handlePricingChange('otherCharges', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="Shipping, etc."
+                    />
+                  </div>
+
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price (KES)</label>
                     <input
                       type="number"
                       step="0.01"
                       value={currentItem.costPrice}
-                      onChange={(e) => handleCostPriceChange(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      onChange={(e) => handlePricingChange('costPrice', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-gray-50"
+                      placeholder="Auto-calculated"
                     />
                   </div>
 
@@ -789,8 +876,9 @@ const InvoiceManagement: React.FC = () => {
                       type="number"
                       step="0.01"
                       value={currentItem.sellingPrice}
-                      onChange={(e) => setCurrentItem({ ...currentItem, sellingPrice: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                      placeholder="Auto-calculated"
                     />
                   </div>
 
