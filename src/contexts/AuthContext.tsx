@@ -320,73 +320,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signIn = async (email: string, password: string) => {
-    console.log('=== SIGN IN ATTEMPT ===');
-    console.log('Email:', email);
-    console.log('Supabase enabled:', isSupabaseEnabled);
-    console.log('Supabase client available:', !!supabase);
-
     if (!isSupabaseEnabled || !supabase) {
-      console.error('Supabase not available for authentication');
       throw new Error('Authentication not available in demo mode');
     }
 
     // Validate inputs
     if (!email?.trim() || !password?.trim()) {
-      console.error('Email or password is empty');
       throw new Error('Email and password are required');
     }
 
-    console.log('Calling Supabase signInWithPassword...');
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    console.log('Sign in response:', { user: data?.user?.id, error });
-
     if (error) {
-      console.error('=== SIGN IN ERROR ===');
-      console.error('Error Code:', error.message);
-      console.error('Error Status:', error.status);
-      console.error('Full error:', error);
       throw error;
     }
 
     if (data.user) {
-      console.log('User authenticated successfully, loading profile...');
       const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
         .select('name, is_active')
         .eq('user_id', data.user.id)
         .single();
 
-      console.log('Profile query result:', { profile, error: profileError });
-
       if (profileError) {
-        console.error('=== PROFILE LOAD ERROR ===');
-        console.error('Error Code:', profileError.code);
-        console.error('Error Message:', profileError.message);
-        console.error('Error Details:', profileError.details);
-        console.error('Error Hint:', profileError.hint);
         await supabase.auth.signOut();
         throw new Error('Unable to load user profile. Please contact your administrator.');
       }
 
       if (!profile.is_active) {
-        console.error('User account is deactivated');
         await supabase.auth.signOut();
         throw new Error('Your account has been deactivated. Please contact your administrator.');
       }
 
-      console.log('Logging auth activity...');
       await logAuthActivity(
         data.user.id,
         profile?.name || email.split('@')[0],
         'USER_LOGIN',
         `User logged in: ${email}`
       );
-
-      console.log('✅ Sign in completed successfully');
     }
   };
 

@@ -3,11 +3,6 @@ import { getSupabaseConfig, config, isProduction, isDevelopment } from '../confi
 
 const supabaseConfig = getSupabaseConfig();
 
-console.log('=== SUPABASE INITIALIZATION ===');
-console.log('Environment:', config.env);
-console.log('Supabase URL:', supabaseConfig.url);
-console.log('Anon Key (first 20 chars):', supabaseConfig.anonKey?.substring(0, 20) + '...');
-
 const isSupabaseConfigured = Boolean(
   supabaseConfig.url &&
   supabaseConfig.anonKey &&
@@ -18,8 +13,6 @@ const isSupabaseConfigured = Boolean(
   supabaseConfig.url.startsWith('https://') &&
   supabaseConfig.url.includes('.supabase.co')
 );
-
-console.log('Is Supabase Configured:', isSupabaseConfigured);
 
 if (!isSupabaseConfigured) {
   console.error('❌ Supabase not configured properly');
@@ -46,8 +39,6 @@ export const supabase = createClient(
     },
   }
 );
-
-console.log('✅ Supabase client created successfully');
 
 export const isSupabaseEnabled = isSupabaseConfigured;
 

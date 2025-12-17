@@ -59,7 +59,7 @@ interface AppProviderProps {
 }
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const { showAlert } = useAlert();
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -392,18 +392,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   };
 
-  // Initialize data on mount - wait for auth to complete
+  // Initialize data on mount
   useEffect(() => {
-    if (!authLoading && !loading && user) {
-      console.log('[AppContext] Auth complete, loading data for user:', user.email);
+    if (!loading) {
       refreshData();
     }
-  }, [authLoading]);
+  }, []);
 
   // Refresh data when user changes (sign in/out)
   useEffect(() => {
-    if (user && !authLoading && !loading) {
-      console.log('[AppContext] User changed, refreshing data for:', user.email);
+    if (user && !loading) {
       refreshData();
     }
   }, [user]);
