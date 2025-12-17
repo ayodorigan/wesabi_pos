@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Download,
   Filter,
@@ -15,6 +15,7 @@ import { formatKES } from '../utils/currency';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import Pagination from './Pagination';
+import { useAutoRefresh } from '../contexts/DataRefreshContext';
 
 interface SaleData {
   id: string;
@@ -59,9 +60,15 @@ const SalesHistory: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
+  const fetchSalesDataCallback = useCallback(() => {
+    fetchSalesData();
+  }, []);
+
   useEffect(() => {
     fetchSalesData();
   }, []);
+
+  useAutoRefresh('sales', fetchSalesDataCallback);
 
   const fetchSalesData = async () => {
     try {

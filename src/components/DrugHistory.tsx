@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Package, Calendar, ChevronDown } from 'lucide-react';
 import { useAlert } from '../contexts/AlertContext';
 import { formatKES } from '../utils/currency';
 import { supabase } from '../lib/supabase';
 import Pagination from './Pagination';
+import { useAutoRefresh } from '../contexts/DataRefreshContext';
 
 interface DrugSale {
   id: string;
@@ -29,9 +30,15 @@ const DrugHistory: React.FC = () => {
   const itemsPerPage = 20;
   const searchRef = useRef<HTMLDivElement>(null);
 
+  const fetchDrugSalesCallback = useCallback(() => {
+    fetchDrugSales();
+  }, []);
+
   useEffect(() => {
     fetchDrugSales();
   }, []);
+
+  useAutoRefresh('sales', fetchDrugSalesCallback);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

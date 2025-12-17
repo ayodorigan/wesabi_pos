@@ -9,6 +9,7 @@ import autoTable from 'jspdf-autotable';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { usePagination } from '../hooks/usePagination';
 import Pagination from './Pagination';
+import { useAutoRefresh } from '../contexts/DataRefreshContext';
 
 interface Product {
   id: string;
@@ -123,6 +124,8 @@ export default function Orders() {
     fetchOrders();
     fetchProducts();
   }, [fetchOrders, fetchProducts]);
+
+  useAutoRefresh('orders', fetchOrders);
 
   const loadLowStockItems = async () => {
     try {

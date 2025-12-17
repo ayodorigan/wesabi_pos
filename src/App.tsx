@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
 import { AlertProvider } from './contexts/AlertContext';
+import { DataRefreshProvider } from './contexts/DataRefreshContext';
 import Login from './components/Login';
 import Layout from './components/Layout';
 import LoadingScreen from './components/LoadingScreen';
@@ -147,9 +148,11 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <AlertProvider>
-        <AppProvider>
-          <AppContent />
-        </AppProvider>
+        <DataRefreshProvider>
+          <AppProvider>
+            <AppContent />
+          </AppProvider>
+        </DataRefreshProvider>
       </AlertProvider>
     </AuthProvider>
   );

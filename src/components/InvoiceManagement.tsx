@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, FileText, Trash2, Eye, Package, Edit, Upload, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -11,6 +11,7 @@ import VATRateInput from './VATRateInput';
 import { useApp } from '../contexts/AppContext';
 import { usePagination } from '../hooks/usePagination';
 import Pagination from './Pagination';
+import { useAutoRefresh } from '../contexts/DataRefreshContext';
 
 const InvoiceManagement: React.FC = () => {
   const { user, canDeleteProducts } = useAuth();
@@ -49,9 +50,15 @@ const InvoiceManagement: React.FC = () => {
 
   const medicineNames = medicineTemplates.map(med => med.name);
 
+  const loadInvoicesCallback = useCallback(() => {
+    loadInvoices();
+  }, [user]);
+
   useEffect(() => {
     loadInvoices();
   }, [user]);
+
+  useAutoRefresh('invoices', loadInvoicesCallback);
 
   const loadInvoices = async () => {
     setLoading(true);

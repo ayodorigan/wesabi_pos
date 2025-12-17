@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, FileText, Trash2, Download, Eye, Edit, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -10,6 +10,7 @@ import AutocompleteInput from './AutocompleteInput';
 import { useApp } from '../contexts/AppContext';
 import { usePagination } from '../hooks/usePagination';
 import Pagination from './Pagination';
+import { useAutoRefresh } from '../contexts/DataRefreshContext';
 
 const CreditNotes: React.FC = () => {
   const { user } = useAuth();
@@ -42,11 +43,19 @@ const CreditNotes: React.FC = () => {
 
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
 
+  const loadCreditNotesCallback = useCallback(() => {
+    if (user) {
+      loadCreditNotes();
+    }
+  }, [user]);
+
   useEffect(() => {
     if (user) {
       loadCreditNotes();
     }
   }, [user]);
+
+  useAutoRefresh('credit_notes', loadCreditNotesCallback);
 
   const loadCreditNotes = async () => {
     setLoading(true);

@@ -22,11 +22,13 @@ import { formatKES, getMinimumSellingPrice, validateSellingPrice, enforceMinimum
 import { getErrorMessage } from '../utils/errorMessages';
 import { retryDatabaseOperation } from '../utils/retry';
 import { usePageRefresh } from '../hooks/usePageRefresh';
+import { useDataRefresh } from '../contexts/DataRefreshContext';
 
 const POS: React.FC = () => {
   const { products, addSale, getLastSoldPrice } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
+  const { triggerRefresh } = useDataRefresh();
   usePageRefresh('pos', { refreshOnMount: true, staleTime: 30000 });
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -199,6 +201,8 @@ const POS: React.FC = () => {
       setShowMpesaModal(false);
       setMpesaPaymentDetails(null);
       setCheckoutRequestId(null);
+
+      triggerRefresh(['sales', 'inventory']);
 
       showAlert({ title: 'Point of Sale', message: `Sale completed! Receipt #${receiptNumber} - Wesabi Pharmacy`, type: 'success' });
     } catch (error) {
