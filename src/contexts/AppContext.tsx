@@ -454,7 +454,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           expiry_date: productData.expiryDate.toISOString(),
           invoice_price: productData.invoicePrice || null,
           supplier_discount_percent: productData.supplierDiscountPercent || null,
-          vat_rate: productData.vatRate || 16,
+          vat_rate: productData.vatRate || 0,
           other_charges: productData.otherCharges || null,
           cost_price: productData.costPrice,
           selling_price: enforcedSellingPrice,
@@ -522,7 +522,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (updates.expiryDate) updateData.expiry_date = updates.expiryDate.toISOString();
       if (updates.invoicePrice !== undefined) updateData.invoice_price = updates.invoicePrice || null;
       if (updates.supplierDiscountPercent !== undefined) updateData.supplier_discount_percent = updates.supplierDiscountPercent || null;
-      if (updates.vatRate !== undefined) updateData.vat_rate = updates.vatRate || 16;
+      if (updates.vatRate !== undefined) updateData.vat_rate = updates.vatRate || 0;
       if (updates.otherCharges !== undefined) updateData.other_charges = updates.otherCharges || null;
       if (updates.costPrice !== undefined) updateData.cost_price = updates.costPrice;
       if (updates.sellingPrice !== undefined) {
@@ -531,7 +531,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         const pricingInputs = {
           invoicePrice: updates.invoicePrice !== undefined ? updates.invoicePrice : existingProduct?.invoicePrice,
           supplierDiscountPercent: updates.supplierDiscountPercent !== undefined ? updates.supplierDiscountPercent : existingProduct?.supplierDiscountPercent,
-          vatRate: updates.vatRate !== undefined ? updates.vatRate : existingProduct?.vatRate || 16,
+          vatRate: updates.vatRate !== undefined ? updates.vatRate : existingProduct?.vatRate || 0,
           otherCharges: updates.otherCharges !== undefined ? updates.otherCharges : existingProduct?.otherCharges,
           costPrice: updates.costPrice !== undefined ? updates.costPrice : existingProduct?.costPrice || 0
         };
@@ -940,7 +940,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       const productsToInsert = importedProducts.map(item => {
         const invoicePrice = parseFloat(item.invoiceprice) || 0;
         const supplierDiscountPercent = parseFloat(item.supplierdiscountpercent) || 0;
-        const vatRate = parseFloat(item.vatrate) || 16;
+        const vatRate = parseFloat(item.vatrate) || 0;
         const otherCharges = parseFloat(item.othercharges) || 0;
         const costPrice = parseFloat(item.costprice) || 0;
         let sellingPrice = parseFloat(item.sellingprice) || 0;
@@ -948,7 +948,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         const pricingInputs = {
           invoicePrice: invoicePrice || undefined,
           supplierDiscountPercent: supplierDiscountPercent || undefined,
-          vatRate: vatRate || 16,
+          vatRate: vatRate || 0,
           otherCharges: otherCharges || undefined,
           costPrice: costPrice
         };
@@ -966,7 +966,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           expiry_date: item.expirydate ? new Date(item.expirydate).toISOString() : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
           invoice_price: invoicePrice || null,
           supplier_discount_percent: supplierDiscountPercent || null,
-          vat_rate: vatRate || 16,
+          vat_rate: vatRate || 0,
           other_charges: otherCharges || null,
           cost_price: costPrice,
           selling_price: sellingPrice,

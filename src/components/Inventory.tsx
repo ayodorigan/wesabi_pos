@@ -17,6 +17,7 @@ import { Product } from '../types';
 import { formatKES, calculateSellingPrice, getMinimumSellingPrice, enforceMinimumSellingPrice } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
+import VATRateInput from './VATRateInput';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 
 const Inventory: React.FC = () => {
@@ -52,7 +53,7 @@ const Inventory: React.FC = () => {
     invoiceNumber: '',
     invoicePrice: '',
     supplierDiscountPercent: '0',
-    vatRate: '16',
+    vatRate: '0',
     otherCharges: '0',
     costPrice: '',
     sellingPrice: '',
@@ -187,7 +188,7 @@ const Inventory: React.FC = () => {
       invoiceNumber: '',
       invoicePrice: '',
       supplierDiscountPercent: '0',
-      vatRate: '16',
+      vatRate: '0',
       otherCharges: '0',
       costPrice: '',
       sellingPrice: '',
@@ -218,7 +219,7 @@ const Inventory: React.FC = () => {
     const pricingInputs = {
       invoicePrice: parseFloat(formData.invoicePrice) || undefined,
       supplierDiscountPercent: parseFloat(formData.supplierDiscountPercent) || undefined,
-      vatRate: parseFloat(formData.vatRate) || 16,
+      vatRate: parseFloat(formData.vatRate) || 0,
       otherCharges: parseFloat(formData.otherCharges) || undefined,
       costPrice: costPrice
     };
@@ -270,7 +271,7 @@ const Inventory: React.FC = () => {
     // Validate selling price against minimum
     const invoicePrice = parseFloat(formData.invoicePrice) || 0;
     const supplierDiscountPercent = parseFloat(formData.supplierDiscountPercent) || 0;
-    const vatRate = parseFloat(formData.vatRate) || 16;
+    const vatRate = parseFloat(formData.vatRate) || 0;
     const otherCharges = parseFloat(formData.otherCharges) || 0;
     const costPrice = parseFloat(formData.costPrice) || 0;
     const sellingPrice = parseFloat(formData.sellingPrice) || 0;
@@ -278,7 +279,7 @@ const Inventory: React.FC = () => {
     const pricingInputs = {
       invoicePrice: invoicePrice || undefined,
       supplierDiscountPercent: supplierDiscountPercent || undefined,
-      vatRate: vatRate || 16,
+      vatRate: vatRate || 0,
       otherCharges: otherCharges || undefined,
       costPrice: costPrice
     };
@@ -299,7 +300,7 @@ const Inventory: React.FC = () => {
       invoiceNumber: formData.invoiceNumber,
       invoicePrice: invoicePrice || undefined,
       supplierDiscountPercent: supplierDiscountPercent || undefined,
-      vatRate: vatRate || 16,
+      vatRate: vatRate || 0,
       otherCharges: otherCharges || undefined,
       costPrice: costPrice,
       sellingPrice: enforceMinimumSellingPrice(sellingPrice, pricingInputs),
@@ -330,7 +331,7 @@ const Inventory: React.FC = () => {
     // Validate selling price against minimum
     const invoicePrice = parseFloat(formData.invoicePrice) || 0;
     const supplierDiscountPercent = parseFloat(formData.supplierDiscountPercent) || 0;
-    const vatRate = parseFloat(formData.vatRate) || 16;
+    const vatRate = parseFloat(formData.vatRate) || 0;
     const otherCharges = parseFloat(formData.otherCharges) || 0;
     const costPrice = parseFloat(formData.costPrice) || 0;
     const sellingPrice = parseFloat(formData.sellingPrice) || 0;
@@ -338,7 +339,7 @@ const Inventory: React.FC = () => {
     const pricingInputs = {
       invoicePrice: invoicePrice || undefined,
       supplierDiscountPercent: supplierDiscountPercent || undefined,
-      vatRate: vatRate || 16,
+      vatRate: vatRate || 0,
       otherCharges: otherCharges || undefined,
       costPrice: costPrice
     };
@@ -361,7 +362,7 @@ const Inventory: React.FC = () => {
       invoiceNumber: formData.invoiceNumber || editingProduct.invoiceNumber,
       invoicePrice: invoicePrice || undefined,
       supplierDiscountPercent: supplierDiscountPercent || undefined,
-      vatRate: vatRate || 16,
+      vatRate: vatRate || 0,
       otherCharges: otherCharges || undefined,
       costPrice: costPrice,
       sellingPrice: enforceMinimumSellingPrice(sellingPrice, pricingInputs),
@@ -386,7 +387,7 @@ const Inventory: React.FC = () => {
       invoiceNumber: product.invoiceNumber || '',
       invoicePrice: product.invoicePrice?.toString() || '',
       supplierDiscountPercent: product.supplierDiscountPercent?.toString() || '0',
-      vatRate: product.vatRate?.toString() || '16',
+      vatRate: product.vatRate?.toString() || '0',
       otherCharges: product.otherCharges?.toString() || '0',
       costPrice: product.costPrice.toString(),
       sellingPrice: product.sellingPrice.toString(),
@@ -691,18 +692,10 @@ const Inventory: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">VAT Rate (%)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="100"
-                            value={formData.vatRate}
-                            onChange={(e) => setFormData({ ...formData, vatRate: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
+                        <VATRateInput
+                          value={formData.vatRate}
+                          onChange={(value) => setFormData({ ...formData, vatRate: value })}
+                        />
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Other Charges (KES)</label>
                           <input
@@ -750,7 +743,7 @@ const Inventory: React.FC = () => {
                           const pricingInputs = {
                             invoicePrice: parseFloat(formData.invoicePrice) || undefined,
                             supplierDiscountPercent: parseFloat(formData.supplierDiscountPercent) || undefined,
-                            vatRate: parseFloat(formData.vatRate) || 16,
+                            vatRate: parseFloat(formData.vatRate) || 0,
                             otherCharges: parseFloat(formData.otherCharges) || undefined,
                             costPrice: parseFloat(formData.costPrice) || 0
                           };
@@ -770,7 +763,7 @@ const Inventory: React.FC = () => {
                           Minimum: {formatKES(getMinimumSellingPrice({
                             invoicePrice: parseFloat(formData.invoicePrice) || undefined,
                             supplierDiscountPercent: parseFloat(formData.supplierDiscountPercent) || undefined,
-                            vatRate: parseFloat(formData.vatRate) || 16,
+                            vatRate: parseFloat(formData.vatRate) || 0,
                             otherCharges: parseFloat(formData.otherCharges) || undefined,
                             costPrice: parseFloat(formData.costPrice) || 0
                           }))}
@@ -927,18 +920,10 @@ const Inventory: React.FC = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">VAT Rate (%)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="100"
-                            value={formData.vatRate}
-                            onChange={(e) => setFormData({ ...formData, vatRate: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
+                        <VATRateInput
+                          value={formData.vatRate}
+                          onChange={(value) => setFormData({ ...formData, vatRate: value })}
+                        />
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Other Charges (KES)</label>
                           <input
@@ -980,7 +965,7 @@ const Inventory: React.FC = () => {
                           const pricingInputs = {
                             invoicePrice: parseFloat(formData.invoicePrice) || undefined,
                             supplierDiscountPercent: parseFloat(formData.supplierDiscountPercent) || undefined,
-                            vatRate: parseFloat(formData.vatRate) || 16,
+                            vatRate: parseFloat(formData.vatRate) || 0,
                             otherCharges: parseFloat(formData.otherCharges) || undefined,
                             costPrice: parseFloat(formData.costPrice) || 0
                           };
@@ -1000,7 +985,7 @@ const Inventory: React.FC = () => {
                           Minimum: {formatKES(getMinimumSellingPrice({
                             invoicePrice: parseFloat(formData.invoicePrice) || undefined,
                             supplierDiscountPercent: parseFloat(formData.supplierDiscountPercent) || undefined,
-                            vatRate: parseFloat(formData.vatRate) || 16,
+                            vatRate: parseFloat(formData.vatRate) || 0,
                             otherCharges: parseFloat(formData.otherCharges) || undefined,
                             costPrice: parseFloat(formData.costPrice) || 0
                           }))}

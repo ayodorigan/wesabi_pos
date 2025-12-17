@@ -23,7 +23,7 @@ interface PricingInputs {
 export const calculateNetCost = (inputs: PricingInputs): number => {
   const invoicePrice = inputs.invoicePrice ?? inputs.costPrice ?? 0;
   const supplierDiscountPercent = inputs.supplierDiscountPercent ?? 0;
-  const vatRate = inputs.vatRate ?? 16;
+  const vatRate = inputs.vatRate ?? 0;
   const otherCharges = inputs.otherCharges ?? 0;
 
   const discountedAmount = invoicePrice - (invoicePrice * supplierDiscountPercent / 100);

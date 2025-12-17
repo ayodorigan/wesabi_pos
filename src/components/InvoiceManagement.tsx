@@ -7,6 +7,7 @@ import { Invoice, InvoiceItem } from '../types';
 import { formatKES, calculateSellingPrice, calculateNetCost } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
 import AutocompleteInput from './AutocompleteInput';
+import VATRateInput from './VATRateInput';
 import { useApp } from '../contexts/AppContext';
 
 const InvoiceManagement: React.FC = () => {
@@ -35,7 +36,7 @@ const InvoiceManagement: React.FC = () => {
     quantity: '',
     invoicePrice: '',
     supplierDiscountPercent: '0',
-    vatRate: '16',
+    vatRate: '0',
     otherCharges: '0',
     costPrice: '',
     sellingPrice: '',
@@ -125,14 +126,14 @@ const InvoiceManagement: React.FC = () => {
 
       const invoicePrice = parseFloat(updated.invoicePrice) || 0;
       const supplierDiscountPercent = parseFloat(updated.supplierDiscountPercent) || 0;
-      const vatRate = parseFloat(updated.vatRate) || 16;
+      const vatRate = parseFloat(updated.vatRate) || 0;
       const otherCharges = parseFloat(updated.otherCharges) || 0;
       const costPrice = parseFloat(updated.costPrice) || 0;
 
       const pricingInputs = {
         invoicePrice: invoicePrice || undefined,
         supplierDiscountPercent: supplierDiscountPercent || undefined,
-        vatRate: vatRate || 16,
+        vatRate: vatRate || 0,
         otherCharges: otherCharges || undefined,
         costPrice: costPrice
       };
@@ -195,7 +196,7 @@ const InvoiceManagement: React.FC = () => {
       quantity: '',
       invoicePrice: '',
       supplierDiscountPercent: '0',
-      vatRate: '16',
+      vatRate: '0',
       otherCharges: '0',
       costPrice: '',
       sellingPrice: '',
@@ -432,14 +433,14 @@ const InvoiceManagement: React.FC = () => {
 
         const invoicePrice = parseFloat(row.invoiceprice) || 0;
         const supplierDiscountPercent = parseFloat(row.supplierdiscountpercent) || 0;
-        const vatRate = parseFloat(row.vatrate) || 16;
+        const vatRate = parseFloat(row.vatrate) || 0;
         const otherCharges = parseFloat(row.othercharges) || 0;
         const costPrice = parseFloat(row.costprice) || 0;
 
         const pricingInputs = {
           invoicePrice: invoicePrice || undefined,
           supplierDiscountPercent: supplierDiscountPercent || undefined,
-          vatRate: vatRate || 16,
+          vatRate: vatRate || 0,
           otherCharges: otherCharges || undefined,
           costPrice: costPrice
         };
@@ -521,7 +522,7 @@ const InvoiceManagement: React.FC = () => {
       quantity: '',
       invoicePrice: '',
       supplierDiscountPercent: '0',
-      vatRate: '16',
+      vatRate: '0',
       otherCharges: '0',
       costPrice: '',
       sellingPrice: '',
@@ -835,16 +836,10 @@ const InvoiceManagement: React.FC = () => {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">VAT Rate %</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={currentItem.vatRate}
-                      onChange={(e) => handlePricingChange('vatRate', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
+                  <VATRateInput
+                    value={currentItem.vatRate}
+                    onChange={(value) => handlePricingChange('vatRate', value)}
+                  />
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Other Charges (KES)</label>
