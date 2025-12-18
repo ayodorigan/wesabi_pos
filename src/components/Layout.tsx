@@ -15,7 +15,9 @@ import {
   FileInput,
   FileMinus,
   ClipboardList,
-  Pill
+  Pill,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -31,6 +33,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   const { showAlert } = useAlert();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   if (!user) return null;
 
@@ -107,15 +110,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       <div className="flex pt-[73px] lg:pt-0">
         {/* Sidebar */}
         <div className={`
-          fixed left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out flex-shrink-0
+          fixed left-0 z-50 bg-white shadow-lg transform transition-all duration-300 ease-in-out flex-shrink-0
           top-[73px] bottom-0 lg:top-0
           lg:translate-x-0
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          ${isSidebarCollapsed ? 'lg:w-20' : 'lg:w-64'}
+          w-64
         `}>
           <div className="flex flex-col h-full lg:h-screen">
             {/* Logo */}
             <div className="hidden lg:flex items-center px-6 py-4 min-h-[73px] flex-shrink-0">
-              <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-12" />
+              {isSidebarCollapsed ? (
+                <img src="/wesabi_icon.png" alt="Wesabi" className="h-8 w-8" />
+              ) : (
+                <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-12" />
+              )}
             </div>
 
             {/* Navigation */}
@@ -131,15 +140,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                           setIsSidebarOpen(false);
                         }}
                         className={`
-                          w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors
-                          ${activeTab === item.id 
-                            ? 'bg-green-100 text-green-700' 
+                          w-full flex items-center rounded-lg text-left transition-colors
+                          ${isSidebarCollapsed ? 'justify-center px-3 py-3' : 'space-x-3 px-3 py-2'}
+                          ${activeTab === item.id
+                            ? 'bg-green-100 text-green-700'
                             : 'text-gray-600 hover:bg-gray-100'
                           }
                         `}
+                        title={isSidebarCollapsed ? item.label : undefined}
                       >
-                        <Icon className="h-5 w-5" />
-                        <span>{item.label}</span>
+                        <Icon className="h-5 w-5 flex-shrink-0" />
+                        {!isSidebarCollapsed && <span>{item.label}</span>}
                       </button>
                     </li>
                   );
@@ -147,12 +158,86 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               </ul>
             </nav>
 
+            {/* Account Section */}
+            <div className="border-t flex-shrink-0">
+              {/* Collapse Toggle Button (Desktop only) */}
+              <button
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                className="hidden lg:flex w-full items-center justify-center py-3 text-gray-600 hover:bg-gray-100 transition-colors border-b"
+              >
+                {isSidebarCollapsed ? (
+                  <ChevronRight className="h-5 w-5" />
+                ) : (
+                  <ChevronLeft className="h-5 w-5" />
+                )}
+              </button>
+
+              {/* User Profile */}
+              <div className="p-4">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                    className={`
+                      w-full flex items-center rounded-lg hover:bg-gray-100 transition-colors
+                      ${isSidebarCollapsed ? 'justify-center p-2' : 'space-x-3 p-2'}
+                    `}
+                  >
+                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-medium text-green-600">
+                        {user.name.split(' ').map(n => n[0]).join('')}
+                      </span>
+                    </div>
+                    {!isSidebarCollapsed && (
+                      <>
+                        <div className="flex-1 text-left">
+                          <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+                          <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                        </div>
+                        <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                      </>
+                    )}
+                  </button>
+
+                  {showProfileDropdown && (
+                    <div className={`
+                      absolute bottom-full mb-2 bg-white rounded-lg shadow-lg border z-50
+                      ${isSidebarCollapsed ? 'left-full ml-2 w-48' : 'left-0 right-0'}
+                    `}>
+                      <div className="py-1">
+                        <button
+                          onClick={() => {
+                            onTabChange('profile');
+                            setShowProfileDropdown(false);
+                            setIsSidebarOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                        >
+                          <User className="h-4 w-4 mr-2" />
+                          My Profile
+                        </button>
+                        <button
+                          onClick={handleSignOut}
+                          className="w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-red-50 flex items-center"
+                        >
+                          <LogOut className="h-4 w-4 mr-2" />
+                          Sign Out
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 lg:ml-64 min-w-0 flex flex-col h-[calc(100vh-73px)] lg:h-screen">
-          {/* Top Header with Profile */}
+        <div className={`
+          flex-1 min-w-0 flex flex-col h-[calc(100vh-73px)] lg:h-screen transition-all duration-300
+          ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}
+        `}>
+          {/* Top Header */}
           <div className="bg-white shadow-sm border-b px-4 lg:px-8 py-4 flex-shrink-0">
             <div className="flex justify-between items-center">
               {/* Page Title */}
@@ -160,49 +245,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                 <h1 className="text-2xl font-bold text-gray-900">{currentPageInfo.title}</h1>
                 {currentPageInfo.subtitle && (
                   <p className="text-sm text-gray-600 mt-1">{currentPageInfo.subtitle}</p>
-                )}
-              </div>
-
-              {/* Profile Dropdown */}
-              <div className="relative ml-auto">
-                <button
-                  onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                  className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-green-600">
-                      {user.name.split(' ').map(n => n[0]).join('')}
-                    </span>
-                  </div>
-                  <div className="hidden sm:block text-left">
-                    <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                    <p className="text-xs text-gray-500 capitalize">{user.role}</p>
-                  </div>
-                  <ChevronDown className="h-4 w-4 text-gray-400" />
-                </button>
-
-                {showProfileDropdown && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border z-50">
-                    <div className="py-1">
-                      <button
-                        onClick={() => {
-                          onTabChange('profile');
-                          setShowProfileDropdown(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                      >
-                        <User className="h-4 w-4 mr-2" />
-                        My Profile
-                      </button>
-                     <button
-                       onClick={handleSignOut}
-                       className="w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-red-50 flex items-center"
-                     >
-                       <LogOut className="h-4 w-4 mr-2" />
-                       Sign Out
-                     </button>
-                    </div>
-                  </div>
                 )}
               </div>
             </div>
@@ -216,7 +258,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
 
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
@@ -224,8 +266,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
 
       {/* Profile Dropdown Overlay */}
       {showProfileDropdown && (
-        <div 
-          className="fixed inset-0 z-30"
+        <div
+          className="fixed inset-0 z-40"
           onClick={() => setShowProfileDropdown(false)}
         />
       )}
