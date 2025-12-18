@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, FileText, Eye, Package, Upload, ArrowUp, ArrowDown, RotateCcw } from 'lucide-react';
+import { Plus, Search, FileText, Eye, Package, Upload, ArrowUp, ArrowDown, RotateCcw, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../lib/supabase';
