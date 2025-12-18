@@ -107,18 +107,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       <div className="flex">
         {/* Sidebar */}
         <div className={`
-          fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out min-h-screen flex-shrink-0
-          lg:translate-x-0 lg:static lg:inset-0
+          fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out flex-shrink-0
+          lg:translate-x-0
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col h-screen">
             {/* Logo */}
-            <div className="hidden lg:flex items-center px-6 py-4 border-b min-h-[73px]">
+            <div className="hidden lg:flex items-center px-6 py-4 border-b min-h-[73px] flex-shrink-0">
               <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-12" />
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 p-4 pt-6">
+            <nav className="flex-1 p-4 pt-6 overflow-y-auto">
               <ul className="space-y-2">
                 {menuItems.map((item) => {
                   const Icon = item.icon;
@@ -150,7 +150,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 lg:ml-0 min-w-0">
+        <div className="flex-1 lg:ml-64 min-w-0">
           {/* Top Header with Profile */}
           <div className="bg-white shadow-sm border-b px-4 lg:px-8 py-4">
             <div className="flex justify-between items-center">
