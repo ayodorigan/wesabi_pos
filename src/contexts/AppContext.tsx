@@ -6,6 +6,7 @@ import { useAuth } from './AuthContext';
 import { useAlert } from './AlertContext';
 import { retryDatabaseOperation } from '../utils/retry';
 import { Product, PriceHistory, SaleItem, Sale, StockTake, ActivityLog, StockAlert, SalesHistoryItem } from '../types';
+import { getAllDrugNames, addDrugToRegistry } from '../utils/drugRegistry';
 
 interface AppContextType {
   products: Product[];
@@ -33,7 +34,7 @@ interface AppContextType {
   importProducts: (products: any[]) => Promise<void>;
   addCategory: (category: string) => void;
   addSupplier: (supplier: string) => void;
-  addMedicine: (medicine: string) => void;
+  addMedicine: (medicine: string) => Promise<void>;
   getMedicineByName: (name: string) => typeof medicineDatabase[0] | undefined;
   getSalesHistory: () => SalesHistoryItem[];
   generateReceipt: (sale: Sale) => void;
@@ -259,10 +260,35 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       // Sales history is generated on-demand by the SalesHistory component
       // Not generated here to improve initial load performance
 
+      // Load drug registry
+      try {
+        const { success, data: drugNames } = await getAllDrugNames();
+        if (success && drugNames && drugNames.length > 0) {
+          // Merge drug registry with existing medicine database
+          const registryMedicines = drugNames.map(drug => ({
+            name: drug.name,
+            category: drug.category || 'Other',
+            commonDosages: ['As prescribed'],
+            description: 'Registered medicine'
+          }));
+
+          // Combine with existing templates, avoiding duplicates
+          const existingNames = new Set(medicineDatabase.map(m => m.name.toLowerCase()));
+          const uniqueRegistry = registryMedicines.filter(
+            m => !existingNames.has(m.name.toLowerCase())
+          );
+
+          setMedicineTemplates([...medicineDatabase, ...uniqueRegistry]);
+        }
+      } catch (error) {
+        console.error('Error loading drug registry:', error);
+        // Continue without registry data - fallback to static data
+      }
+
       // Update categories and suppliers from loaded data
       const loadedCategories = [...new Set(formattedProducts.map(p => p.category))];
       const loadedSuppliers = [...new Set(formattedProducts.map(p => p.supplier))];
-      
+
       setCategories(prev => [...new Set([...prev, ...loadedCategories])]);
       setSuppliers(prev => [...new Set([...prev, ...loadedSuppliers])]);
 
@@ -899,7 +925,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   };
 
-  const addMedicine = (medicine: string) => {
+  const addMedicine = async (medicine: string) => {
     const newMedicine = {
       name: medicine,
       category: 'Other',
@@ -907,6 +933,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       description: 'User-added medicine'
     };
     setMedicineTemplates(prev => [...prev, newMedicine]);
+
+    // Also add to the drug registry database
+    if (isSupabaseEnabled && supabase) {
+      try {
+        await addDrugToRegistry(medicine, 'Other');
+      } catch (error) {
+        console.error('Error adding medicine to registry:', error);
+        // Continue anyway - the local state is updated
+      }
+    }
   };
 
   const getMedicineByName = (name: string) => {
