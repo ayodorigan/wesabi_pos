@@ -188,7 +188,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                       ${isSidebarCollapsed ? 'justify-center p-2' : 'space-x-3 p-2'}
                     `}
                   >
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 min-w-[2rem] min-h-[2rem] bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-sm font-medium text-green-600">
                         {user.name.split(' ').map(n => n[0]).join('')}
                       </span>
