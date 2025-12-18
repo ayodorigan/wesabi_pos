@@ -118,12 +118,30 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
           w-64
         `}>
           <div className="flex flex-col h-full lg:h-screen">
-            {/* Logo */}
-            <div className="hidden lg:flex items-center px-6 py-4 min-h-[73px] flex-shrink-0">
+            {/* Logo and Collapse Button */}
+            <div className={`
+              hidden lg:flex items-center min-h-[73px] flex-shrink-0 border-b
+              ${isSidebarCollapsed ? 'justify-center px-4 py-4' : 'justify-between px-6 py-4'}
+            `}>
               {isSidebarCollapsed ? (
-                <img src="/wesabi_icon.png" alt="Wesabi" className="h-8 w-8" />
+                <button
+                  onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                  className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                  title="Expand sidebar"
+                >
+                  <img src="/wesabi_icon.png" alt="Wesabi" className="h-8 w-8" />
+                </button>
               ) : (
-                <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-12" />
+                <>
+                  <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-12" />
+                  <button
+                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                    className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                    title="Collapse sidebar"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                </>
               )}
             </div>
 
@@ -160,18 +178,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
 
             {/* Account Section */}
             <div className="border-t flex-shrink-0">
-              {/* Collapse Toggle Button (Desktop only) */}
-              <button
-                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="hidden lg:flex w-full items-center justify-center py-3 text-gray-600 hover:bg-gray-100 transition-colors border-b"
-              >
-                {isSidebarCollapsed ? (
-                  <ChevronRight className="h-5 w-5" />
-                ) : (
-                  <ChevronLeft className="h-5 w-5" />
-                )}
-              </button>
-
               {/* User Profile */}
               <div className="p-4">
                 <div className="relative">
