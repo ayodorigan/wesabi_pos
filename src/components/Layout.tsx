@@ -113,7 +113,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         `}>
           <div className="flex flex-col h-full">
             {/* Logo */}
-            <div className="hidden lg:flex items-center px-6 py-4 border-b">
+            <div className="hidden lg:flex items-center px-6 py-4 border-b min-h-[73px]">
               <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-12" />
             </div>
 
