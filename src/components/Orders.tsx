@@ -10,6 +10,7 @@ import { usePageRefresh } from '../hooks/usePageRefresh';
 import { usePagination } from '../hooks/usePagination';
 import Pagination from './Pagination';
 import { useAutoRefresh } from '../contexts/DataRefreshContext';
+import { getErrorMessage } from '../utils/errorMessages';
 
 interface Product {
   id: string;
@@ -95,7 +96,7 @@ export default function Orders() {
       if (error) throw error;
       setOrders(data || []);
     } catch (error: any) {
-      showAlert({ title: 'Error', message: error.message, type: 'error' });
+      showAlert({ title: 'Error', message: getErrorMessage(error), type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -111,7 +112,7 @@ export default function Orders() {
       if (error) throw error;
       setAllProducts(data || []);
     } catch (error: any) {
-      showAlert({ title: 'Error', message: error.message, type: 'error' });
+      showAlert({ title: 'Error', message: getErrorMessage(error), type: 'error' });
     }
   }, [showAlert]);
 
@@ -148,7 +149,7 @@ export default function Orders() {
       }));
       setOrderItems(items);
     } catch (error: any) {
-      showAlert({ title: 'Error', message: error.message, type: 'error' });
+      showAlert({ title: 'Error', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -175,7 +176,7 @@ export default function Orders() {
       setNotes(order.notes || '');
       setShowCreateModal(true);
     } catch (error: any) {
-      showAlert({ title: 'Error', message: error.message, type: 'error' });
+      showAlert({ title: 'Error', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -270,7 +271,7 @@ export default function Orders() {
       setNewProduct({ name: '', min_stock_level: '10' });
       showAlert({ title: 'Success', message: 'Product added successfully', type: 'success' });
     } catch (error: any) {
-      showAlert({ title: 'Error', message: error.message, type: 'error' });
+      showAlert({ title: 'Error', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -351,7 +352,7 @@ export default function Orders() {
       setShowCreateModal(false);
       fetchOrders();
     } catch (error: any) {
-      showAlert({ title: 'Error', message: error.message, type: 'error' });
+      showAlert({ title: 'Error', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -522,7 +523,7 @@ export default function Orders() {
       showAlert({ title: 'Success', message: `Order ${order.order_number} reverted to pending status`, type: 'success' });
       fetchOrders();
     } catch (error: any) {
-      showAlert({ title: 'Error', message: error.message || 'Failed to revert order status', type: 'error' });
+      showAlert({ title: 'Error', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -538,7 +539,7 @@ export default function Orders() {
       showAlert({ title: 'Success', message: `Order ${order.order_number} marked as completed`, type: 'success' });
       fetchOrders();
     } catch (error: any) {
-      showAlert({ title: 'Error', message: error.message || 'Failed to mark order as completed', type: 'error' });
+      showAlert({ title: 'Error', message: getErrorMessage(error), type: 'error' });
     }
   };
 

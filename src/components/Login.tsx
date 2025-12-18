@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { getErrorMessage } from '../utils/errorMessages';
 
 const Login: React.FC = () => {
   const { signIn, loading, isSupabaseEnabled } = useAuth();
@@ -49,7 +50,7 @@ const Login: React.FC = () => {
         console.error('Error Hint:', error.hint);
         console.error('Full Error Object:', JSON.stringify(error, null, 2));
         setShowSignUpOption(false);
-        setError(`Database error querying schema: ${error.message || 'Unknown error'}`);
+        setError(getErrorMessage(error));
         return;
       }
 
@@ -62,7 +63,7 @@ const Login: React.FC = () => {
       console.error('Exception stack:', error?.stack);
       console.error('Full exception:', error);
       setShowSignUpOption(false);
-      setError(`Error: ${error?.message || 'Unknown error'}`);
+      setError(getErrorMessage(error));
     }
   };
 
@@ -112,7 +113,7 @@ const Login: React.FC = () => {
         await signIn(formData.email, formData.password);
       }
     } catch (error: any) {
-      setError(error.message || 'Failed to ' + (isSignUp ? 'sign up' : 'sign in'));
+      setError(getErrorMessage(error));
     } finally {
       setIsLoading(false);
     }

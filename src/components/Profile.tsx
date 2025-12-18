@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  User, 
-  Camera, 
+import {
+  User,
+  Camera,
   Save,
   Eye,
   EyeOff,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
+import { getErrorMessage } from '../utils/errorMessages';
 
 const Profile: React.FC = () => {
   const { user, changePassword, updateProfile } = useAuth();
@@ -61,7 +62,7 @@ const Profile: React.FC = () => {
       showAlert({ title: 'Profile', message: 'Profile updated successfully!', type: 'success' });
       setIsEditing(false);
     } catch (error: any) {
-      showAlert({ title: 'Profile', message: error.message || 'Failed to update profile', type: 'error' });
+      showAlert({ title: 'Profile', message: getErrorMessage(error), type: 'error' });
     }
   };
 
@@ -84,7 +85,7 @@ const Profile: React.FC = () => {
       setShowPasswordChange(false);
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error: any) {
-      showAlert({ title: 'Profile', message: error.message || 'Failed to change password', type: 'error' });
+      showAlert({ title: 'Profile', message: getErrorMessage(error), type: 'error' });
     }
   };
 
