@@ -49,6 +49,24 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
+  const pageTitles: Record<string, { title: string; subtitle?: string }> = {
+    dashboard: { title: 'Dashboard', subtitle: 'Wesabi Pharmacy - Management Overview' },
+    pos: { title: 'Point of Sale' },
+    invoices: { title: 'Invoice Management', subtitle: 'Add inventory by invoice' },
+    inventory: { title: 'Inventory Management' },
+    orders: { title: 'Supplier Orders', subtitle: 'Manage purchase orders and stock requests' },
+    creditnotes: { title: 'Credit Notes', subtitle: 'View and manage customer returns' },
+    stocktake: { title: 'Stock Take', subtitle: 'Physical inventory verification' },
+    drugsaleshistory: { title: 'Sales Report', subtitle: 'Track sales performance' },
+    drughistory: { title: 'Drug History', subtitle: 'Historical product data' },
+    analytics: { title: 'Analytics', subtitle: 'Business insights and reports' },
+    logs: { title: 'Activity Logs', subtitle: 'System activity tracking' },
+    settings: { title: 'Settings', subtitle: 'User management' },
+    profile: { title: 'My Profile', subtitle: 'Account settings' },
+  };
+
+  const currentPageInfo = pageTitles[activeTab] || { title: 'Dashboard' };
+
   // Filter menu items based on user permissions
   const menuItems = allMenuItems.filter(item => canAccessPage(item.id));
 
@@ -136,8 +154,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
           {/* Top Header with Profile */}
           <div className="bg-white shadow-sm border-b px-4 lg:px-8 py-4">
             <div className="flex justify-between items-center">
-              <div></div>
-              
+              {/* Page Title */}
+              <div className="flex-1">
+                <h1 className="text-2xl font-bold text-gray-900">{currentPageInfo.title}</h1>
+                {currentPageInfo.subtitle && (
+                  <p className="text-sm text-gray-600 mt-1">{currentPageInfo.subtitle}</p>
+                )}
+              </div>
+
               {/* Profile Dropdown */}
               <div className="relative ml-auto">
                 <button

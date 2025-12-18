@@ -705,11 +705,7 @@ const InvoiceManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Invoice Management</h1>
-          <p className="text-gray-600">Add inventory by invoice</p>
-        </div>
+      <div className="flex justify-end items-center">
         <button
           onClick={() => setShowAddForm(true)}
           className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"

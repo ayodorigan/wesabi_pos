@@ -148,8 +148,7 @@ const DrugHistory: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-800">Drug History</h2>
+      <div className="flex items-center justify-end">
         <div className="text-sm text-gray-600">
           Total Records: {filteredSales.length}
         </div>

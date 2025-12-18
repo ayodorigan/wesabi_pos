@@ -509,11 +509,7 @@ const CreditNotes: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Credit Notes</h1>
-          <p className="text-gray-600">Manage drug returns and credit notes</p>
-        </div>
+      <div className="flex justify-end items-center">
         <div className="flex space-x-2">
           <button
             onClick={exportCreditNotesToPDF}

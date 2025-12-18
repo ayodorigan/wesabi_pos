@@ -497,11 +497,7 @@ const StockTake: React.FC = () => {
   if (!isSupabaseEnabled) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Stock Take</h1>
-            <p className="text-gray-600">Wesabi Pharmacy - Stock Take Management</p>
-          </div>
+        <div className="flex flex-col sm:flex-row justify-end items-start sm:items-center gap-4">
         </div>
 
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
@@ -536,9 +532,8 @@ const StockTake: React.FC = () => {
                 <span>Save & Exit</span>
               </button>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">{activeSession.name}</h1>
             <div className="flex items-center space-x-4 text-sm text-gray-600">
-              <span>Wesabi Pharmacy - Physical Stock Verification</span>
+              <span className="text-lg font-semibold text-gray-900">{activeSession.name}</span>
               {lastSaved && (
                 <span className="text-green-600">
                   Last saved: {lastSaved.toLocaleTimeString('en-KE')}
@@ -730,11 +725,7 @@ const StockTake: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Stock Take History</h1>
-          <p className="text-gray-600">Wesabi Pharmacy - Stock Take Management</p>
-        </div>
+      <div className="flex flex-col sm:flex-row justify-end items-start sm:items-center gap-4">
         <button
           onClick={startNewStockTake}
           className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
