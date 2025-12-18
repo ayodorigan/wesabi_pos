@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, FileText, Download, Eye, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Search, FileText, Download, Eye, ArrowUp, ArrowDown, Trash2, Edit2, CheckSquare, Square } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../lib/supabase';
-import { CreditNote, CreditNoteItem, Product, RETURN_REASONS, ReturnReasonCode } from '../types';
+import { CreditNote, CreditNoteItem, Invoice, InvoiceItem, RETURN_REASONS, ReturnReasonCode } from '../types';
 import { formatKES } from '../utils/currency';
 import { getErrorMessage } from '../utils/errorMessages';
-import AutocompleteInput from './AutocompleteInput';
 import { useApp } from '../contexts/AppContext';
 import { usePagination } from '../hooks/usePagination';
 import Pagination from './Pagination';
 import { useAutoRefresh } from '../contexts/DataRefreshContext';
 
 const CreditNotes: React.FC = () => {
-  const { user } = useAuth();
+  const { user, canDeleteProducts } = useAuth();
   const { showAlert } = useAlert();
-  const { suppliers, products, refreshData, logActivity } = useApp();
+  const { refreshData, logActivity } = useApp();
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedCreditNote, setSelectedCreditNote] = useState<CreditNote | null>(null);
@@ -25,26 +25,13 @@ const CreditNotes: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  const [creditNoteData, setCreditNoteData] = useState({
-    invoiceNumber: '',
-    supplier: '',
-    returnDate: new Date().toISOString().split('T')[0],
-  });
-
-  const [creditNoteItems, setCreditNoteItems] = useState<CreditNoteItem[]>([]);
-  const [currentItem, setCurrentItem] = useState({
-    productId: '',
-    productName: '',
-    batchNumber: '',
-    quantity: '',
-    costPrice: '',
-    reason: '',
-  });
-
-  const [returnReasonCode, setReturnReasonCode] = useState<ReturnReasonCode>('other');
-  const [customReason, setCustomReason] = useState('');
-
-  const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>('');
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [availableItems, setAvailableItems] = useState<InvoiceItem[]>([]);
+  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
+  const [itemQuantities, setItemQuantities] = useState<{ [key: number]: number }>({});
+  const [itemReasons, setItemReasons] = useState<{ [key: number]: string }>({});
+  const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
 
   const loadCreditNotesCallback = useCallback(() => {
     if (user) {
@@ -55,6 +42,7 @@ const CreditNotes: React.FC = () => {
   useEffect(() => {
     if (user) {
       loadCreditNotes();
+      loadInvoices();
     }
   }, [user]);
 
@@ -116,155 +104,282 @@ const CreditNotes: React.FC = () => {
     }
   };
 
-  const handleProductSelect = (productName: string) => {
-    const product = products.find(p => p.name === productName);
-    if (product) {
-      setCurrentItem({
-        ...currentItem,
-        productId: product.id,
-        productName: product.name,
-        batchNumber: product.batchNumber,
-        costPrice: product.costPrice.toString(),
+  const loadInvoices = async () => {
+    try {
+      if (!supabase) return;
+
+      const { data: invoicesData, error: invoicesError } = await supabase
+        .from('invoices')
+        .select('*')
+        .order('invoice_date', { ascending: false });
+
+      if (invoicesError) throw invoicesError;
+
+      const invoicesWithItems = await Promise.all(
+        (invoicesData || []).map(async (invoice) => {
+          const { data: items } = await supabase
+            .from('invoice_items')
+            .select('*')
+            .eq('invoice_id', invoice.id);
+
+          return {
+            ...invoice,
+            id: invoice.id,
+            invoiceNumber: invoice.invoice_number,
+            supplier: invoice.supplier,
+            invoiceDate: new Date(invoice.invoice_date),
+            totalAmount: parseFloat(invoice.total_amount),
+            notes: invoice.notes,
+            userId: invoice.user_id,
+            userName: invoice.user_name,
+            items: (items || []).map((item: any) => ({
+              id: item.id,
+              productName: item.product_name,
+              category: item.category,
+              batchNumber: item.batch_number,
+              expiryDate: new Date(item.expiry_date),
+              quantity: item.quantity,
+              invoicePrice: item.invoice_price ? parseFloat(item.invoice_price) : undefined,
+              supplierDiscountPercent: item.supplier_discount_percent ? parseFloat(item.supplier_discount_percent) : undefined,
+              vatRate: item.vat_rate ? parseFloat(item.vat_rate) : undefined,
+              otherCharges: item.other_charges ? parseFloat(item.other_charges) : undefined,
+              costPrice: parseFloat(item.cost_price),
+              sellingPrice: parseFloat(item.selling_price),
+              totalCost: parseFloat(item.total_cost),
+              barcode: item.barcode,
+            })),
+            createdAt: new Date(invoice.created_at),
+            updatedAt: new Date(invoice.updated_at),
+          };
+        })
+      );
+
+      setInvoices(invoicesWithItems);
+    } catch (error) {
+      console.error('Error loading invoices:', error);
+    }
+  };
+
+  const handleInvoiceSelect = (invoiceId: string) => {
+    setSelectedInvoiceId(invoiceId);
+    const invoice = invoices.find(inv => inv.id === invoiceId);
+    if (invoice) {
+      setSelectedInvoice(invoice);
+      setAvailableItems(invoice.items);
+      setSelectedItems(new Set());
+      setItemQuantities({});
+      setItemReasons({});
+    }
+  };
+
+  const toggleItemSelection = (index: number) => {
+    const newSelected = new Set(selectedItems);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+      const newQuantities = { ...itemQuantities };
+      delete newQuantities[index];
+      setItemQuantities(newQuantities);
+      const newReasons = { ...itemReasons };
+      delete newReasons[index];
+      setItemReasons(newReasons);
+    } else {
+      newSelected.add(index);
+      setItemQuantities({
+        ...itemQuantities,
+        [index]: availableItems[index].quantity
+      });
+      setItemReasons({
+        ...itemReasons,
+        [index]: RETURN_REASONS.other
       });
     }
+    setSelectedItems(newSelected);
   };
 
-  const addItemToCreditNote = () => {
-    if (!currentItem.productId || !currentItem.quantity || !currentItem.costPrice) {
-      showAlert({ title: 'Credit Notes', message: 'Please fill in all required fields for the item', type: 'error' });
+  const updateItemQuantity = (index: number, quantity: number) => {
+    const maxQuantity = availableItems[index].quantity;
+    if (quantity > maxQuantity) {
+      showAlert({
+        title: 'Credit Notes',
+        message: `Quantity cannot exceed ${maxQuantity}`,
+        type: 'warning'
+      });
       return;
     }
-
-    if (returnReasonCode === 'other' && !customReason.trim()) {
-      showAlert({ title: 'Credit Notes', message: 'Please specify a custom reason', type: 'error' });
-      return;
-    }
-
-    const quantity = parseInt(currentItem.quantity);
-    const costPrice = parseFloat(currentItem.costPrice);
-    const totalCredit = quantity * costPrice;
-
-    const finalReason = returnReasonCode === 'other' ? customReason : RETURN_REASONS[returnReasonCode];
-
-    const newItem: CreditNoteItem = {
-      productId: currentItem.productId,
-      productName: currentItem.productName,
-      batchNumber: currentItem.batchNumber,
-      quantity,
-      costPrice,
-      totalCredit,
-      reason: finalReason,
-    };
-
-    setCreditNoteItems([...creditNoteItems, newItem]);
-
-    setCurrentItem({
-      productId: '',
-      productName: '',
-      batchNumber: '',
-      quantity: '',
-      costPrice: '',
-      reason: '',
+    setItemQuantities({
+      ...itemQuantities,
+      [index]: Math.max(1, Math.min(quantity, maxQuantity))
     });
-    setReturnReasonCode('other');
-    setCustomReason('');
   };
 
-  const removeItemFromCreditNote = (index: number) => {
-    setCreditNoteItems(creditNoteItems.filter((_, i) => i !== index));
+  const updateItemReason = (index: number, reason: string) => {
+    setItemReasons({
+      ...itemReasons,
+      [index]: reason
+    });
   };
 
   const saveCreditNote = async () => {
-    if (!creditNoteData.invoiceNumber || !creditNoteData.supplier) {
-      showAlert({ title: 'Credit Notes', message: 'Please fill in all required fields', type: 'error' });
+    if (!selectedInvoice) {
+      showAlert({ title: 'Credit Notes', message: 'Please select an invoice', type: 'error' });
       return;
     }
 
-    if (creditNoteItems.length === 0) {
-      showAlert({ title: 'Credit Notes', message: 'Please add at least one item to the credit note', type: 'error' });
+    if (selectedItems.size === 0) {
+      showAlert({ title: 'Credit Notes', message: 'Please select at least one item', type: 'error' });
       return;
+    }
+
+    for (const itemIndex of Array.from(selectedItems)) {
+      if (!itemReasons[itemIndex] || itemReasons[itemIndex].trim() === '') {
+        showAlert({
+          title: 'Credit Notes',
+          message: 'Please provide a reason for all selected items',
+          type: 'error'
+        });
+        return;
+      }
     }
 
     if (!user || !supabase) return;
 
     setLoading(true);
     try {
+      const creditNoteItems: CreditNoteItem[] = Array.from(selectedItems).map(index => {
+        const item = availableItems[index];
+        const quantity = itemQuantities[index] || item.quantity;
+        return {
+          productId: item.id || '',
+          productName: item.productName,
+          batchNumber: item.batchNumber,
+          quantity: quantity,
+          costPrice: item.costPrice,
+          totalCredit: quantity * item.costPrice,
+          reason: itemReasons[index] || 'Return'
+        };
+      });
+
       const totalAmount = creditNoteItems.reduce((sum, item) => sum + item.totalCredit, 0);
-      const autoGeneratedNumber = `CN-${Date.now()}`;
-      const mainReason = creditNoteItems.map(item => item.reason).filter(Boolean).join(', ') || 'Return';
-      const reasonCode = creditNoteItems.length > 0 ? returnReasonCode : 'other';
+      const autoGeneratedNumber = isEditing && selectedCreditNote
+        ? selectedCreditNote.creditNoteNumber
+        : `CN-${Date.now()}`;
 
-      const { data: creditNote, error: creditNoteError } = await supabase
-        .from('credit_notes')
-        .insert({
-          credit_note_number: autoGeneratedNumber,
-          invoice_number: creditNoteData.invoiceNumber,
-          supplier: creditNoteData.supplier,
-          return_date: creditNoteData.returnDate,
-          total_amount: totalAmount,
-          reason: mainReason,
-          return_reason_code: reasonCode,
-          user_id: user.user_id,
-          user_name: user.name,
-        })
-        .select()
-        .single();
+      if (isEditing && selectedCreditNote) {
+        const { error: updateError } = await supabase
+          .from('credit_notes')
+          .update({
+            invoice_id: selectedInvoice.id,
+            invoice_number: selectedInvoice.invoiceNumber,
+            supplier: selectedInvoice.supplier,
+            return_date: returnDate,
+            total_amount: totalAmount,
+            reason: creditNoteItems.map(item => item.reason).join(', '),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', selectedCreditNote.id);
 
-      if (creditNoteError) throw creditNoteError;
+        if (updateError) throw updateError;
 
-      for (const item of creditNoteItems) {
-        const { data: product } = await supabase
-          .from('products')
-          .select('*')
-          .eq('id', item.productId)
-          .single();
+        await supabase
+          .from('credit_note_items')
+          .delete()
+          .eq('credit_note_id', selectedCreditNote.id);
 
-        if (product) {
-          const newStock = product.current_stock - item.quantity;
-          if (newStock < 0) {
-            throw new Error(`Insufficient stock for ${item.productName}. Available: ${product.current_stock}, Returning: ${item.quantity}`);
-          }
+        for (const item of creditNoteItems) {
+          const { error: itemError } = await supabase
+            .from('credit_note_items')
+            .insert({
+              credit_note_id: selectedCreditNote.id,
+              product_id: item.productId,
+              product_name: item.productName,
+              batch_number: item.batchNumber,
+              quantity: item.quantity,
+              cost_price: item.costPrice,
+              total_credit: item.totalCredit,
+              reason: item.reason,
+            });
 
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({
-              current_stock: newStock,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', item.productId);
-
-          if (updateError) throw updateError;
+          if (itemError) throw itemError;
         }
 
-        const { error: itemError } = await supabase
-          .from('credit_note_items')
-          .insert({
-            credit_note_id: creditNote.id,
-            product_id: item.productId,
-            product_name: item.productName,
-            batch_number: item.batchNumber,
-            quantity: item.quantity,
-            cost_price: item.costPrice,
-            total_credit: item.totalCredit,
-            reason: item.reason,
-          });
+        await logActivity(
+          'CREDIT_NOTE_UPDATED',
+          `Updated credit note ${autoGeneratedNumber} for invoice ${selectedInvoice.invoiceNumber} - Total: ${formatKES(totalAmount)}`
+        );
 
-        if (itemError) throw itemError;
+        showAlert({ title: 'Credit Notes', message: 'Credit note updated successfully!', type: 'success' });
+      } else {
+        const { data: creditNote, error: creditNoteError } = await supabase
+          .from('credit_notes')
+          .insert({
+            credit_note_number: autoGeneratedNumber,
+            invoice_id: selectedInvoice.id,
+            invoice_number: selectedInvoice.invoiceNumber,
+            supplier: selectedInvoice.supplier,
+            return_date: returnDate,
+            total_amount: totalAmount,
+            reason: creditNoteItems.map(item => item.reason).join(', '),
+            user_id: user.user_id,
+            user_name: user.name,
+          })
+          .select()
+          .single();
+
+        if (creditNoteError) throw creditNoteError;
+
+        for (const item of creditNoteItems) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('*')
+            .eq('name', item.productName)
+            .eq('batch_number', item.batchNumber)
+            .maybeSingle();
+
+          if (product) {
+            const newStock = product.current_stock - item.quantity;
+            if (newStock < 0) {
+              throw new Error(`Insufficient stock for ${item.productName}. Available: ${product.current_stock}, Returning: ${item.quantity}`);
+            }
+
+            const { error: updateError } = await supabase
+              .from('products')
+              .update({
+                current_stock: newStock,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', product.id);
+
+            if (updateError) throw updateError;
+          }
+
+          const { error: itemError } = await supabase
+            .from('credit_note_items')
+            .insert({
+              credit_note_id: creditNote.id,
+              product_id: item.productId,
+              product_name: item.productName,
+              batch_number: item.batchNumber,
+              quantity: item.quantity,
+              cost_price: item.costPrice,
+              total_credit: item.totalCredit,
+              reason: item.reason,
+            });
+
+          if (itemError) throw itemError;
+        }
+
+        await logActivity(
+          'CREDIT_NOTE_CREATED',
+          `Created credit note ${autoGeneratedNumber} for invoice ${selectedInvoice.invoiceNumber} - Total: ${formatKES(totalAmount)}`
+        );
+
+        showAlert({ title: 'Credit Notes', message: 'Credit note saved successfully!', type: 'success' });
       }
 
-      setLoading(false);
       await loadCreditNotes();
       await refreshData();
-
-      // Log activity
-      await logActivity(
-        'CREDIT_NOTE_CREATED',
-        `Created credit note ${autoGeneratedNumber} for supplier ${creditNoteData.supplier} - Total: ${formatKES(totalAmount)}`
-      );
-
       resetForm();
       setShowAddForm(false);
-      showAlert({ title: 'Credit Notes', message: 'Credit note saved successfully!', type: 'success' });
     } catch (error: any) {
       console.error('Error saving credit note:', error);
       showAlert({ title: 'Credit Notes', message: getErrorMessage(error), type: 'error' });
@@ -273,21 +388,86 @@ const CreditNotes: React.FC = () => {
     }
   };
 
+  const editCreditNote = (creditNote: CreditNote) => {
+    setIsEditing(true);
+    setSelectedCreditNote(creditNote);
+    const invoice = invoices.find(inv => inv.id === creditNote.invoiceId);
+    if (invoice) {
+      setSelectedInvoiceId(invoice.id);
+      setSelectedInvoice(invoice);
+      setAvailableItems(invoice.items);
+      setReturnDate(creditNote.returnDate.toISOString().split('T')[0]);
+
+      const itemIndices = new Set<number>();
+      const quantities: { [key: number]: number } = {};
+      const reasons: { [key: number]: string } = {};
+
+      creditNote.items.forEach(cnItem => {
+        const index = invoice.items.findIndex(
+          invItem => invItem.productName === cnItem.productName && invItem.batchNumber === cnItem.batchNumber
+        );
+        if (index !== -1) {
+          itemIndices.add(index);
+          quantities[index] = cnItem.quantity;
+          reasons[index] = cnItem.reason || '';
+        }
+      });
+
+      setSelectedItems(itemIndices);
+      setItemQuantities(quantities);
+      setItemReasons(reasons);
+    }
+    setShowAddForm(true);
+  };
+
+  const deleteCreditNote = (creditNote: CreditNote) => {
+    if (!canDeleteProducts()) {
+      showAlert({ title: 'Credit Notes', message: 'You do not have permission to delete credit notes', type: 'error' });
+      return;
+    }
+
+    showAlert({
+      title: 'Delete Credit Note',
+      message: `Are you sure you want to delete credit note ${creditNote.creditNoteNumber}? This action cannot be undone.`,
+      type: 'confirm',
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        setLoading(true);
+        try {
+          if (!supabase) return;
+
+          const { error } = await supabase
+            .from('credit_notes')
+            .delete()
+            .eq('id', creditNote.id);
+
+          if (error) throw error;
+
+          await logActivity(
+            'CREDIT_NOTE_DELETED',
+            `Deleted credit note ${creditNote.creditNoteNumber}`
+          );
+
+          await loadCreditNotes();
+          showAlert({ title: 'Credit Notes', message: 'Credit note deleted successfully!', type: 'success' });
+        } catch (error: any) {
+          console.error('Error deleting credit note:', error);
+          showAlert({ title: 'Credit Notes', message: getErrorMessage(error), type: 'error' });
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
+
   const resetForm = () => {
-    setCreditNoteData({
-      invoiceNumber: '',
-      supplier: '',
-      returnDate: new Date().toISOString().split('T')[0],
-    });
-    setCreditNoteItems([]);
-    setCurrentItem({
-      productId: '',
-      productName: '',
-      batchNumber: '',
-      quantity: '',
-      costPrice: '',
-      reason: '',
-    });
+    setSelectedInvoiceId('');
+    setSelectedInvoice(null);
+    setAvailableItems([]);
+    setSelectedItems(new Set());
+    setItemQuantities({});
+    setItemReasons({});
+    setReturnDate(new Date().toISOString().split('T')[0]);
     setIsEditing(false);
     setSelectedCreditNote(null);
   };
@@ -296,7 +476,6 @@ const CreditNotes: React.FC = () => {
     setSelectedCreditNote(creditNote);
     setShowViewModal(true);
   };
-
 
   const exportCreditNotesToPDF = () => {
     try {
@@ -464,24 +643,6 @@ const CreditNotes: React.FC = () => {
     }
   };
 
-  const getCreditNoteShareText = (creditNote: CreditNote): string => {
-    let text = `WESABI PHARMACY - CREDIT NOTE\n\n`;
-    text += `Credit Note #: ${creditNote.creditNoteNumber}\n`;
-    text += `Invoice #: ${creditNote.invoiceNumber}\n`;
-    text += `Supplier: ${creditNote.supplier}\n`;
-    text += `Return Date: ${creditNote.returnDate.toLocaleDateString('en-KE')}\n`;
-    text += `Created By: ${creditNote.userName}\n\n`;
-    text += `Items Returned:\n`;
-    creditNote.items.forEach((item, index) => {
-      text += `${index + 1}. ${item.productName}\n`;
-      text += `   Batch: ${item.batchNumber}, Qty: ${item.quantity}\n`;
-      text += `   Cost: ${formatKES(item.costPrice)}, Credit: ${formatKES(item.totalCredit)}\n`;
-      text += `   Reason: ${item.reason || '-'}\n`;
-    });
-    text += `\nTotal Credit Amount: ${formatKES(creditNote.totalAmount)}`;
-    return text;
-  };
-
   const filteredCreditNotes = creditNotes.filter(creditNote =>
     creditNote.creditNoteNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     creditNote.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -505,8 +666,6 @@ const CreditNotes: React.FC = () => {
     itemsPerPage
   } = usePagination({ items: sortedCreditNotes, itemsPerPage: 20 });
 
-  const productNames = products.map(p => p.name);
-
   return (
     <div className="space-y-6">
       <div className="flex justify-end items-center">
@@ -519,7 +678,10 @@ const CreditNotes: React.FC = () => {
             <span>Export</span>
           </button>
           <button
-            onClick={() => setShowAddForm(true)}
+            onClick={() => {
+              resetForm();
+              setShowAddForm(true);
+            }}
             className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
           >
             <Plus className="h-4 w-4" />
@@ -590,6 +752,22 @@ const CreditNotes: React.FC = () => {
                       >
                         <Eye className="h-4 w-4" />
                       </button>
+                      <button
+                        onClick={() => editCreditNote(creditNote)}
+                        className="text-green-600 hover:text-green-800"
+                        title="Edit Credit Note"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                      {canDeleteProducts() && (
+                        <button
+                          onClick={() => deleteCreditNote(creditNote)}
+                          className="text-red-600 hover:text-red-800"
+                          title="Delete Credit Note"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -615,185 +793,146 @@ const CreditNotes: React.FC = () => {
 
       {showAddForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
-          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto relative" style={{ zIndex: 10000 }}>
+          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto relative" style={{ zIndex: 10000 }}>
             <div className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Create Credit Note</h3>
+              <h3 className="text-lg font-semibold mb-4">
+                {isEditing ? 'Edit Credit Note' : 'Create Credit Note'}
+              </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Original Invoice Number <span className="text-red-500">*</span>
+                    Select Invoice <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={creditNoteData.invoiceNumber}
-                    onChange={(e) => setCreditNoteData({ ...creditNoteData, invoiceNumber: e.target.value })}
+                  <select
+                    value={selectedInvoiceId}
+                    onChange={(e) => handleInvoiceSelect(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
+                    disabled={isEditing}
+                  >
+                    <option value="">Select an invoice...</option>
+                    {invoices.map(invoice => (
+                      <option key={invoice.id} value={invoice.id}>
+                        {invoice.invoiceNumber} - {invoice.supplier} ({formatKES(invoice.totalAmount)})
+                      </option>
+                    ))}
+                  </select>
                 </div>
-
-                <AutocompleteInput
-                  value={creditNoteData.supplier}
-                  onChange={(value) => setCreditNoteData({ ...creditNoteData, supplier: value })}
-                  options={suppliers}
-                  placeholder="Select supplier"
-                  label="Supplier"
-                  required
-                />
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Return Date</label>
                   <input
                     type="date"
-                    value={creditNoteData.returnDate}
-                    onChange={(e) => setCreditNoteData({ ...creditNoteData, returnDate: e.target.value })}
+                    value={returnDate}
+                    onChange={(e) => setReturnDate(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
               </div>
 
-              <div className="border-t pt-4 mb-4">
-                <h4 className="font-semibold mb-3">Add Items to Return</h4>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                  <AutocompleteInput
-                    value={currentItem.productName}
-                    onChange={handleProductSelect}
-                    options={productNames}
-                    placeholder="Select product"
-                    label="Product"
-                    required
-                  />
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Batch Number</label>
-                    <input
-                      type="text"
-                      value={currentItem.batchNumber}
-                      onChange={(e) => setCurrentItem({ ...currentItem, batchNumber: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                      readOnly
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                    <input
-                      type="number"
-                      value={currentItem.quantity}
-                      onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price (KES)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={currentItem.costPrice}
-                      onChange={(e) => setCurrentItem({ ...currentItem, costPrice: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                      readOnly
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Return Reason <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={returnReasonCode}
-                      onChange={(e) => setReturnReasonCode(e.target.value as ReturnReasonCode)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                    >
-                      {(Object.keys(RETURN_REASONS) as ReturnReasonCode[]).map((code) => (
-                        <option key={code} value={code}>
-                          {RETURN_REASONS[code]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {returnReasonCode === 'other' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Custom Reason <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={customReason}
-                        onChange={(e) => setCustomReason(e.target.value)}
-                        placeholder="Specify reason"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex items-end">
-                    <button
-                      type="button"
-                      onClick={addItemToCreditNote}
-                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                      Add Item
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {creditNoteItems.length > 0 && (
+              {selectedInvoice && availableItems.length > 0 && (
                 <div className="mb-4">
-                  <h4 className="font-semibold mb-2">Items to Return ({creditNoteItems.length})</h4>
+                  <h4 className="font-semibold mb-3">Select Items to Return</h4>
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full">
                       <thead className="bg-gray-50">
                         <tr>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Select</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Available Qty</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Return Qty</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost Price</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total Credit</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Reason</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {creditNoteItems.map((item, index) => (
-                          <tr key={index}>
-                            <td className="px-3 py-2 text-sm">{item.productName}</td>
-                            <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
-                            <td className="px-3 py-2 text-sm">{item.quantity}</td>
-                            <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
-                            <td className="px-3 py-2 text-sm font-medium text-red-600">{formatKES(item.totalCredit)}</td>
-                            <td className="px-3 py-2 text-sm">{item.reason || '-'}</td>
-                            <td className="px-3 py-2 text-sm">
-                              <button
-                                onClick={() => removeItemFromCreditNote(index)}
-                                className="text-red-600 hover:text-red-800"
-                                title="Remove item"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                        <tr className="bg-gray-50 font-semibold">
-                          <td colSpan={4} className="px-3 py-2 text-right">Total Credit:</td>
-                          <td className="px-3 py-2 text-red-600">
-                            {formatKES(creditNoteItems.reduce((sum, item) => sum + item.totalCredit, 0))}
-                          </td>
-                          <td colSpan={2}></td>
-                        </tr>
+                        {availableItems.map((item, index) => {
+                          const isSelected = selectedItems.has(index);
+                          const quantity = itemQuantities[index] || item.quantity;
+                          const totalCredit = quantity * item.costPrice;
+
+                          return (
+                            <tr key={index} className={isSelected ? 'bg-red-50' : ''}>
+                              <td className="px-3 py-2">
+                                <button
+                                  onClick={() => toggleItemSelection(index)}
+                                  className="text-gray-600 hover:text-red-600"
+                                >
+                                  {isSelected ? (
+                                    <CheckSquare className="h-5 w-5 text-red-600" />
+                                  ) : (
+                                    <Square className="h-5 w-5" />
+                                  )}
+                                </button>
+                              </td>
+                              <td className="px-3 py-2 text-sm">{item.productName}</td>
+                              <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
+                              <td className="px-3 py-2 text-sm">{item.quantity}</td>
+                              <td className="px-3 py-2">
+                                {isSelected ? (
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max={item.quantity}
+                                    value={quantity}
+                                    onChange={(e) => updateItemQuantity(index, parseInt(e.target.value))}
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                                  />
+                                ) : (
+                                  <span className="text-sm text-gray-400">-</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
+                              <td className="px-3 py-2 text-sm font-medium text-red-600">
+                                {isSelected ? formatKES(totalCredit) : '-'}
+                              </td>
+                              <td className="px-3 py-2">
+                                {isSelected ? (
+                                  <input
+                                    type="text"
+                                    placeholder="Reason for return"
+                                    value={itemReasons[index] || ''}
+                                    onChange={(e) => updateItemReason(index, e.target.value)}
+                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                                  />
+                                ) : (
+                                  <span className="text-sm text-gray-400">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
+                      {selectedItems.size > 0 && (
+                        <tfoot className="bg-gray-50 font-semibold">
+                          <tr>
+                            <td colSpan={6} className="px-3 py-2 text-right">Total Credit:</td>
+                            <td className="px-3 py-2 text-red-600">
+                              {formatKES(
+                                Array.from(selectedItems).reduce((sum, index) => {
+                                  const item = availableItems[index];
+                                  const quantity = itemQuantities[index] || item.quantity;
+                                  return sum + (quantity * item.costPrice);
+                                }, 0)
+                              )}
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      )}
                     </table>
                   </div>
+                  {selectedItems.size > 0 && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      {selectedItems.size} item(s) selected for return
+                    </p>
+                  )}
                 </div>
               )}
 
-              <div className="flex justify-end space-x-2 pt-4">
+              <div className="flex justify-end space-x-2 pt-4 border-t">
                 <button
                   type="button"
                   onClick={() => {
@@ -807,10 +946,10 @@ const CreditNotes: React.FC = () => {
                 </button>
                 <button
                   onClick={saveCreditNote}
-                  disabled={loading || creditNoteItems.length === 0}
+                  disabled={loading || !selectedInvoice || selectedItems.size === 0}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                 >
-                  {loading ? 'Saving...' : 'Save Credit Note'}
+                  {loading ? 'Saving...' : isEditing ? 'Update Credit Note' : 'Save Credit Note'}
                 </button>
               </div>
             </div>
@@ -818,7 +957,6 @@ const CreditNotes: React.FC = () => {
         </div>
       )}
 
-      {/* View Credit Note Modal */}
       {showViewModal && selectedCreditNote && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
