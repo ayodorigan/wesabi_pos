@@ -30,7 +30,8 @@ const CreditNotes: React.FC = () => {
   const [availableItems, setAvailableItems] = useState<InvoiceItem[]>([]);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [itemQuantities, setItemQuantities] = useState<{ [key: number]: number }>({});
-  const [itemReasons, setItemReasons] = useState<{ [key: number]: string }>({});
+  const [itemReasons, setItemReasons] = useState<{ [key: number]: ReturnReasonCode }>({});
+  const [itemCustomReasons, setItemCustomReasons] = useState<{ [key: number]: string }>({});
   const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
 
   const loadCreditNotesCallback = useCallback(() => {
@@ -169,6 +170,7 @@ const CreditNotes: React.FC = () => {
       setSelectedItems(new Set());
       setItemQuantities({});
       setItemReasons({});
+      setItemCustomReasons({});
     }
   };
 
@@ -182,6 +184,9 @@ const CreditNotes: React.FC = () => {
       const newReasons = { ...itemReasons };
       delete newReasons[index];
       setItemReasons(newReasons);
+      const newCustomReasons = { ...itemCustomReasons };
+      delete newCustomReasons[index];
+      setItemCustomReasons(newCustomReasons);
     } else {
       newSelected.add(index);
       setItemQuantities({
@@ -190,7 +195,7 @@ const CreditNotes: React.FC = () => {
       });
       setItemReasons({
         ...itemReasons,
-        [index]: RETURN_REASONS.other
+        [index]: 'excess'
       });
     }
     setSelectedItems(newSelected);
@@ -212,10 +217,22 @@ const CreditNotes: React.FC = () => {
     });
   };
 
-  const updateItemReason = (index: number, reason: string) => {
+  const updateItemReason = (index: number, reason: ReturnReasonCode) => {
     setItemReasons({
       ...itemReasons,
       [index]: reason
+    });
+    if (reason !== 'other') {
+      const newCustomReasons = { ...itemCustomReasons };
+      delete newCustomReasons[index];
+      setItemCustomReasons(newCustomReasons);
+    }
+  };
+
+  const updateItemCustomReason = (index: number, customReason: string) => {
+    setItemCustomReasons({
+      ...itemCustomReasons,
+      [index]: customReason
     });
   };
 
@@ -231,10 +248,19 @@ const CreditNotes: React.FC = () => {
     }
 
     for (const itemIndex of Array.from(selectedItems)) {
-      if (!itemReasons[itemIndex] || itemReasons[itemIndex].trim() === '') {
+      const reasonCode = itemReasons[itemIndex];
+      if (!reasonCode) {
         showAlert({
           title: 'Credit Notes',
-          message: 'Please provide a reason for all selected items',
+          message: 'Please select a reason for all selected items',
+          type: 'error'
+        });
+        return;
+      }
+      if (reasonCode === 'other' && (!itemCustomReasons[itemIndex] || itemCustomReasons[itemIndex].trim() === '')) {
+        showAlert({
+          title: 'Credit Notes',
+          message: 'Please provide a custom reason for items marked as "Other"',
           type: 'error'
         });
         return;
@@ -248,6 +274,10 @@ const CreditNotes: React.FC = () => {
       const creditNoteItems: CreditNoteItem[] = Array.from(selectedItems).map(index => {
         const item = availableItems[index];
         const quantity = itemQuantities[index] || item.quantity;
+        const reasonCode = itemReasons[index];
+        const finalReason = reasonCode === 'other'
+          ? itemCustomReasons[index]
+          : RETURN_REASONS[reasonCode];
         return {
           productId: item.id || '',
           productName: item.productName,
@@ -255,7 +285,7 @@ const CreditNotes: React.FC = () => {
           quantity: quantity,
           costPrice: item.costPrice,
           totalCredit: quantity * item.costPrice,
-          reason: itemReasons[index] || 'Return'
+          reason: finalReason
         };
       });
 
@@ -400,7 +430,8 @@ const CreditNotes: React.FC = () => {
 
       const itemIndices = new Set<number>();
       const quantities: { [key: number]: number } = {};
-      const reasons: { [key: number]: string } = {};
+      const reasons: { [key: number]: ReturnReasonCode } = {};
+      const customReasons: { [key: number]: string } = {};
 
       creditNote.items.forEach(cnItem => {
         const index = invoice.items.findIndex(
@@ -409,13 +440,21 @@ const CreditNotes: React.FC = () => {
         if (index !== -1) {
           itemIndices.add(index);
           quantities[index] = cnItem.quantity;
-          reasons[index] = cnItem.reason || '';
+
+          const reasonEntry = Object.entries(RETURN_REASONS).find(([_, value]) => value === cnItem.reason);
+          if (reasonEntry) {
+            reasons[index] = reasonEntry[0] as ReturnReasonCode;
+          } else {
+            reasons[index] = 'other';
+            customReasons[index] = cnItem.reason || '';
+          }
         }
       });
 
       setSelectedItems(itemIndices);
       setItemQuantities(quantities);
       setItemReasons(reasons);
+      setItemCustomReasons(customReasons);
     }
     setShowAddForm(true);
   };
@@ -467,6 +506,7 @@ const CreditNotes: React.FC = () => {
     setSelectedItems(new Set());
     setItemQuantities({});
     setItemReasons({});
+    setItemCustomReasons({});
     setReturnDate(new Date().toISOString().split('T')[0]);
     setIsEditing(false);
     setSelectedCreditNote(null);
@@ -837,14 +877,14 @@ const CreditNotes: React.FC = () => {
                     <table className="w-full">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Select</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-16">Select</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Available Qty</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Return Qty</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost Price</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total Credit</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Reason</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500" style={{ minWidth: '300px' }}>Reason</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
@@ -890,13 +930,28 @@ const CreditNotes: React.FC = () => {
                               </td>
                               <td className="px-3 py-2">
                                 {isSelected ? (
-                                  <input
-                                    type="text"
-                                    placeholder="Reason for return"
-                                    value={itemReasons[index] || ''}
-                                    onChange={(e) => updateItemReason(index, e.target.value)}
-                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
-                                  />
+                                  <div className="space-y-1">
+                                    <select
+                                      value={itemReasons[index] || 'excess'}
+                                      onChange={(e) => updateItemReason(index, e.target.value as ReturnReasonCode)}
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                                    >
+                                      {(Object.keys(RETURN_REASONS) as ReturnReasonCode[]).map((code) => (
+                                        <option key={code} value={code}>
+                                          {RETURN_REASONS[code]}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {itemReasons[index] === 'other' && (
+                                      <input
+                                        type="text"
+                                        placeholder="Specify custom reason"
+                                        value={itemCustomReasons[index] || ''}
+                                        onChange={(e) => updateItemCustomReason(index, e.target.value)}
+                                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                                      />
+                                    )}
+                                  </div>
                                 ) : (
                                   <span className="text-sm text-gray-400">-</span>
                                 )}
