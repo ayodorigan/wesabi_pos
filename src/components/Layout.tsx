@@ -120,7 +120,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
           <div className="flex flex-col h-full lg:h-screen">
             {/* Logo and Collapse Button */}
             <div className={`
-              hidden lg:flex items-center min-h-[73px] flex-shrink-0 border-b
+              hidden lg:flex items-center min-h-[73px] flex-shrink-0
               ${isSidebarCollapsed ? 'justify-center px-4 py-4' : 'justify-between px-6 py-4'}
             `}>
               {isSidebarCollapsed ? (
