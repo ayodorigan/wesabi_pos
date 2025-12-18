@@ -137,7 +137,7 @@ export interface Invoice {
 
 export interface CreditNoteItem {
   id?: string;
-  productId: string;
+  productId: string | null;
   productName: string;
   batchNumber: string;
   quantity: number;

@@ -134,7 +134,7 @@ const CreditNotes: React.FC = () => {
             userId: invoice.user_id,
             userName: invoice.user_name,
             items: (items || []).map((item: any) => ({
-              id: item.id,
+              id: item.product_id,
               productName: item.product_name,
               category: item.category,
               batchNumber: item.batch_number,
@@ -279,7 +279,7 @@ const CreditNotes: React.FC = () => {
           ? itemCustomReasons[index]
           : RETURN_REASONS[reasonCode];
         return {
-          productId: item.id || '',
+          productId: item.id || null,
           productName: item.productName,
           batchNumber: item.batchNumber,
           quantity: quantity,
