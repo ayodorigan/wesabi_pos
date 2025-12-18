@@ -90,7 +90,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile Header */}
-      <div className="lg:hidden bg-white shadow-sm border-b">
+      <div className="lg:hidden bg-white shadow-sm border-b fixed top-0 left-0 right-0 z-30">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center">
             <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-12" />
@@ -104,14 +104,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         </div>
       </div>
 
-      <div className="flex">
+      <div className="flex pt-[73px] lg:pt-0">
         {/* Sidebar */}
         <div className={`
-          fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out flex-shrink-0
+          fixed left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out flex-shrink-0
+          top-[73px] bottom-0 lg:top-0
           lg:translate-x-0
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
-          <div className="flex flex-col h-screen">
+          <div className="flex flex-col h-full lg:h-screen">
             {/* Logo */}
             <div className="hidden lg:flex items-center px-6 py-4 border-b min-h-[73px] flex-shrink-0">
               <img src="/wesabi_logo_landscape.png" alt="Wesabi Pharmacy" className="h-12" />
@@ -150,9 +151,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 lg:ml-64 min-w-0">
+        <div className="flex-1 lg:ml-64 min-w-0 flex flex-col h-[calc(100vh-73px)] lg:h-screen">
           {/* Top Header with Profile */}
-          <div className="bg-white shadow-sm border-b px-4 lg:px-8 py-4">
+          <div className="bg-white shadow-sm border-b px-4 lg:px-8 py-4 flex-shrink-0">
             <div className="flex justify-between items-center">
               {/* Page Title */}
               <div className="flex-1">
@@ -207,7 +208,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             </div>
           </div>
 
-          <main className="p-4 lg:p-8">
+          <main className="flex-1 overflow-y-auto p-4 lg:p-8">
             {children}
           </main>
         </div>
