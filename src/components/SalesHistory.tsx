@@ -57,6 +57,12 @@ const SalesHistory: React.FC = () => {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+  const today = new Date();
+  const isSunday = today.getDay() === 0;
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 7);
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -144,36 +150,76 @@ const SalesHistory: React.FC = () => {
     let startDate: Date | null = null;
     let endDate: Date | null = null;
 
-    switch (filterType) {
-      case 'day': {
-        const selected = new Date(selectedDate);
-        startDate = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate());
-        endDate = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate(), 23, 59, 59, 999);
-        break;
-      }
-      case 'week': {
-        const range = getWeekDateRange(selectedYear, selectedMonth, selectedWeek);
-        startDate = range.startDate;
-        endDate = range.endDate;
-        break;
-      }
-      case 'month': {
-        startDate = new Date(selectedYear, selectedMonth - 1, 1);
-        endDate = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
-        break;
-      }
-      case 'year': {
-        startDate = new Date(selectedYear, 0, 1);
-        endDate = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
-        break;
-      }
-      case 'custom': {
-        if (customStartDate && customEndDate) {
-          startDate = new Date(customStartDate);
-          endDate = new Date(customEndDate);
-          endDate.setHours(23, 59, 59, 999);
+    if (!isAdmin && isSunday) {
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      startDate = todayStart;
+      endDate = todayEnd;
+    } else {
+      switch (filterType) {
+        case 'day': {
+          const selected = new Date(selectedDate);
+          startDate = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate());
+          endDate = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate(), 23, 59, 59, 999);
+
+          if (!isAdmin) {
+            const selectedDateTime = selected.getTime();
+            const sevenDaysAgoTime = sevenDaysAgo.getTime();
+            const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+            if (selectedDateTime < sevenDaysAgoTime || selectedDateTime > todayTime) {
+              startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            }
+          }
+          break;
         }
-        break;
+        case 'week': {
+          const range = getWeekDateRange(selectedYear, selectedMonth, selectedWeek);
+          startDate = range.startDate;
+          endDate = range.endDate;
+
+          if (!isAdmin) {
+            if (endDate > now || startDate < sevenDaysAgo) {
+              startDate = sevenDaysAgo;
+              endDate = now;
+            }
+          }
+          break;
+        }
+        case 'month': {
+          startDate = new Date(selectedYear, selectedMonth - 1, 1);
+          endDate = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
+
+          if (!isAdmin) {
+            startDate = sevenDaysAgo;
+            endDate = now;
+          }
+          break;
+        }
+        case 'year': {
+          startDate = new Date(selectedYear, 0, 1);
+          endDate = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+
+          if (!isAdmin) {
+            startDate = sevenDaysAgo;
+            endDate = now;
+          }
+          break;
+        }
+        case 'custom': {
+          if (customStartDate && customEndDate) {
+            startDate = new Date(customStartDate);
+            endDate = new Date(customEndDate);
+            endDate.setHours(23, 59, 59, 999);
+
+            if (!isAdmin) {
+              startDate = sevenDaysAgo;
+              endDate = now;
+            }
+          }
+          break;
+        }
       }
     }
 
@@ -185,7 +231,7 @@ const SalesHistory: React.FC = () => {
     }
 
     return filtered;
-  }, [salesData, searchTerm, paymentFilter, filterType, selectedDate, selectedYear, selectedMonth, selectedWeek, customStartDate, customEndDate]);
+  }, [salesData, searchTerm, paymentFilter, filterType, selectedDate, selectedYear, selectedMonth, selectedWeek, customStartDate, customEndDate, isAdmin, isSunday, sevenDaysAgo]);
 
   const statistics = useMemo(() => {
     const uniqueTransactions = filteredSales.length;
@@ -324,17 +370,33 @@ const SalesHistory: React.FC = () => {
   };
 
   const getFilterDescription = () => {
+    if (!isAdmin && isSunday) {
+      return `Sunday Only - ${today.toLocaleDateString('en-KE')}`;
+    }
+
     switch (filterType) {
       case 'day':
         return new Date(selectedDate).toLocaleDateString('en-KE');
       case 'week':
+        if (!isAdmin) {
+          return `Current Week (${sevenDaysAgo.toLocaleDateString('en-KE')} - ${today.toLocaleDateString('en-KE')})`;
+        }
         const { startDate, endDate } = getWeekDateRange(selectedYear, selectedMonth, selectedWeek);
         return `Week ${selectedWeek} of ${new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })} (${startDate.toLocaleDateString('en-KE')} - ${endDate.toLocaleDateString('en-KE')})`;
       case 'month':
+        if (!isAdmin) {
+          return `Current Week (${sevenDaysAgo.toLocaleDateString('en-KE')} - ${today.toLocaleDateString('en-KE')})`;
+        }
         return new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' });
       case 'year':
+        if (!isAdmin) {
+          return `Current Week (${sevenDaysAgo.toLocaleDateString('en-KE')} - ${today.toLocaleDateString('en-KE')})`;
+        }
         return selectedYear.toString();
       case 'custom':
+        if (!isAdmin) {
+          return `Current Week (${sevenDaysAgo.toLocaleDateString('en-KE')} - ${today.toLocaleDateString('en-KE')})`;
+        }
         if (customStartDate && customEndDate) {
           return `${new Date(customStartDate).toLocaleDateString('en-KE')} - ${new Date(customEndDate).toLocaleDateString('en-KE')}`;
         }
@@ -446,6 +508,24 @@ const SalesHistory: React.FC = () => {
 
       <div className="bg-white p-4 rounded-lg shadow-sm border">
         <div className="space-y-4">
+          {!isAdmin && isSunday && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start space-x-2">
+              <div className="text-yellow-600 mt-0.5">⚠️</div>
+              <div className="text-sm text-yellow-800">
+                <strong>Sunday Restriction:</strong> Date filtering is disabled on Sundays for non-admin users. Only today's data is shown.
+              </div>
+            </div>
+          )}
+
+          {!isAdmin && !isSunday && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start space-x-2">
+              <div className="text-blue-600 mt-0.5">ℹ️</div>
+              <div className="text-sm text-blue-800">
+                <strong>Access Level:</strong> You can view sales data from the current week only (past 7 days).
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -466,13 +546,14 @@ const SalesHistory: React.FC = () => {
                   setFilterType(e.target.value as any);
                   setCurrentPage(1);
                 }}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                disabled={!isAdmin && isSunday}
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 <option value="day">Day</option>
                 <option value="week">Week</option>
-                <option value="month">Month</option>
-                <option value="year">Year</option>
-                <option value="custom">Custom Range</option>
+                {isAdmin && <option value="month">Month</option>}
+                {isAdmin && <option value="year">Year</option>}
+                {isAdmin && <option value="custom">Custom Range</option>}
               </select>
             </div>
 
@@ -495,7 +576,7 @@ const SalesHistory: React.FC = () => {
             </div>
           </div>
 
-          {filterType === 'day' && (
+          {filterType === 'day' && !((!isAdmin && isSunday)) && (
             <div className="flex items-center space-x-2">
               <Calendar className="h-5 w-5 text-gray-400" />
               <input
@@ -505,12 +586,14 @@ const SalesHistory: React.FC = () => {
                   setSelectedDate(e.target.value);
                   setCurrentPage(1);
                 }}
+                min={!isAdmin ? sevenDaysAgo.toISOString().split('T')[0] : undefined}
+                max={!isAdmin ? today.toISOString().split('T')[0] : undefined}
                 className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
               />
             </div>
           )}
 
-          {filterType === 'week' && (
+          {filterType === 'week' && !((!isAdmin && isSunday)) && (
             <div className="grid grid-cols-3 gap-4">
               <select
                 value={selectedYear}
@@ -518,7 +601,8 @@ const SalesHistory: React.FC = () => {
                   setSelectedYear(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                disabled={!isAdmin}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 {years.map(year => (
                   <option key={year} value={year}>{year}</option>
@@ -531,7 +615,8 @@ const SalesHistory: React.FC = () => {
                   setSelectedWeek(1);
                   setCurrentPage(1);
                 }}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                disabled={!isAdmin}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 {months.map(month => (
                   <option key={month.value} value={month.value}>{month.label}</option>
@@ -543,7 +628,8 @@ const SalesHistory: React.FC = () => {
                   setSelectedWeek(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                disabled={!isAdmin}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 {Array.from({ length: getWeeksInMonth(selectedYear, selectedMonth) }, (_, i) => i + 1).map(week => (
                   <option key={week} value={week}>Week {week}</option>
