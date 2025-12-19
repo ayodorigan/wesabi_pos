@@ -29,7 +29,7 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
 
   useEffect(() => {
     const filtered = options.filter(option =>
-      option.toLowerCase().includes(value.toLowerCase())
+      option && typeof option === 'string' && option.toLowerCase().includes(value.toLowerCase())
     );
     setFilteredOptions(filtered);
   }, [value, options]);
@@ -67,8 +67,8 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
     }
   };
 
-  const showAddNew = allowAddNew && value.trim() && !options.some(option => 
-    option.toLowerCase() === value.trim().toLowerCase()
+  const showAddNew = allowAddNew && value.trim() && !options.some(option =>
+    option && typeof option === 'string' && option.toLowerCase() === value.trim().toLowerCase()
   );
 
   return (
