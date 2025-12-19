@@ -41,16 +41,15 @@ const InvoiceManagement: React.FC = () => {
     batchNumber: '',
     expiryDate: '',
     quantity: '',
-    invoicePrice: '',
-    supplierDiscountPercent: '0',
-    vatRate: '0',
-    otherCharges: '0',
     costPrice: '',
+    supplierDiscountPercent: '0',
+    vatRate: '16',
+    discountedCostPrice: '',
     sellingPrice: '',
+    discountedSellingPrice: '',
+    vat: '',
+    grossProfitMargin: '',
     barcode: '',
-    discountedCost: '',
-    discountedPrice: '',
-    targetPrice: '',
   });
 
   const medicineNames = medicineTemplates.map(med => med.name);
@@ -101,17 +100,16 @@ const InvoiceManagement: React.FC = () => {
               batchNumber: item.batch_number,
               expiryDate: new Date(item.expiry_date),
               quantity: item.quantity,
-              invoicePrice: item.invoice_price ? parseFloat(item.invoice_price) : undefined,
+              costPrice: parseFloat(item.cost_price) || 0,
+              discountedCostPrice: item.discounted_cost_price ? parseFloat(item.discounted_cost_price) : undefined,
+              sellingPrice: parseFloat(item.selling_price) || 0,
+              discountedSellingPrice: item.discounted_selling_price ? parseFloat(item.discounted_selling_price) : undefined,
+              vat: item.vat ? parseFloat(item.vat) : undefined,
+              grossProfitMargin: item.gross_profit_margin ? parseFloat(item.gross_profit_margin) : undefined,
               supplierDiscountPercent: item.supplier_discount_percent ? parseFloat(item.supplier_discount_percent) : undefined,
               vatRate: item.vat_rate ? parseFloat(item.vat_rate) : undefined,
-              otherCharges: item.other_charges ? parseFloat(item.other_charges) : undefined,
-              costPrice: parseFloat(item.cost_price),
-              sellingPrice: parseFloat(item.selling_price),
               totalCost: parseFloat(item.total_cost),
               barcode: item.barcode,
-              discountedCost: item.discounted_cost ? parseFloat(item.discounted_cost) : undefined,
-              discountedPrice: item.minimum_selling_price ? parseFloat(item.minimum_selling_price) : undefined,
-              targetPrice: item.target_selling_price ? parseFloat(item.target_selling_price) : undefined,
             })),
             createdAt: new Date(invoice.created_at),
             updatedAt: new Date(invoice.updated_at),
@@ -209,33 +207,34 @@ const InvoiceManagement: React.FC = () => {
       return;
     }
 
-    if (!currentItem.invoicePrice && !currentItem.costPrice) {
-      showAlert({ title: 'Invoice Management', message: 'Please fill in either Invoice Price or Cost Price', type: 'error' });
+    if (!currentItem.costPrice) {
+      showAlert({ title: 'Invoice Management', message: 'Please fill in Cost Price', type: 'error' });
       return;
     }
 
     const quantity = parseInt(currentItem.quantity);
     const costPrice = parseFloat(currentItem.costPrice);
+    const discountedCostPrice = parseFloat(currentItem.discountedCostPrice) || costPrice;
     const sellingPrice = parseFloat(currentItem.sellingPrice);
-    const totalCost = quantity * costPrice;
+    const discountedSellingPrice = parseFloat(currentItem.discountedSellingPrice) || sellingPrice;
+    const totalCost = quantity * discountedCostPrice;
 
-    const newItem: InvoiceItem & { discountedCost?: number; discountedPrice?: number; targetPrice?: number } = {
+    const newItem: InvoiceItem = {
       productName: currentItem.productName,
       category: currentItem.category || 'General',
       batchNumber: currentItem.batchNumber || '',
       expiryDate: currentItem.expiryDate ? new Date(currentItem.expiryDate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       quantity,
-      invoicePrice: parseFloat(currentItem.invoicePrice) || undefined,
+      costPrice,
+      discountedCostPrice: currentItem.discountedCostPrice ? parseFloat(currentItem.discountedCostPrice) : undefined,
+      sellingPrice,
+      discountedSellingPrice: currentItem.discountedSellingPrice ? parseFloat(currentItem.discountedSellingPrice) : undefined,
+      vat: currentItem.vat ? parseFloat(currentItem.vat) : undefined,
+      grossProfitMargin: currentItem.grossProfitMargin ? parseFloat(currentItem.grossProfitMargin) : undefined,
       supplierDiscountPercent: parseFloat(currentItem.supplierDiscountPercent) || undefined,
       vatRate: parseFloat(currentItem.vatRate) || undefined,
-      otherCharges: parseFloat(currentItem.otherCharges) || undefined,
-      costPrice,
-      sellingPrice,
       totalCost,
       barcode: currentItem.barcode || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      discountedCost: currentItem.discountedCost ? parseFloat(currentItem.discountedCost) : undefined,
-      discountedPrice: currentItem.discountedPrice ? parseFloat(currentItem.discountedPrice) : undefined,
-      targetPrice: currentItem.targetPrice ? parseFloat(currentItem.targetPrice) : undefined,
     };
 
     setInvoiceItems([newItem, ...invoiceItems]);
@@ -246,16 +245,15 @@ const InvoiceManagement: React.FC = () => {
       batchNumber: '',
       expiryDate: '',
       quantity: '',
-      invoicePrice: '',
-      supplierDiscountPercent: '0',
-      vatRate: '0',
-      otherCharges: '0',
       costPrice: '',
+      supplierDiscountPercent: '0',
+      vatRate: '16',
+      discountedCostPrice: '',
       sellingPrice: '',
+      discountedSellingPrice: '',
+      vat: '',
+      grossProfitMargin: '',
       barcode: '',
-      discountedCost: '',
-      discountedPrice: '',
-      targetPrice: '',
     });
   };
 
@@ -332,26 +330,16 @@ const InvoiceManagement: React.FC = () => {
           const updateData: any = {
             current_stock: existingProduct.current_stock + item.quantity,
             cost_price: item.costPrice,
+            discounted_cost_price: item.discountedCostPrice,
             selling_price: item.sellingPrice,
-            invoice_price: item.invoicePrice,
+            discounted_selling_price: item.discountedSellingPrice,
+            vat: item.vat,
+            gross_profit_margin: item.grossProfitMargin,
             supplier_discount_percent: item.supplierDiscountPercent,
             vat_rate: item.vatRate,
-            other_charges: item.otherCharges,
             has_vat: item.vatRate !== undefined && item.vatRate !== null && item.vatRate > 0,
             updated_at: new Date().toISOString(),
           };
-
-          // Add pricing fields if they exist
-          const typedItem = item as any;
-          if (typedItem.discountedCost) {
-            updateData.discounted_cost = typedItem.discountedCost;
-          }
-          if (typedItem.discountedPrice) {
-            updateData.minimum_selling_price = typedItem.discountedPrice;
-          }
-          if (typedItem.targetPrice) {
-            updateData.target_selling_price = typedItem.targetPrice;
-          }
 
           const { error: updateError } = await supabase
             .from('products')
@@ -381,30 +369,20 @@ const InvoiceManagement: React.FC = () => {
             supplier: invoiceData.supplier,
             batch_number: item.batchNumber,
             expiry_date: expiryDateStr,
-            invoice_price: item.invoicePrice,
+            cost_price: item.costPrice,
+            discounted_cost_price: item.discountedCostPrice,
+            selling_price: item.sellingPrice,
+            discounted_selling_price: item.discountedSellingPrice,
+            vat: item.vat,
+            gross_profit_margin: item.grossProfitMargin,
             supplier_discount_percent: item.supplierDiscountPercent,
             vat_rate: item.vatRate,
-            other_charges: item.otherCharges,
             has_vat: item.vatRate !== undefined && item.vatRate !== null && item.vatRate > 0,
-            cost_price: item.costPrice,
-            selling_price: item.sellingPrice,
             current_stock: item.quantity,
             min_stock_level: 10,
             barcode: item.barcode,
             invoice_number: invoiceData.invoiceNumber,
           };
-
-          // Add pricing fields if they exist
-          const typedItem = item as any;
-          if (typedItem.discountedCost) {
-            insertData.discounted_cost = typedItem.discountedCost;
-          }
-          if (typedItem.discountedPrice) {
-            insertData.minimum_selling_price = typedItem.discountedPrice;
-          }
-          if (typedItem.targetPrice) {
-            insertData.target_selling_price = typedItem.targetPrice;
-          }
 
           const { data: newProduct, error: productError } = await supabase
             .from('products')
@@ -441,27 +419,17 @@ const InvoiceManagement: React.FC = () => {
           batch_number: item.batchNumber,
           expiry_date: invoiceItemExpiryDate,
           quantity: item.quantity,
-          invoice_price: item.invoicePrice,
+          cost_price: item.costPrice,
+          discounted_cost_price: item.discountedCostPrice,
+          selling_price: item.sellingPrice,
+          discounted_selling_price: item.discountedSellingPrice,
+          vat: item.vat,
+          gross_profit_margin: item.grossProfitMargin,
           supplier_discount_percent: item.supplierDiscountPercent,
           vat_rate: item.vatRate,
-          other_charges: item.otherCharges,
-          cost_price: item.costPrice,
-          selling_price: item.sellingPrice,
           total_cost: item.totalCost,
           barcode: item.barcode,
         };
-
-        // Add pricing fields if they exist
-        const typedItem = item as any;
-        if (typedItem.discountedCost) {
-          invoiceItemData.discounted_cost = typedItem.discountedCost;
-        }
-        if (typedItem.discountedPrice) {
-          invoiceItemData.minimum_selling_price = typedItem.discountedPrice;
-        }
-        if (typedItem.targetPrice) {
-          invoiceItemData.target_selling_price = typedItem.targetPrice;
-        }
 
         invoiceItemsToInsert.push(invoiceItemData);
       }

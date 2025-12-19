@@ -17,18 +17,17 @@ export interface Product {
   batchNumber: string;
   expiryDate: Date;
   costPrice: number;
+  discountedCostPrice?: number;
   sellingPrice: number;
+  discountedSellingPrice?: number;
+  vat?: number;
+  grossProfitMargin?: number;
   currentStock: number;
   minStockLevel: number;
   barcode: string;
   invoiceNumber?: string;
-  invoicePrice?: number;
   supplierDiscountPercent?: number;
   vatRate?: number;
-  otherCharges?: number;
-  discountedCost?: number;
-  minimumSellingPrice?: number;
-  targetSellingPrice?: number;
   hasVat?: boolean;
   priceHistory: PriceHistory[];
   createdAt: Date;
@@ -123,21 +122,16 @@ export interface InvoiceItem {
   batchNumber: string;
   expiryDate: Date;
   quantity: number;
-  invoicePrice?: number;
-  supplierDiscountPercent?: number;
-  vatRate?: number;
-  otherCharges?: number;
   costPrice: number;
+  discountedCostPrice?: number;
   sellingPrice: number;
+  discountedSellingPrice?: number;
+  vat?: number;
+  grossProfitMargin?: number;
   totalCost: number;
   barcode: string;
-  sellingPriceExVat?: number;
-  vatAmount?: number;
-  finalPriceRounded?: number;
-  roundingExtra?: number;
-  profit?: number;
-  priceTypeUsed?: 'MINIMUM' | 'TARGET';
-  actualCostAtSale?: number;
+  supplierDiscountPercent?: number;
+  vatRate?: number;
 }
 
 export interface Invoice {
@@ -191,14 +185,16 @@ export interface InvoiceReversalItem {
   batchNumber?: string;
   expiryDate?: Date;
   quantity: number;
-  invoicePrice?: number;
-  supplierDiscountPercent?: number;
-  vatRate?: number;
-  otherCharges?: number;
   costPrice: number;
+  discountedCostPrice?: number;
   sellingPrice?: number;
+  discountedSellingPrice?: number;
+  vat?: number;
+  grossProfitMargin?: number;
   totalCost: number;
   barcode?: string;
+  supplierDiscountPercent?: number;
+  vatRate?: number;
 }
 
 export interface InvoiceReversal {

@@ -119,13 +119,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           supplier: product.supplier,
           batchNumber: product.batch_number,
           expiryDate: new Date(product.expiry_date),
-          invoicePrice: product.invoice_price ? parseFloat(product.invoice_price) : undefined,
+          costPrice: parseFloat(product.cost_price) || 0,
+          discountedCostPrice: product.discounted_cost_price ? parseFloat(product.discounted_cost_price) : undefined,
+          sellingPrice: parseFloat(product.selling_price) || 0,
+          discountedSellingPrice: product.discounted_selling_price ? parseFloat(product.discounted_selling_price) : undefined,
+          vat: product.vat ? parseFloat(product.vat) : undefined,
+          grossProfitMargin: product.gross_profit_margin ? parseFloat(product.gross_profit_margin) : undefined,
           supplierDiscountPercent: product.supplier_discount_percent ? parseFloat(product.supplier_discount_percent) : undefined,
           vatRate: product.vat_rate !== null && product.vat_rate !== undefined ? parseFloat(product.vat_rate) : undefined,
-          otherCharges: product.other_charges ? parseFloat(product.other_charges) : undefined,
           hasVat: product.has_vat !== null && product.has_vat !== undefined ? product.has_vat : true,
-          costPrice: parseFloat(product.cost_price) || 0,
-          sellingPrice: parseFloat(product.selling_price) || 0,
           currentStock: product.current_stock || 0,
           minStockLevel: product.min_stock_level || 10,
           barcode: product.barcode,
@@ -416,13 +418,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           supplier: productData.supplier,
           batch_number: productData.batchNumber,
           expiry_date: productData.expiryDate.toISOString(),
-          invoice_price: productData.invoicePrice || null,
+          cost_price: productData.costPrice,
+          discounted_cost_price: productData.discountedCostPrice || null,
+          selling_price: enforcedSellingPrice,
+          discounted_selling_price: productData.discountedSellingPrice || null,
+          vat: productData.vat || null,
+          gross_profit_margin: productData.grossProfitMargin || null,
           supplier_discount_percent: productData.supplierDiscountPercent || null,
           vat_rate: productData.vatRate || 0,
-          other_charges: productData.otherCharges || null,
           has_vat: productData.hasVat !== undefined ? productData.hasVat : true,
-          cost_price: productData.costPrice,
-          selling_price: enforcedSellingPrice,
           current_stock: productData.currentStock,
           min_stock_level: productData.minStockLevel,
           barcode: productData.barcode,
@@ -485,23 +489,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (updates.supplier) updateData.supplier = updates.supplier;
       if (updates.batchNumber) updateData.batch_number = updates.batchNumber;
       if (updates.expiryDate) updateData.expiry_date = updates.expiryDate.toISOString();
-      if (updates.invoicePrice !== undefined) updateData.invoice_price = updates.invoicePrice || null;
+      if (updates.costPrice !== undefined) updateData.cost_price = updates.costPrice;
+      if (updates.discountedCostPrice !== undefined) updateData.discounted_cost_price = updates.discountedCostPrice || null;
+      if (updates.discountedSellingPrice !== undefined) updateData.discounted_selling_price = updates.discountedSellingPrice || null;
+      if (updates.vat !== undefined) updateData.vat = updates.vat || null;
+      if (updates.grossProfitMargin !== undefined) updateData.gross_profit_margin = updates.grossProfitMargin || null;
       if (updates.supplierDiscountPercent !== undefined) updateData.supplier_discount_percent = updates.supplierDiscountPercent || null;
       if (updates.vatRate !== undefined) updateData.vat_rate = updates.vatRate || 0;
-      if (updates.otherCharges !== undefined) updateData.other_charges = updates.otherCharges || null;
       if (updates.hasVat !== undefined) updateData.has_vat = updates.hasVat;
-      if (updates.costPrice !== undefined) updateData.cost_price = updates.costPrice;
       if (updates.sellingPrice !== undefined) {
-        // Enforce minimum selling price with new pricing logic
-        const existingProduct = products.find(p => p.id === id);
-        const pricingInputs = {
-          invoicePrice: updates.invoicePrice !== undefined ? updates.invoicePrice : existingProduct?.invoicePrice,
-          supplierDiscountPercent: updates.supplierDiscountPercent !== undefined ? updates.supplierDiscountPercent : existingProduct?.supplierDiscountPercent,
-          vatRate: updates.vatRate !== undefined ? updates.vatRate : existingProduct?.vatRate || 0,
-          otherCharges: updates.otherCharges !== undefined ? updates.otherCharges : existingProduct?.otherCharges,
-          costPrice: updates.costPrice !== undefined ? updates.costPrice : existingProduct?.costPrice || 0
-        };
-        updateData.selling_price = enforceMinimumSellingPrice(updates.sellingPrice, pricingInputs);
+        updateData.selling_price = updates.sellingPrice;
       }
       if (updates.currentStock !== undefined) updateData.current_stock = updates.currentStock;
       if (updates.minStockLevel !== undefined) updateData.min_stock_level = updates.minStockLevel;
@@ -864,25 +861,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const importProducts = async (importedProducts: any[]) => {
     try {
       const productsToInsert = importedProducts.map(item => {
-        const invoicePrice = parseFloat(item.invoiceprice) || 0;
-        const supplierDiscountPercent = parseFloat(item.supplierdiscountpercent) || 0;
-        const vatRate = parseFloat(item.vatrate) || 0;
-        const otherCharges = parseFloat(item.othercharges) || 0;
         const costPrice = parseFloat(item.costprice) || 0;
-        let sellingPrice = parseFloat(item.sellingprice) || 0;
-
-        const pricingInputs = {
-          invoicePrice: invoicePrice || undefined,
-          supplierDiscountPercent: supplierDiscountPercent || undefined,
-          vatRate: vatRate || 0,
-          otherCharges: otherCharges || undefined,
-          costPrice: costPrice
-        };
-
-        const minSellingPrice = getMinimumSellingPrice(pricingInputs);
-        if (sellingPrice < minSellingPrice) {
-          sellingPrice = minSellingPrice;
-        }
+        const discountedCostPrice = parseFloat(item.discountedcostprice) || null;
+        const sellingPrice = parseFloat(item.sellingprice) || 0;
+        const discountedSellingPrice = parseFloat(item.discountedsellingprice) || null;
+        const vat = parseFloat(item.vat) || null;
+        const grossProfitMargin = parseFloat(item.grossprofitmargin) || null;
+        const supplierDiscountPercent = parseFloat(item.supplierdiscountpercent) || null;
+        const vatRate = parseFloat(item.vatrate) || 0;
 
         return {
           name: item.name || '',
@@ -890,13 +876,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           supplier: item.supplier || '',
           batch_number: item.batchnumber || `BATCH-${Date.now()}`,
           expiry_date: item.expirydate ? new Date(item.expirydate).toISOString() : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-          invoice_price: invoicePrice || null,
-          supplier_discount_percent: supplierDiscountPercent || null,
-          vat_rate: vatRate || 0,
-          other_charges: otherCharges || null,
-          has_vat: vatRate !== undefined && vatRate !== null && vatRate > 0,
           cost_price: costPrice,
+          discounted_cost_price: discountedCostPrice,
           selling_price: sellingPrice,
+          discounted_selling_price: discountedSellingPrice,
+          vat: vat,
+          gross_profit_margin: grossProfitMargin,
+          supplier_discount_percent: supplierDiscountPercent,
+          vat_rate: vatRate,
+          has_vat: vatRate !== undefined && vatRate !== null && vatRate > 0,
           current_stock: parseInt(item.currentstock) || 0,
           min_stock_level: parseInt(item.minstocklevel) || 10,
           barcode: item.barcode || `${Date.now()}-${Math.random()}`,
