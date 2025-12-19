@@ -539,6 +539,11 @@ const Inventory: React.FC = () => {
                   pricing.sellingPriceRounded
                 );
 
+                // Calculate profit margins
+                const actualCost = pricing.actualCost;
+                const profitAmount = product.sellingPrice - actualCost;
+                const profitMarginPercent = actualCost > 0 ? (profitAmount / actualCost) * 100 : 0;
+
                 // Calculate margin improvement from discount
                 const marginWithoutDiscount = pricing.sellingPriceRounded - product.costPrice;
                 const marginWithDiscount = pricing.discountedCost
@@ -616,6 +621,12 @@ const Inventory: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex flex-col space-y-1">
+                            <div className="text-sm font-semibold text-gray-900">
+                              {profitMarginPercent.toFixed(1)}%
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Profit: {formatCurrency(profitAmount)}
+                            </div>
                             {isHighMargin && (
                               <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
                                 <TrendingUp className="h-3 w-3 mr-1" />

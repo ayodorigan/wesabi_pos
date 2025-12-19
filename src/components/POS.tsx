@@ -482,30 +482,34 @@ const POS: React.FC = () => {
 
         {/* Products Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[calc(100vh-16rem)] overflow-y-auto">
-          {filteredProducts.map(product => (
-            <div 
-              key={product.id} 
-              className="bg-white p-4 rounded-lg shadow-sm border hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => addToCart(product)}
-            >
-              <div className="space-y-2">
-                <div className="flex justify-between items-start">
-                  <h3 className="font-medium text-gray-900 text-sm">{product.name}</h3>
-                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                    {product.category}
-                  </span>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-lg font-bold text-green-600">{formatKES(product.sellingPrice)}</p>
-                  {product.priceHistory.length > 1 && (
-                    <p className="text-xs text-gray-500">
-                      Last sold: {formatKES(product.priceHistory[product.priceHistory.length - 2]?.sellingPrice || product.sellingPrice)}
-                    </p>
-                  )}
-                  <p className="text-sm text-gray-600">Stock: {product.currentStock}</p>
-                  <p className="text-xs text-gray-500">Batch: {product.batchNumber}</p>
-                </div>
+          {filteredProducts.map(product => {
+            const pricing = getProductPricing(product);
+            const displayPrice = pricing.sellingPriceRounded;
+
+            return (
+              <div
+                key={product.id}
+                className="bg-white p-4 rounded-lg shadow-sm border hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => addToCart(product)}
+              >
+                <div className="space-y-2">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-medium text-gray-900 text-sm">{product.name}</h3>
+                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                      {product.category}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-lg font-bold text-green-600">{formatKES(displayPrice)}</p>
+                    {product.priceHistory.length > 1 && (
+                      <p className="text-xs text-gray-500">
+                        Last sold: {formatKES(product.priceHistory[product.priceHistory.length - 2]?.sellingPrice || displayPrice)}
+                      </p>
+                    )}
+                    <p className="text-sm text-gray-600">Stock: {product.currentStock}</p>
+                    <p className="text-xs text-gray-500">Batch: {product.batchNumber}</p>
+                  </div>
 
                 <div className="flex items-center justify-between pt-2">
                   {product.priceHistory.length > 1 && (
@@ -545,9 +549,10 @@ const POS: React.FC = () => {
                     </button>
                   </div>
                 </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {filteredProducts.length === 0 && searchTerm && (
