@@ -26,6 +26,10 @@ export interface Product {
   supplierDiscountPercent?: number;
   vatRate?: number;
   otherCharges?: number;
+  discountedCost?: number;
+  minimumSellingPrice?: number;
+  targetSellingPrice?: number;
+  hasVat?: boolean;
   priceHistory: PriceHistory[];
   createdAt: Date;
   updatedAt: Date;
@@ -40,6 +44,14 @@ export interface SaleItem {
   originalPrice?: number;
   priceAdjusted?: boolean;
   batchNumber?: string;
+  costPrice?: number;
+  sellingPriceExVat?: number;
+  vatAmount?: number;
+  finalPriceRounded?: number;
+  roundingExtra?: number;
+  profit?: number;
+  priceTypeUsed?: 'MINIMUM' | 'TARGET';
+  actualCostAtSale?: number;
 }
 
 export interface Sale {
@@ -119,6 +131,13 @@ export interface InvoiceItem {
   sellingPrice: number;
   totalCost: number;
   barcode: string;
+  sellingPriceExVat?: number;
+  vatAmount?: number;
+  finalPriceRounded?: number;
+  roundingExtra?: number;
+  profit?: number;
+  priceTypeUsed?: 'MINIMUM' | 'TARGET';
+  actualCostAtSale?: number;
 }
 
 export interface Invoice {

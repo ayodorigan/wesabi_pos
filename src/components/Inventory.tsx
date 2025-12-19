@@ -8,7 +8,8 @@ import {
   Edit,
   Trash2,
   AlertTriangle,
-  Package
+  Package,
+  TrendingUp
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,6 +22,8 @@ import VATRateInput from './VATRateInput';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { usePagination } from '../hooks/usePagination';
 import Pagination from './Pagination';
+import { usePricing } from '../hooks/usePricing';
+import { formatCurrency, shouldWarnLowMargin } from '../utils/pricing';
 
 const Inventory: React.FC = () => {
   const {
@@ -39,6 +42,7 @@ const Inventory: React.FC = () => {
   } = useApp();
   const { user, canManagePricing, canDeleteProducts } = useAuth();
   const { showAlert } = useAlert();
+  const { getProductPricing } = usePricing();
   usePageRefresh('inventory', { refreshOnMount: true, staleTime: 30000 });
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -505,11 +509,12 @@ const Inventory: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
                 {canManagePricing && (
                   <>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Price</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount %</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VAT %</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost Price</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Original Cost</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discounted Cost</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Margin</th>
                   </>
                 )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry</th>
@@ -524,6 +529,23 @@ const Inventory: React.FC = () => {
                 const daysToExpiry = Math.ceil((product.expiryDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
                 const isLowStock = product.currentStock <= product.minStockLevel;
                 const isExpiringSoon = daysToExpiry <= 30 && daysToExpiry > 0;
+
+                // Calculate pricing information
+                const pricing = getProductPricing(product);
+                const hasDiscount = pricing.hasDiscount;
+                const isCloseToMinimum = shouldWarnLowMargin(
+                  product.sellingPrice,
+                  pricing.minimumPriceRounded,
+                  pricing.targetPriceRounded
+                );
+
+                // Calculate margin improvement from discount
+                const marginWithoutDiscount = pricing.targetPriceRounded - product.costPrice;
+                const marginWithDiscount = pricing.discountedCost
+                  ? pricing.targetPriceRounded - pricing.discountedCost
+                  : marginWithoutDiscount;
+                const marginImprovement = marginWithDiscount / marginWithoutDiscount;
+                const isHighMargin = hasDiscount && marginImprovement > 1.3;
 
                 return (
                   <tr key={product.id} className="hover:bg-gray-50">
@@ -547,24 +569,71 @@ const Inventory: React.FC = () => {
                       <>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">
-                            {product.invoicePrice ? formatKES(product.invoicePrice) : '-'}
+                            {formatCurrency(product.costPrice)}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">
-                            {product.supplierDiscountPercent ? `${product.supplierDiscountPercent}%` : '0%'}
+                            {pricing.discountedCost ? (
+                              <div>
+                                <div>{formatCurrency(pricing.discountedCost)}</div>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                  {product.supplierDiscountPercent}% off
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
-                            {product.vatRate ? `${product.vatRate}%` : '0%'}
+                          <div className="text-sm">
+                            {pricing.minimumPriceRounded ? (
+                              <div>
+                                <div className="font-medium text-gray-900">
+                                  {formatCurrency(pricing.minimumPriceRounded)}
+                                </div>
+                                {hasDiscount && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">
+                                    With Discount
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{formatKES(product.costPrice)}</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {formatCurrency(pricing.targetPriceRounded)}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{formatKES(product.sellingPrice)}</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {formatKES(product.sellingPrice)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex flex-col space-y-1">
+                            {isHighMargin && (
+                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
+                                <TrendingUp className="h-3 w-3 mr-1" />
+                                High Margin
+                              </span>
+                            )}
+                            {isCloseToMinimum && (
+                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-800">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                Close to Min
+                              </span>
+                            )}
+                            {hasDiscount && !isHighMargin && !isCloseToMinimum && (
+                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-800">
+                                Discounted
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </>
                     )}

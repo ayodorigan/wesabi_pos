@@ -12,7 +12,8 @@ import {
   Shield,
   History,
   Check,
-  Edit
+  Edit,
+  Info
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,12 +24,15 @@ import { getErrorMessage } from '../utils/errorMessages';
 import { retryDatabaseOperation } from '../utils/retry';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import { useDataRefresh } from '../contexts/DataRefreshContext';
+import { usePricing } from '../hooks/usePricing';
+import { formatCurrency } from '../utils/pricing';
 
 const POS: React.FC = () => {
   const { products, addSale, getLastSoldPrice } = useApp();
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { triggerRefresh } = useDataRefresh();
+  const { getProductPricing, calculateSaleItemPricing, validatePrice } = usePricing();
   usePageRefresh('pos', { refreshOnMount: true, staleTime: 30000 });
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,6 +56,7 @@ const POS: React.FC = () => {
   const [lastSoldPrices, setLastSoldPrices] = useState<Record<string, number | null>>({});
   const [mpesaTimeoutReached, setMpesaTimeoutReached] = useState(false);
   const [mpesaTimeoutId, setMpesaTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [showPricingInfo, setShowPricingInfo] = useState<Record<string, boolean>>({});
 
   const filteredProducts = products.filter(product => 
     product.currentStock > 0 && (
@@ -62,24 +67,25 @@ const POS: React.FC = () => {
 
   const addToCart = (product: Product) => {
     const existingItem = cart.find(item => item.productId === product.id);
-    
+
     if (existingItem) {
       // Don't add duplicate products, just show a message
       showAlert({ title: 'Point of Sale', message: 'Product already in cart. Adjust quantity if needed.', type: 'warning' });
       return;
     } else {
-      const newItem: SaleItem = {
-        productId: product.id,
-        productName: product.name,
-        quantity: 1,
-        unitPrice: product.sellingPrice,
-        totalPrice: product.sellingPrice,
-        originalPrice: product.sellingPrice,
-        priceAdjusted: false,
-        batchNumber: product.batchNumber,
-      };
-      setCart(prev => [newItem, ...prev]);
-      
+      // Use the new pricing system to calculate all pricing fields
+      const pricing = getProductPricing(product);
+
+      // Use target price by default
+      const saleItem = calculateSaleItemPricing(
+        product,
+        1,
+        pricing.targetPriceRounded,
+        'TARGET'
+      );
+
+      setCart(prev => [saleItem, ...prev]);
+
       // Fetch last sold price when adding to cart
       getLastSoldPrice(product.id).then(lastPrice => {
         setLastSoldPrices(prev => ({
@@ -102,10 +108,22 @@ const POS: React.FC = () => {
 
     if (newQuantity > product.currentStock) return;
 
+    const currentItem = cart.find(item => item.productId === productId);
+    if (!currentItem) return;
+
+    // Recalculate pricing with new quantity
+    const pricing = getProductPricing(product);
+    const priceType = currentItem.priceTypeUsed || 'TARGET';
+
+    const updatedItem = calculateSaleItemPricing(
+      product,
+      newQuantity,
+      currentItem.unitPrice,
+      priceType
+    );
+
     setCart(cart.map(item =>
-      item.productId === productId
-        ? { ...item, quantity: newQuantity, totalPrice: newQuantity * item.unitPrice }
-        : item
+      item.productId === productId ? updatedItem : item
     ));
   };
 
@@ -123,22 +141,30 @@ const POS: React.FC = () => {
     if (!product) return;
 
     const newPrice = parseFloat(tempPrice);
-    const minPrice = getMinimumSellingPrice(product.costPrice);
 
-    if (newPrice < minPrice) {
-      showAlert({ title: 'Point of Sale', message: `Price cannot be less than minimum selling price: ${formatKES(minPrice)}`, type: 'error' });
+    // Validate price using the new pricing system
+    const validation = validatePrice(product, newPrice);
+    if (!validation.valid) {
+      showAlert({ title: 'Point of Sale', message: validation.message || 'Invalid price', type: 'error' });
       return;
     }
 
+    const currentItem = cart.find(item => item.productId === productId);
+    if (!currentItem) return;
+
+    // Recalculate all pricing fields with the new price
+    const pricing = getProductPricing(product);
+    const priceType = newPrice === pricing.minimumPriceRounded ? 'MINIMUM' : 'TARGET';
+
+    const updatedItem = calculateSaleItemPricing(
+      product,
+      currentItem.quantity,
+      newPrice,
+      priceType
+    );
+
     setCart(cart.map(item =>
-      item.productId === productId
-        ? { 
-            ...item, 
-            unitPrice: newPrice, 
-            totalPrice: item.quantity * newPrice,
-            priceAdjusted: newPrice !== product.sellingPrice
-          }
-        : item
+      item.productId === productId ? updatedItem : item
     ));
     setEditingPrice(null);
   };
@@ -155,15 +181,27 @@ const POS: React.FC = () => {
   const processSale = async () => {
     if (cart.length === 0 || !user) return;
 
-    // Validate all prices against minimum selling price (cost * 1.33)
+    // Validate all prices using the new pricing system
     for (const item of cart) {
       const product = products.find(p => p.id === item.productId);
       if (product) {
-        const minPrice = getMinimumSellingPrice(product.costPrice);
-        if (item.unitPrice < minPrice) {
-          showAlert({ title: 'Point of Sale', message: `Price for ${item.productName} cannot be less than minimum selling price: ${formatKES(minPrice)}`, type: 'error' });
+        const validation = validatePrice(product, item.unitPrice);
+        if (!validation.valid) {
+          showAlert({ title: 'Point of Sale', message: validation.message || `Invalid price for ${item.productName}`, type: 'error' });
           return;
         }
+      }
+
+      // Ensure all pricing fields are present
+      if (item.sellingPriceExVat === undefined ||
+          item.vatAmount === undefined ||
+          item.finalPriceRounded === undefined ||
+          item.roundingExtra === undefined ||
+          item.profit === undefined ||
+          item.priceTypeUsed === undefined ||
+          item.actualCostAtSale === undefined) {
+        showAlert({ title: 'Point of Sale', message: `Pricing information missing for ${item.productName}. Please remove and re-add the item.`, type: 'error' });
+        return;
       }
     }
 
@@ -529,11 +567,27 @@ const POS: React.FC = () => {
 
         {/* Cart Items */}
         <div className="space-y-2 mb-4 max-h-[400px] overflow-y-auto">
-          {cart.map(item => (
-            <div key={item.productId} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{item.productName}</p>
-                <div className="space-y-1">
+          {cart.map(item => {
+            const product = products.find(p => p.id === item.productId);
+            const pricing = product ? getProductPricing(product) : null;
+
+            return (
+            <div key={item.productId} className="flex flex-col p-2 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-900 truncate">{item.productName}</p>
+                    {pricing && (
+                      <button
+                        onClick={() => setShowPricingInfo(prev => ({ ...prev, [item.productId]: !prev[item.productId] }))}
+                        className="p-1 text-blue-500 hover:text-blue-700"
+                        title="Show pricing details"
+                      >
+                        <Info className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-1">
                   {editingPrice === item.productId ? (
                     <div className="flex items-center space-x-1">
                       <input
@@ -591,32 +645,37 @@ const POS: React.FC = () => {
                                 const newUseLastPrice = !useLastPrice[item.productId];
                                 const product = products.find(p => p.id === item.productId);
                                 if (!product) return;
-                                
+
                                 setUseLastPrice(prev => ({
                                   ...prev,
                                   [item.productId]: newUseLastPrice
                                 }));
-                                
-                                let priceToUse = newUseLastPrice 
-                                  ? lastSoldPrices[item.productId]! 
+
+                                let priceToUse = newUseLastPrice
+                                  ? lastSoldPrices[item.productId]!
                                   : product.sellingPrice;
-                                
-                                // Enforce minimum selling price
-                                const minPrice = getMinimumSellingPrice(product.costPrice);
-                                if (priceToUse < minPrice) {
-                                  priceToUse = minPrice;
-                                  showAlert({ title: 'Point of Sale', message: `Price adjusted to minimum selling price: ${formatKES(minPrice)}`, type: 'info' });
+
+                                // Validate using new pricing system
+                                const validation = validatePrice(product, priceToUse);
+                                if (!validation.valid) {
+                                  const pricing = getProductPricing(product);
+                                  priceToUse = pricing.minimumPriceRounded || pricing.targetPriceRounded;
+                                  showAlert({ title: 'Point of Sale', message: validation.message || 'Price adjusted to minimum', type: 'info' });
                                 }
-                                
+
+                                // Recalculate with new pricing system
+                                const pricing = getProductPricing(product);
+                                const priceType = priceToUse === pricing.minimumPriceRounded ? 'MINIMUM' : 'TARGET';
+
+                                const updatedItem = calculateSaleItemPricing(
+                                  product,
+                                  item.quantity,
+                                  priceToUse,
+                                  priceType
+                                );
+
                                 setCart(cart.map(cartItem =>
-                                  cartItem.productId === item.productId
-                                    ? { 
-                                        ...cartItem, 
-                                        unitPrice: priceToUse, 
-                                        totalPrice: cartItem.quantity * priceToUse,
-                                        priceAdjusted: priceToUse !== product.sellingPrice
-                                      }
-                                    : cartItem
+                                  cartItem.productId === item.productId ? updatedItem : cartItem
                                 ));
                               }}
                               className="mr-1"
@@ -670,8 +729,39 @@ const POS: React.FC = () => {
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
+              </div>
+
+              {/* Pricing Information Panel */}
+              {showPricingInfo[item.productId] && pricing && (
+                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs space-y-1">
+                  <div className="font-semibold text-blue-800 mb-1">Pricing Details:</div>
+                  {pricing.hasDiscount && pricing.minimumPriceRounded && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Minimum Price:</span>
+                      <span className="font-medium">{formatKES(pricing.minimumPriceRounded)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Target Price:</span>
+                    <span className="font-medium">{formatKES(pricing.targetPriceRounded)}</span>
+                  </div>
+                  {item.profit !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Profit (per unit):</span>
+                      <span className="font-medium text-green-600">{formatKES(item.profit / item.quantity)}</span>
+                    </div>
+                  )}
+                  {item.priceTypeUsed && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Price Type:</span>
+                      <span className="font-medium">{item.priceTypeUsed === 'MINIMUM' ? 'Minimum' : 'Target'}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {cart.length === 0 && (

@@ -12,6 +12,8 @@ import { useApp } from '../contexts/AppContext';
 import { usePagination } from '../hooks/usePagination';
 import Pagination from './Pagination';
 import { useAutoRefresh } from '../contexts/DataRefreshContext';
+import { usePricing } from '../hooks/usePricing';
+import { calculateProductPricing } from '../utils/pricing';
 
 const InvoiceManagement: React.FC = () => {
   const { user, canDeleteProducts } = useAuth();
@@ -46,6 +48,9 @@ const InvoiceManagement: React.FC = () => {
     costPrice: '',
     sellingPrice: '',
     barcode: '',
+    discountedCost: '',
+    minimumSellingPrice: '',
+    targetSellingPrice: '',
   });
 
   const medicineNames = medicineTemplates.map(med => med.name);
@@ -104,6 +109,9 @@ const InvoiceManagement: React.FC = () => {
               sellingPrice: parseFloat(item.selling_price),
               totalCost: parseFloat(item.total_cost),
               barcode: item.barcode,
+              discountedCost: item.discounted_cost ? parseFloat(item.discounted_cost) : undefined,
+              minimumSellingPrice: item.minimum_selling_price ? parseFloat(item.minimum_selling_price) : undefined,
+              targetSellingPrice: item.target_selling_price ? parseFloat(item.target_selling_price) : undefined,
             })),
             createdAt: new Date(invoice.created_at),
             updatedAt: new Date(invoice.updated_at),
@@ -156,16 +164,38 @@ const InvoiceManagement: React.FC = () => {
       if (invoicePrice > 0) {
         const calculatedCostPrice = calculateNetCost(pricingInputs);
         const calculatedSellingPrice = calculateSellingPrice(pricingInputs);
+
+        // Calculate pricing using the new pricing utilities
+        const pricingResult = calculateProductPricing({
+          originalCost: invoicePrice,
+          discountPercent: supplierDiscountPercent,
+          hasVAT: true,
+          vatRate: vatRate || 16
+        });
+
         return {
           ...updated,
           costPrice: calculatedCostPrice.toString(),
-          sellingPrice: calculatedSellingPrice.toString()
+          sellingPrice: calculatedSellingPrice.toString(),
+          discountedCost: pricingResult.discountedCost ? pricingResult.discountedCost.toString() : '',
+          minimumSellingPrice: pricingResult.minimumSellingPrice ? pricingResult.minimumSellingPrice.toString() : '',
+          targetSellingPrice: pricingResult.targetSellingPrice.toString()
         };
       } else if (field === 'costPrice' && costPrice > 0) {
         const calculatedSellingPrice = calculateSellingPrice(costPrice);
+
+        // Calculate pricing using the new pricing utilities
+        const pricingResult = calculateProductPricing({
+          originalCost: costPrice,
+          discountPercent: 0,
+          hasVAT: true,
+          vatRate: vatRate || 16
+        });
+
         return {
           ...updated,
-          sellingPrice: calculatedSellingPrice.toString()
+          sellingPrice: calculatedSellingPrice.toString(),
+          targetSellingPrice: pricingResult.targetSellingPrice.toString()
         };
       }
 
@@ -189,7 +219,7 @@ const InvoiceManagement: React.FC = () => {
     const sellingPrice = parseFloat(currentItem.sellingPrice);
     const totalCost = quantity * costPrice;
 
-    const newItem: InvoiceItem = {
+    const newItem: InvoiceItem & { discountedCost?: number; minimumSellingPrice?: number; targetSellingPrice?: number } = {
       productName: currentItem.productName,
       category: currentItem.category || 'General',
       batchNumber: currentItem.batchNumber || '',
@@ -203,6 +233,9 @@ const InvoiceManagement: React.FC = () => {
       sellingPrice,
       totalCost,
       barcode: currentItem.barcode || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      discountedCost: currentItem.discountedCost ? parseFloat(currentItem.discountedCost) : undefined,
+      minimumSellingPrice: currentItem.minimumSellingPrice ? parseFloat(currentItem.minimumSellingPrice) : undefined,
+      targetSellingPrice: currentItem.targetSellingPrice ? parseFloat(currentItem.targetSellingPrice) : undefined,
     };
 
     setInvoiceItems([newItem, ...invoiceItems]);
@@ -220,6 +253,9 @@ const InvoiceManagement: React.FC = () => {
       costPrice: '',
       sellingPrice: '',
       barcode: '',
+      discountedCost: '',
+      minimumSellingPrice: '',
+      targetSellingPrice: '',
     });
   };
 
@@ -293,18 +329,32 @@ const InvoiceManagement: React.FC = () => {
             originalStock: existingProduct.current_stock
           });
 
+          const updateData: any = {
+            current_stock: existingProduct.current_stock + item.quantity,
+            cost_price: item.costPrice,
+            selling_price: item.sellingPrice,
+            invoice_price: item.invoicePrice,
+            supplier_discount_percent: item.supplierDiscountPercent,
+            vat_rate: item.vatRate,
+            other_charges: item.otherCharges,
+            updated_at: new Date().toISOString(),
+          };
+
+          // Add pricing fields if they exist
+          const typedItem = item as any;
+          if (typedItem.discountedCost) {
+            updateData.discounted_cost = typedItem.discountedCost;
+          }
+          if (typedItem.minimumSellingPrice) {
+            updateData.minimum_selling_price = typedItem.minimumSellingPrice;
+          }
+          if (typedItem.targetSellingPrice) {
+            updateData.target_selling_price = typedItem.targetSellingPrice;
+          }
+
           const { error: updateError } = await supabase
             .from('products')
-            .update({
-              current_stock: existingProduct.current_stock + item.quantity,
-              cost_price: item.costPrice,
-              selling_price: item.sellingPrice,
-              invoice_price: item.invoicePrice,
-              supplier_discount_percent: item.supplierDiscountPercent,
-              vat_rate: item.vatRate,
-              other_charges: item.otherCharges,
-              updated_at: new Date().toISOString(),
-            })
+            .update(updateData)
             .eq('id', existingProduct.id);
 
           if (updateError) {
@@ -312,25 +362,39 @@ const InvoiceManagement: React.FC = () => {
             throw new Error(`Failed to update product ${item.productName}: ${updateError.message}`);
           }
         } else {
+          const insertData: any = {
+            name: item.productName,
+            category: item.category,
+            supplier: invoiceData.supplier,
+            batch_number: item.batchNumber,
+            expiry_date: item.expiryDate.toISOString().split('T')[0],
+            invoice_price: item.invoicePrice,
+            supplier_discount_percent: item.supplierDiscountPercent,
+            vat_rate: item.vatRate,
+            other_charges: item.otherCharges,
+            cost_price: item.costPrice,
+            selling_price: item.sellingPrice,
+            current_stock: item.quantity,
+            min_stock_level: 10,
+            barcode: item.barcode,
+            invoice_number: invoiceData.invoiceNumber,
+          };
+
+          // Add pricing fields if they exist
+          const typedItem = item as any;
+          if (typedItem.discountedCost) {
+            insertData.discounted_cost = typedItem.discountedCost;
+          }
+          if (typedItem.minimumSellingPrice) {
+            insertData.minimum_selling_price = typedItem.minimumSellingPrice;
+          }
+          if (typedItem.targetSellingPrice) {
+            insertData.target_selling_price = typedItem.targetSellingPrice;
+          }
+
           const { data: newProduct, error: productError } = await supabase
             .from('products')
-            .insert({
-              name: item.productName,
-              category: item.category,
-              supplier: invoiceData.supplier,
-              batch_number: item.batchNumber,
-              expiry_date: item.expiryDate.toISOString().split('T')[0],
-              invoice_price: item.invoicePrice,
-              supplier_discount_percent: item.supplierDiscountPercent,
-              vat_rate: item.vatRate,
-              other_charges: item.otherCharges,
-              cost_price: item.costPrice,
-              selling_price: item.sellingPrice,
-              current_stock: item.quantity,
-              min_stock_level: 10,
-              barcode: item.barcode,
-              invoice_number: invoiceData.invoiceNumber,
-            })
+            .insert(insertData)
             .select()
             .single();
 
@@ -343,7 +407,7 @@ const InvoiceManagement: React.FC = () => {
           processedProducts.push({ id: newProduct.id, originalStock: 0 });
         }
 
-        invoiceItemsToInsert.push({
+        const invoiceItemData: any = {
           invoice_id: invoiceId,
           product_id: productId,
           product_name: item.productName,
@@ -359,7 +423,21 @@ const InvoiceManagement: React.FC = () => {
           selling_price: item.sellingPrice,
           total_cost: item.totalCost,
           barcode: item.barcode,
-        });
+        };
+
+        // Add pricing fields if they exist
+        const typedItem = item as any;
+        if (typedItem.discountedCost) {
+          invoiceItemData.discounted_cost = typedItem.discountedCost;
+        }
+        if (typedItem.minimumSellingPrice) {
+          invoiceItemData.minimum_selling_price = typedItem.minimumSellingPrice;
+        }
+        if (typedItem.targetSellingPrice) {
+          invoiceItemData.target_selling_price = typedItem.targetSellingPrice;
+        }
+
+        invoiceItemsToInsert.push(invoiceItemData);
       }
 
       setSavingProgress({
@@ -595,6 +673,14 @@ const InvoiceManagement: React.FC = () => {
         const calculatedCostPrice = invoicePrice ? calculateNetCost(pricingInputs) : costPrice;
         const sellingPrice = calculateSellingPrice(pricingInputs);
 
+        // Calculate pricing using the new pricing utilities
+        const pricingResult = calculateProductPricing({
+          originalCost: invoicePrice || costPrice,
+          discountPercent: supplierDiscountPercent,
+          hasVAT: true,
+          vatRate: vatRate || 16
+        });
+
         items.push({
           productName: row.productname,
           category: row.category || 'General',
@@ -609,7 +695,10 @@ const InvoiceManagement: React.FC = () => {
           sellingPrice,
           totalCost: (parseInt(row.quantity) || 0) * calculatedCostPrice,
           barcode: row.barcode || `${Date.now()}-${i}`,
-        });
+          discountedCost: pricingResult.discountedCost || undefined,
+          minimumSellingPrice: pricingResult.minimumSellingPrice || undefined,
+          targetSellingPrice: pricingResult.targetSellingPrice,
+        } as any);
       }
 
       setInvoiceItems(items);
@@ -678,6 +767,9 @@ const InvoiceManagement: React.FC = () => {
       costPrice: '',
       sellingPrice: '',
       barcode: '',
+      discountedCost: '',
+      minimumSellingPrice: '',
+      targetSellingPrice: '',
     });
   };
 
@@ -843,36 +935,115 @@ const InvoiceManagement: React.FC = () => {
 
               <h4 className="font-semibold mb-2">Items ({selectedInvoice.items.length})</h4>
               <div className="border rounded-lg overflow-hidden mb-4">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT %</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {selectedInvoice.items.map((item, index) => (
-                      <tr key={index}>
-                        <td className="px-3 py-2 text-sm">{item.productName}</td>
-                        <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
-                        <td className="px-3 py-2 text-sm">{item.quantity}</td>
-                        <td className="px-3 py-2 text-sm">{item.invoicePrice ? formatKES(item.invoicePrice) : '-'}</td>
-                        <td className="px-3 py-2 text-sm">{item.supplierDiscountPercent || '0'}%</td>
-                        <td className="px-3 py-2 text-sm">{item.vatRate || '0'}%</td>
-                        <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
-                        <td className="px-3 py-2 text-sm">{formatKES(item.sellingPrice)}</td>
-                        <td className="px-3 py-2 text-sm font-medium">{formatKES(item.totalCost)}</td>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost (w/ Disc)</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Min Selling</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Target Selling</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Margin %</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {selectedInvoice.items.map((item, index) => {
+                        const typedItem = item as any;
+                        const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                        const actualCost = typedItem.discountedCost || item.costPrice;
+                        const profitMargin = ((targetPrice - actualCost) / targetPrice * 100).toFixed(1);
+
+                        return (
+                          <tr key={index}>
+                            <td className="px-3 py-2 text-sm">{item.productName}</td>
+                            <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
+                            <td className="px-3 py-2 text-sm">{item.quantity}</td>
+                            <td className="px-3 py-2 text-sm">{item.invoicePrice ? formatKES(item.invoicePrice) : '-'}</td>
+                            <td className="px-3 py-2 text-sm">
+                              {item.supplierDiscountPercent || '0'}%
+                              {item.supplierDiscountPercent && item.supplierDiscountPercent > 0 && (
+                                <span className="ml-1 text-green-600 font-semibold">!</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-sm">
+                              {formatKES(actualCost)}
+                              {typedItem.discountedCost && (
+                                <div className="text-xs text-gray-500 line-through">
+                                  {formatKES(item.invoicePrice || item.costPrice)}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-sm font-medium text-orange-600">
+                              {typedItem.minimumSellingPrice ? formatKES(typedItem.minimumSellingPrice) : '-'}
+                            </td>
+                            <td className="px-3 py-2 text-sm font-medium text-green-600">
+                              {formatKES(targetPrice)}
+                            </td>
+                            <td className="px-3 py-2 text-sm">
+                              <span className={`font-semibold ${parseFloat(profitMargin) >= 25 ? 'text-green-600' : 'text-yellow-600'}`}>
+                                {profitMargin}%
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-sm font-medium">{formatKES(item.totalCost)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Summary Section for View Modal */}
+                <div className="bg-blue-50 border-t-2 border-blue-200 p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-600 uppercase">Total Investment</p>
+                      <p className="text-lg font-bold text-gray-900">
+                        {formatKES(selectedInvoice.items.reduce((sum, item) => sum + item.totalCost, 0))}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600 uppercase">Expected Revenue</p>
+                      <p className="text-lg font-bold text-green-600">
+                        {formatKES(selectedInvoice.items.reduce((sum, item) => {
+                          const typedItem = item as any;
+                          const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                          return sum + (targetPrice * item.quantity);
+                        }, 0))}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600 uppercase">Expected Profit</p>
+                      <p className="text-lg font-bold text-blue-600">
+                        {formatKES(selectedInvoice.items.reduce((sum, item) => {
+                          const typedItem = item as any;
+                          const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                          const actualCost = typedItem.discountedCost || item.costPrice;
+                          return sum + ((targetPrice - actualCost) * item.quantity);
+                        }, 0))}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600 uppercase">Avg Margin</p>
+                      <p className="text-lg font-bold text-purple-600">
+                        {(() => {
+                          const totalRevenue = selectedInvoice.items.reduce((sum, item) => {
+                            const typedItem = item as any;
+                            const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                            return sum + (targetPrice * item.quantity);
+                          }, 0);
+                          const totalCost = selectedInvoice.items.reduce((sum, item) => sum + item.totalCost, 0);
+                          const margin = totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100) : 0;
+                          return `${margin.toFixed(1)}%`;
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end">
@@ -1066,16 +1237,48 @@ const InvoiceManagement: React.FC = () => {
                       placeholder="Auto-calculated"
                     />
                   </div>
+                </div>
 
-                  <div className="flex items-end">
-                    <button
-                      type="button"
-                      onClick={addItemToInvoice}
-                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                      Add Item
-                    </button>
+                {/* Pricing Information Display */}
+                {(currentItem.minimumSellingPrice || currentItem.targetSellingPrice) && (
+                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <h5 className="text-sm font-semibold text-green-900 mb-2">Calculated Pricing Information</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {currentItem.discountedCost && (
+                        <div>
+                          <p className="text-xs text-gray-600">Discounted Cost</p>
+                          <p className="text-sm font-semibold text-gray-900">{formatKES(parseFloat(currentItem.discountedCost))}</p>
+                          <p className="text-xs text-gray-500 line-through">
+                            Original: {formatKES(parseFloat(currentItem.invoicePrice) || parseFloat(currentItem.costPrice))}
+                          </p>
+                        </div>
+                      )}
+                      {currentItem.minimumSellingPrice && (
+                        <div>
+                          <p className="text-xs text-gray-600">Minimum Selling Price</p>
+                          <p className="text-sm font-semibold text-orange-600">{formatKES(parseFloat(currentItem.minimumSellingPrice))}</p>
+                          <p className="text-xs text-gray-500">Floor price with discount</p>
+                        </div>
+                      )}
+                      {currentItem.targetSellingPrice && (
+                        <div>
+                          <p className="text-xs text-gray-600">Target Selling Price</p>
+                          <p className="text-sm font-semibold text-green-600">{formatKES(parseFloat(currentItem.targetSellingPrice))}</p>
+                          <p className="text-xs text-gray-500">Recommended retail price</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                )}
+
+                <div className="flex items-end mt-3">
+                  <button
+                    type="button"
+                    onClick={addItemToInvoice}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Add Item
+                  </button>
                 </div>
               </div>
 
@@ -1083,52 +1286,124 @@ const InvoiceManagement: React.FC = () => {
                 <div className="mb-4">
                   <h4 className="font-semibold mb-2">Invoice Items ({invoiceItems.length})</h4>
                   <div className="border rounded-lg overflow-hidden">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT %</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {invoiceItems.map((item, index) => (
-                          <tr key={index}>
-                            <td className="px-3 py-2 text-sm">{item.productName}</td>
-                            <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
-                            <td className="px-3 py-2 text-sm">{item.quantity}</td>
-                            <td className="px-3 py-2 text-sm">{item.invoicePrice ? formatKES(item.invoicePrice) : '-'}</td>
-                            <td className="px-3 py-2 text-sm">{item.supplierDiscountPercent || '0'}%</td>
-                            <td className="px-3 py-2 text-sm">{item.vatRate || '0'}%</td>
-                            <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
-                            <td className="px-3 py-2 text-sm">{formatKES(item.sellingPrice)}</td>
-                            <td className="px-3 py-2 text-sm font-medium">{formatKES(item.totalCost)}</td>
-                            <td className="px-3 py-2 text-sm">
-                              <button
-                                onClick={() => removeItemFromInvoice(index)}
-                                className="text-red-600 hover:text-red-800"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </td>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost (w/ Disc)</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Min Selling</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Target Selling</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Profit Margin %</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total Cost</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500"></th>
                           </tr>
-                        ))}
-                        <tr className="bg-gray-50 font-semibold">
-                          <td colSpan={5} className="px-3 py-2 text-right">Total:</td>
-                          <td className="px-3 py-2">
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {invoiceItems.map((item, index) => {
+                            const typedItem = item as any;
+                            const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                            const actualCost = typedItem.discountedCost || item.costPrice;
+                            const profitMargin = ((targetPrice - actualCost) / targetPrice * 100).toFixed(1);
+
+                            return (
+                              <tr key={index}>
+                                <td className="px-3 py-2 text-sm">{item.productName}</td>
+                                <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
+                                <td className="px-3 py-2 text-sm">{item.quantity}</td>
+                                <td className="px-3 py-2 text-sm">{item.invoicePrice ? formatKES(item.invoicePrice) : '-'}</td>
+                                <td className="px-3 py-2 text-sm">
+                                  {item.supplierDiscountPercent || '0'}%
+                                  {item.supplierDiscountPercent && item.supplierDiscountPercent > 0 && (
+                                    <span className="ml-1 text-green-600 font-semibold">!</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-sm">
+                                  {formatKES(actualCost)}
+                                  {typedItem.discountedCost && (
+                                    <div className="text-xs text-gray-500 line-through">
+                                      {formatKES(item.invoicePrice || item.costPrice)}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-sm font-medium text-orange-600">
+                                  {typedItem.minimumSellingPrice ? formatKES(typedItem.minimumSellingPrice) : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-sm font-medium text-green-600">
+                                  {formatKES(targetPrice)}
+                                </td>
+                                <td className="px-3 py-2 text-sm">
+                                  <span className={`font-semibold ${parseFloat(profitMargin) >= 25 ? 'text-green-600' : 'text-yellow-600'}`}>
+                                    {profitMargin}%
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-sm font-medium">{formatKES(item.totalCost)}</td>
+                                <td className="px-3 py-2 text-sm">
+                                  <button
+                                    onClick={() => removeItemFromInvoice(index)}
+                                    className="text-red-600 hover:text-red-800"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Summary Section */}
+                    <div className="bg-blue-50 border-t-2 border-blue-200 p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                          <p className="text-xs text-gray-600 uppercase">Total Investment</p>
+                          <p className="text-lg font-bold text-gray-900">
                             {formatKES(invoiceItems.reduce((sum, item) => sum + item.totalCost, 0))}
-                          </td>
-                          <td></td>
-                        </tr>
-                      </tbody>
-                    </table>
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600 uppercase">Expected Revenue (Target)</p>
+                          <p className="text-lg font-bold text-green-600">
+                            {formatKES(invoiceItems.reduce((sum, item) => {
+                              const typedItem = item as any;
+                              const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                              return sum + (targetPrice * item.quantity);
+                            }, 0))}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600 uppercase">Expected Profit</p>
+                          <p className="text-lg font-bold text-blue-600">
+                            {formatKES(invoiceItems.reduce((sum, item) => {
+                              const typedItem = item as any;
+                              const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                              const actualCost = typedItem.discountedCost || item.costPrice;
+                              return sum + ((targetPrice - actualCost) * item.quantity);
+                            }, 0))}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600 uppercase">Avg Profit Margin</p>
+                          <p className="text-lg font-bold text-purple-600">
+                            {(() => {
+                              const totalRevenue = invoiceItems.reduce((sum, item) => {
+                                const typedItem = item as any;
+                                const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                                return sum + (targetPrice * item.quantity);
+                              }, 0);
+                              const totalCost = invoiceItems.reduce((sum, item) => sum + item.totalCost, 0);
+                              const margin = totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100) : 0;
+                              return `${margin.toFixed(1)}%`;
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
