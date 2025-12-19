@@ -119,6 +119,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           supplier: product.supplier,
           batchNumber: product.batch_number,
           expiryDate: new Date(product.expiry_date),
+          invoicePrice: product.invoice_price ? parseFloat(product.invoice_price) : undefined,
+          supplierDiscountPercent: product.supplier_discount_percent ? parseFloat(product.supplier_discount_percent) : undefined,
+          vatRate: product.vat_rate !== null && product.vat_rate !== undefined ? parseFloat(product.vat_rate) : undefined,
+          otherCharges: product.other_charges ? parseFloat(product.other_charges) : undefined,
+          hasVat: product.has_vat !== null && product.has_vat !== undefined ? product.has_vat : true,
           costPrice: parseFloat(product.cost_price) || 0,
           sellingPrice: parseFloat(product.selling_price) || 0,
           currentStock: product.current_stock || 0,
@@ -415,6 +420,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           supplier_discount_percent: productData.supplierDiscountPercent || null,
           vat_rate: productData.vatRate || 0,
           other_charges: productData.otherCharges || null,
+          has_vat: productData.hasVat !== undefined ? productData.hasVat : true,
           cost_price: productData.costPrice,
           selling_price: enforcedSellingPrice,
           current_stock: productData.currentStock,
@@ -483,6 +489,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (updates.supplierDiscountPercent !== undefined) updateData.supplier_discount_percent = updates.supplierDiscountPercent || null;
       if (updates.vatRate !== undefined) updateData.vat_rate = updates.vatRate || 0;
       if (updates.otherCharges !== undefined) updateData.other_charges = updates.otherCharges || null;
+      if (updates.hasVat !== undefined) updateData.has_vat = updates.hasVat;
       if (updates.costPrice !== undefined) updateData.cost_price = updates.costPrice;
       if (updates.sellingPrice !== undefined) {
         // Enforce minimum selling price with new pricing logic
@@ -887,6 +894,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           supplier_discount_percent: supplierDiscountPercent || null,
           vat_rate: vatRate || 0,
           other_charges: otherCharges || null,
+          has_vat: vatRate !== undefined && vatRate !== null && vatRate > 0,
           cost_price: costPrice,
           selling_price: sellingPrice,
           current_stock: parseInt(item.currentstock) || 0,

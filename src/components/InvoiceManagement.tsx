@@ -337,6 +337,7 @@ const InvoiceManagement: React.FC = () => {
             supplier_discount_percent: item.supplierDiscountPercent,
             vat_rate: item.vatRate,
             other_charges: item.otherCharges,
+            has_vat: item.vatRate !== undefined && item.vatRate !== null && item.vatRate > 0,
             updated_at: new Date().toISOString(),
           };
 
@@ -384,6 +385,7 @@ const InvoiceManagement: React.FC = () => {
             supplier_discount_percent: item.supplierDiscountPercent,
             vat_rate: item.vatRate,
             other_charges: item.otherCharges,
+            has_vat: item.vatRate !== undefined && item.vatRate !== null && item.vatRate > 0,
             cost_price: item.costPrice,
             selling_price: item.sellingPrice,
             current_stock: item.quantity,
@@ -980,7 +982,7 @@ const InvoiceManagement: React.FC = () => {
                         const typedItem = item as any;
                         const targetPrice = typedItem.targetPrice || item.sellingPrice;
                         const actualCost = typedItem.discountedCost || item.costPrice;
-                        const profitMargin = ((targetPrice - actualCost) / targetPrice * 100).toFixed(1);
+                        const profitMargin = actualCost > 0 ? ((targetPrice - actualCost) / actualCost * 100).toFixed(1) : '0.0';
 
                         return (
                           <tr key={index}>
@@ -1057,11 +1059,15 @@ const InvoiceManagement: React.FC = () => {
                         {(() => {
                           const totalRevenue = selectedInvoice.items.reduce((sum, item) => {
                             const typedItem = item as any;
-                            const targetPrice = typedItem.sellingPrice || item.sellingPrice;
+                            const targetPrice = typedItem.targetPrice || item.sellingPrice;
                             return sum + (targetPrice * item.quantity);
                           }, 0);
-                          const totalCost = selectedInvoice.items.reduce((sum, item) => sum + item.totalCost, 0);
-                          const margin = totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100) : 0;
+                          const totalActualCost = selectedInvoice.items.reduce((sum, item) => {
+                            const typedItem = item as any;
+                            const actualCost = typedItem.discountedCost || item.costPrice;
+                            return sum + (actualCost * item.quantity);
+                          }, 0);
+                          const margin = totalActualCost > 0 ? ((totalRevenue - totalActualCost) / totalActualCost * 100) : 0;
                           return `${margin.toFixed(1)}%`;
                         })()}
                       </p>
