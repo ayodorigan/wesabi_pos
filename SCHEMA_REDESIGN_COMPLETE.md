@@ -1,362 +1,248 @@
-# Schema Redesign - Complete Documentation
-
-## Overview
-
-Your pharmacy POS system has been completely redesigned with a proper architectural foundation that follows industry best practices. The system now properly separates concerns and maintains data integrity through a ledger-based approach.
-
-## Core Architectural Principles
-
-### 1. **Products ≠ Batches ≠ Stock**
-- **Products** are master data (name, barcode, category)
-- **Batches** represent physical inventory purchases (expiry, cost, supplier)
-- **Stock** is calculated from movements, never stored
-
-### 2. **Ledger-Based Stock Management**
-- All stock changes flow through `stock_movements` table
-- Current stock = SUM of all movements for a batch
-- Complete audit trail of every stock change
-- No sync issues or data corruption
-
-### 3. **Batch-Specific Pricing**
-- Each batch has its own cost price, selling price, and VAT rate
-- Enables accurate profit tracking per batch
-- Handles price changes over time correctly
-
-## New Database Structure
-
-### Master Data Tables
-
-#### `suppliers`
-Normalized supplier information
-- `id` - UUID primary key
-- `name` - Unique supplier name
-- `phone` - Contact phone
-- `email` - Contact email
-
-#### `categories`
-Product categories
-- `id` - UUID primary key
-- `name` - Unique category name
-
-#### `products` (updated)
-Pure master data only
-- `id` - UUID primary key
-- `name` - Product name
-- `category_id` - FK to categories
-- `supplier_id` - FK to suppliers (default supplier)
-- `barcode` - Unique barcode
-- `min_stock_level` - Reorder level
-- `is_vat_exempt` - VAT exemption flag
-- **Removed**: `cost_price`, `selling_price`, `current_stock` (now in batches)
-
-### Purchase Flow Tables
-
-#### `purchase_invoices` (replaces `invoices`)
-Supplier purchase invoices
-- `id` - UUID primary key
-- `invoice_number` - Unique invoice number
-- `supplier_id` - FK to suppliers
-- `invoice_date` - Date of invoice
-- `notes` - Additional notes
-- `created_by` - User who created the invoice
-
-#### `product_batches` ⭐ CRITICAL TABLE
-Each purchase creates a batch
-- `id` - UUID primary key
-- `product_id` - FK to products
-- `supplier_id` - FK to suppliers
-- `purchase_invoice_id` - FK to purchase_invoices
-- `batch_number` - Batch identifier
-- `expiry_date` - When the batch expires
-- `cost_price` - Purchase cost per unit
-- `selling_price` - Retail price per unit
-- `vat_rate` - VAT percentage for this batch
-- `quantity_received` - Initial quantity received
-
-**Why batches matter:**
-- Track expiry per batch (not per product)
-- Different batches can have different costs
-- Different batches can have different prices
-- Complete traceability of which batch was sold
-
-### Stock Ledger
-
-#### `stock_movements` ⭐ CRITICAL TABLE
-Ledger for all stock changes
-- `id` - UUID primary key
-- `product_batch_id` - FK to product_batches
-- `movement_type` - Type of movement:
-  - `purchase` - Stock received from supplier
-  - `sale` - Stock sold to customer
-  - `supplier_return` - Returned to supplier
-  - `customer_return` - Returned by customer
-  - `expiry` - Expired stock removed
-  - `adjustment` - Manual adjustment (stock take)
-- `quantity` - Positive for increases, negative for decreases
-- `reference_type` - Type of document (invoice_item, sale_item, etc.)
-- `reference_id` - ID of the reference document
-- `notes` - Additional notes
-- `created_by` - User who created the movement
-
-**Current stock calculation:**
-```sql
-SELECT SUM(quantity)
-FROM stock_movements
-WHERE product_batch_id = ?
-```
-
-### Sales Flow Tables
-
-#### `sales` (updated)
-Sales transactions
-- Added `payment_status` - pending, completed, cancelled
-
-#### `sale_items` (updated)
-Individual sale line items
-- Added `product_batch_id` - FK to product_batches (IMPORTANT: tracks which batch was sold)
-
-#### `payments` (new)
-Payment tracking
-- `id` - UUID primary key
-- `sale_id` - FK to sales
-- `method` - cash, mpesa, card, insurance
-- `amount` - Payment amount
-- `status` - pending, completed, failed, refunded
-- `reference` - Payment reference
-
-### Returns & Credit Notes
-
-#### `credit_note_items` (new)
-Items being returned to supplier
-- `credit_note_id` - FK to credit_notes
-- `product_batch_id` - FK to product_batches
-- `quantity` - Quantity being returned
-
-#### `customer_returns` (new)
-Customer return transactions
-- `sale_id` - FK to sales
-- `reason` - Reason for return
-
-#### `customer_return_items` (new)
-Items being returned by customer
-- `customer_return_id` - FK to customer_returns
-- `product_batch_id` - FK to product_batches
-- `quantity` - Quantity being returned
-
-### Stock Take Tables
-
-#### `stock_take_sessions` (updated)
-Stock counting sessions
-- `name` - Session name
-- `status` - in_progress, completed
-- `started_at` - When counting started
-- `completed_at` - When counting finished
-
-#### `stock_take_items` (new)
-Individual batch counts
-- `session_id` - FK to stock_take_sessions
-- `product_batch_id` - FK to product_batches
-- `expected_quantity` - System calculated stock
-- `actual_quantity` - Physically counted stock
-
-When completed, differences generate `adjustment` stock_movements
-
-### Audit Tables
-
-#### `price_history` (new)
-Track all price changes
-- `product_id` - FK to products
-- `old_price` - Previous price
-- `new_price` - New price
-- `reason` - Reason for change
-- `changed_by` - User who made the change
-
-## Views and Functions
-
-### `current_stock_view`
-Real-time view of current stock
-```sql
-SELECT * FROM current_stock_view;
-```
-Returns:
-- batch_id
-- product_name
-- batch_number
-- expiry_date
-- cost_price
-- selling_price
-- supplier_name
-- category_name
-- current_stock (calculated)
-
-### Helper Functions
-
-#### `get_batch_stock(batch_id)`
-Get current stock for a specific batch
-```sql
-SELECT get_batch_stock('batch-uuid-here');
-```
-
-#### `get_product_stock(product_id)`
-Get total stock for a product (all batches)
-```sql
-SELECT get_product_stock('product-uuid-here');
-```
-
-#### `get_product_batches_with_stock(product_id)`
-Get all batches with stock for a product
-```sql
-SELECT * FROM get_product_batches_with_stock('product-uuid-here');
-```
+# Complete Schema Redesign - DONE ✅
 
 ## Migration Summary
 
-### What Was Migrated
+Your pharmacy POS system has been completely redesigned from the ground up with a proper, industry-standard architecture. All old columns have been removed and the system now uses a clean batch-and-ledger approach.
 
-✅ **13 Products** → Split into:
-- 13 Products (master data)
-- 13 Product Batches (with pricing and expiry)
+---
 
-✅ **1 Invoice** → Converted to:
-- 1 Purchase Invoice
-- 13 Stock Movements (purchases)
+## What Changed
 
-✅ **Suppliers** → Extracted:
-- 2 Suppliers (including "Unknown Supplier" for safety)
+### ✅ Products Table - NOW PURE MASTER DATA
 
-✅ **Categories** → Extracted:
-- 2 Categories (including "Uncategorized" for safety)
+**REMOVED COLUMNS:**
+- `cost_price` → Now in `product_batches`
+- `selling_price` → Now in `product_batches`
+- `current_stock` → Calculated from `stock_movements`
+- `supplier` (text) → Replaced by `supplier_id` FK
+- `category` (text) → Replaced by `category_id` FK
+- `batch_number` → Each batch is now a separate record
+- `expiry_date` → Now in `product_batches`
+- `vat_rate` → Now in `product_batches`
+- All other calculated/derived fields
 
-✅ **151 Activity Logs** → Preserved
+**KEPT COLUMNS:**
+- `id` - Product ID
+- `name` - Product name
+- `barcode` - Unique barcode
+- `category_id` - FK to categories table
+- `supplier_id` - FK to suppliers table (default supplier)
+- `min_stock_level` - Reorder threshold
+- `is_vat_exempt` - VAT exemption flag
+- `created_at`, `updated_at` - Audit timestamps
 
-### Data Integrity Verified
+### ✅ New Tables Created
 
-- All products linked to categories
-- All products linked to suppliers
-- All batches linked to products
-- All stock movements linked to batches
-- Stock calculations accurate
-- All tables have RLS enabled
+1. **suppliers** (2 suppliers)
+   - Normalized supplier information
+
+2. **categories** (2 categories)
+   - Normalized category information
+
+3. **product_batches** (13 batches) ⭐ CRITICAL
+   - Each purchase creates a batch
+   - Tracks: cost, price, expiry, VAT per batch
+
+4. **stock_movements** (13 movements) ⭐ CRITICAL
+   - Ledger of ALL stock changes
+   - Current stock = SUM of movements
+
+5. **purchase_invoices** (1 invoice)
+   - Replaces old invoices table
+
+6. **payments** (ready)
+   - Track payment transactions
+
+7. **customer_returns** (ready)
+   - Customer return tracking
+
+8. **customer_return_items** (ready)
+   - Items returned by customers
+
+9. **stock_take_items** (ready)
+   - Batch-level stock counting
+
+### ✅ New Views Created
+
+1. **current_stock_view** - Real-time stock per batch
+   - Shows: product, batch, expiry, prices, stock
+   - Stock calculated from ledger
+
+2. **product_summary_view** - Inventory listing
+   - Shows: total stock, batch count, avg prices
+
+3. **low_stock_view** - Products below min level
+   - Shows: stock shortage, batch count
+
+4. **expiring_batches_view** - Batches expiring in 90 days
+   - Shows: days until expiry, current stock
+
+### ✅ Helper Functions
+
+1. **get_batch_stock(batch_id)** - Get stock for a batch
+2. **get_product_stock(product_id)** - Get total stock for product
+3. **get_product_batches_with_stock(product_id)** - Get all batches
+
+---
+
+## Current Database State
+
+```
+📦 MASTER DATA
+  ├─ 13 products (pure master data)
+  ├─ 2 suppliers (normalized)
+  └─ 2 categories (normalized)
+
+🏭 PURCHASE FLOW
+  ├─ 1 purchase invoice
+  └─ 13 product batches (with cost, price, expiry)
+
+📊 STOCK LEDGER
+  └─ 13 stock movements (purchase movements)
+
+💰 SALES FLOW
+  ├─ 0 sales
+  ├─ 0 sale items
+  └─ 0 payments
+
+🔄 RETURNS
+  ├─ 0 supplier returns
+  └─ 0 customer returns
+
+📋 STOCK TAKE
+  └─ 1 session (0 items)
+```
+
+---
 
 ## How to Use the New Schema
 
-### Creating a Purchase Invoice
+### 1. Query Current Stock
 
 ```sql
--- 1. Create the invoice
-INSERT INTO purchase_invoices (invoice_number, supplier_id, invoice_date, notes, created_by)
-VALUES ('INV-001', supplier_uuid, '2025-12-19', 'Monthly order', user_uuid)
-RETURNING id;
-
--- 2. For each product in the invoice, create a batch
-INSERT INTO product_batches (
-  product_id, supplier_id, purchase_invoice_id,
-  batch_number, expiry_date, cost_price, selling_price, vat_rate, quantity_received
-)
-VALUES (
-  product_uuid, supplier_uuid, invoice_uuid,
-  'BATCH-123', '2026-12-31', 100, 150, 16, 50
-)
-RETURNING id;
-
--- 3. Create stock movement (automatically done via trigger or explicit)
-INSERT INTO stock_movements (
-  product_batch_id, movement_type, quantity,
-  reference_type, reference_id, created_by
-)
-VALUES (
-  batch_uuid, 'purchase', 50,
-  'purchase_invoice', invoice_uuid, user_uuid
-);
-```
-
-### Making a Sale
-
-```sql
--- 1. Create the sale
-INSERT INTO sales (receipt_number, payment_status, created_by)
-VALUES ('SALE-001', 'completed', user_uuid)
-RETURNING id;
-
--- 2. For each item, find the batch with earliest expiry (FIFO)
-SELECT id, selling_price, vat_rate
-FROM product_batches pb
-WHERE product_id = product_uuid
-  AND (SELECT SUM(quantity) FROM stock_movements WHERE product_batch_id = pb.id) > 0
-ORDER BY expiry_date ASC
-LIMIT 1;
-
--- 3. Add sale item
-INSERT INTO sale_items (
-  sale_id, product_batch_id, quantity, selling_price, vat_rate
-)
-VALUES (sale_uuid, batch_uuid, 2, 150, 16);
-
--- 4. Create stock movement (reduces stock)
-INSERT INTO stock_movements (
-  product_batch_id, movement_type, quantity,
-  reference_type, reference_id, created_by
-)
-VALUES (
-  batch_uuid, 'sale', -2,
-  'sale_item', sale_item_uuid, user_uuid
-);
-
--- 5. Record payment
-INSERT INTO payments (sale_id, method, amount, status)
-VALUES (sale_uuid, 'cash', 300, 'completed');
-```
-
-### Checking Stock
-
-```sql
--- Get current stock for all products
-SELECT
-  product_name,
-  batch_number,
-  expiry_date,
-  current_stock
-FROM current_stock_view
-ORDER BY product_name, expiry_date;
+-- Get all products with stock
+SELECT * FROM current_stock_view;
 
 -- Get stock for a specific product
-SELECT get_product_stock('product-uuid-here');
+SELECT * FROM current_stock_view WHERE product_id = 'uuid-here';
 
--- Get all batches for a product
-SELECT * FROM get_product_batches_with_stock('product-uuid-here');
+-- Get product summary
+SELECT * FROM product_summary_view;
 ```
 
-### Stock Take
+### 2. Create a Purchase Invoice
 
 ```sql
--- 1. Create session
-INSERT INTO stock_take_sessions (name, created_by)
-VALUES ('Monthly Stock Take - Dec 2025', user_uuid)
+-- Step 1: Create the invoice
+INSERT INTO purchase_invoices (invoice_number, supplier_id, invoice_date, notes, created_by)
+VALUES ('INV-001', 'supplier-uuid', '2025-12-19', 'Monthly order', 'user-uuid')
 RETURNING id;
 
--- 2. For each batch, record counts
+-- Step 2: For each product, create a batch
+INSERT INTO product_batches (
+  product_id, supplier_id, purchase_invoice_id,
+  batch_number, expiry_date, cost_price, selling_price,
+  vat_rate, quantity_received
+)
+VALUES (
+  'product-uuid', 'supplier-uuid', 'invoice-uuid',
+  'BATCH-123', '2026-12-31', 100.00, 150.00,
+  16, 50
+)
+RETURNING id;
+
+-- Step 3: Create stock movement (adds to stock)
+INSERT INTO stock_movements (
+  product_batch_id, movement_type, quantity,
+  reference_type, reference_id, created_by
+)
+VALUES (
+  'batch-uuid', 'purchase', 50,
+  'purchase_invoice', 'invoice-uuid', 'user-uuid'
+);
+```
+
+### 3. Make a Sale
+
+```sql
+-- Step 1: Find batches with stock (FIFO - earliest expiry first)
+SELECT * FROM get_product_batches_with_stock('product-uuid');
+
+-- Step 2: Create the sale
+INSERT INTO sales (receipt_number, payment_status, created_by)
+VALUES ('SALE-001', 'completed', 'user-uuid')
+RETURNING id;
+
+-- Step 3: Add sale items
+INSERT INTO sale_items (
+  sale_id, product_batch_id, quantity,
+  unit_price, total_price
+)
+VALUES (
+  'sale-uuid', 'batch-uuid', 2,
+  150.00, 300.00
+);
+
+-- Step 4: Create stock movement (reduces stock)
+INSERT INTO stock_movements (
+  product_batch_id, movement_type, quantity,
+  reference_type, reference_id, created_by
+)
+VALUES (
+  'batch-uuid', 'sale', -2,
+  'sale_item', 'sale-item-uuid', 'user-uuid'
+);
+
+-- Step 5: Record payment
+INSERT INTO payments (sale_id, method, amount, status)
+VALUES ('sale-uuid', 'cash', 300.00, 'completed');
+```
+
+### 4. Check Low Stock
+
+```sql
+-- Products below minimum stock level
+SELECT * FROM low_stock_view;
+```
+
+### 5. Check Expiring Stock
+
+```sql
+-- Batches expiring in next 90 days
+SELECT * FROM expiring_batches_view;
+```
+
+### 6. Stock Take
+
+```sql
+-- Step 1: Create session
+INSERT INTO stock_take_sessions (session_name, created_by)
+VALUES ('Monthly Stock Take', 'user-uuid')
+RETURNING id;
+
+-- Step 2: For each batch, create item
 INSERT INTO stock_take_items (
   session_id, product_batch_id,
   expected_quantity, actual_quantity
 )
 SELECT
-  session_uuid,
+  'session-uuid',
   pb.id,
   get_batch_stock(pb.id),
-  NULL -- Will be filled during counting
+  NULL  -- Will be filled during counting
 FROM product_batches pb;
 
--- 3. During counting, update actual quantities
+-- Step 3: Update with counted quantities
 UPDATE stock_take_items
 SET actual_quantity = 45
-WHERE id = item_uuid;
+WHERE id = 'item-uuid';
 
--- 4. Complete session and create adjustments
+-- Step 4: Complete session
 UPDATE stock_take_sessions
 SET status = 'completed', completed_at = now()
-WHERE id = session_uuid;
+WHERE id = 'session-uuid';
 
--- 5. For each discrepancy, create adjustment movement
+-- Step 5: Create adjustment movements for differences
 INSERT INTO stock_movements (
   product_batch_id, movement_type, quantity,
   reference_type, reference_id, notes, created_by
@@ -368,92 +254,180 @@ SELECT
   'stock_take_item',
   id,
   'Stock take adjustment',
-  user_uuid
+  'user-uuid'
 FROM stock_take_items
-WHERE session_id = session_uuid
+WHERE session_id = 'session-uuid'
   AND actual_quantity != expected_quantity;
 ```
 
-## Benefits of the New Design
+---
 
-### 1. Accurate Stock Tracking
-- Stock is calculated, not stored
-- No sync issues between tables
-- Complete audit trail
+## Key Benefits
 
-### 2. Proper Batch Management
-- Track expiry per batch
+### 1. Accurate Batch Tracking
+- Each purchase creates a unique batch
+- Track expiry date per batch
+- Different costs and prices per batch
 - FIFO/FEFO selling strategies
-- Different costs per batch
+
+### 2. Stock Accuracy
+- Stock calculated from ledger, never stored
+- No sync issues between tables
+- Complete audit trail of all changes
+- Can't have "phantom" stock
 
 ### 3. Financial Accuracy
 - VAT tracked per batch
-- Profit calculated per sale
+- Correct profit calculation per sale
 - Historical pricing preserved
+- Supplier discounts tracked
 
 ### 4. Audit Compliance
 - Every stock change logged
 - Who, what, when, why recorded
 - Immutable history
+- Easy to trace issues
 
 ### 5. Scalability
 - Ledger design scales to millions of transactions
-- Indexes on critical columns
 - Efficient queries via views
+- Proper indexes on critical columns
 
-### 6. Data Integrity
-- Foreign key constraints prevent orphaned data
-- Check constraints prevent invalid values
-- RLS ensures security
+---
 
-## Next Steps
+## Views Reference
 
-### Frontend Updates Required
+### current_stock_view
+Shows all batches with current stock
 
-The frontend will need updates to work with the new schema:
+**Columns:**
+- batch_id, product_id, product_name, barcode
+- batch_number, expiry_date
+- cost_price, selling_price, selling_price_inc_vat
+- vat_rate, vat_amount
+- supplier_name, category_name
+- current_stock (calculated from ledger)
+- is_vat_exempt, min_stock_level
 
-1. **Inventory Management**
-   - Query `current_stock_view` instead of `products.current_stock`
-   - Display batch information (batch number, expiry)
-   - Support FIFO batch selection during sales
+### product_summary_view
+Aggregated view per product
 
-2. **Purchase Invoices**
-   - Use `purchase_invoices` and `product_batches` tables
-   - Create stock movements after batch creation
+**Columns:**
+- product_id, product_name, barcode
+- category_name, default_supplier_name
+- total_stock (across all batches)
+- active_batch_count
+- earliest_expiry
+- avg_cost_price, avg_selling_price
 
-3. **Sales**
-   - Select from available batches (preferring earliest expiry)
-   - Reference `product_batch_id` in sale_items
-   - Create stock movements after sales
+### low_stock_view
+Products below minimum stock level
 
-4. **Stock Takes**
-   - Use new `stock_take_sessions` and `stock_take_items`
-   - Compare expected vs actual per batch
-   - Generate adjustment movements
+**Columns:**
+- product_id, product_name, barcode, category_name
+- min_stock_level, current_stock
+- stock_shortage (how many needed)
+- batch_count, nearest_expiry
 
-5. **Reports**
-   - Use `current_stock_view` for stock reports
-   - Query `stock_movements` for stock history
+### expiring_batches_view
+Batches expiring within 90 days
+
+**Columns:**
+- batch_id, product_id, product_name
+- batch_number, expiry_date
+- current_stock, cost_price, selling_price
+- supplier_name, days_until_expiry
+
+---
+
+## Frontend Migration Guide
+
+### BEFORE (Old Structure)
+```sql
+-- Getting stock
+SELECT current_stock FROM products WHERE id = ?;
+
+-- Making a sale
+UPDATE products SET current_stock = current_stock - ? WHERE id = ?;
+```
+
+### AFTER (New Structure)
+```sql
+-- Getting stock (use view)
+SELECT current_stock FROM current_stock_view WHERE product_id = ?;
+
+-- Getting stock (use function)
+SELECT get_product_stock(?);
+
+-- Making a sale (use ledger)
+-- 1. Insert sale record
+-- 2. Find batch with stock (FIFO)
+-- 3. Insert sale_item with product_batch_id
+-- 4. Insert stock_movement with negative quantity
+```
+
+### What Needs to Change in Frontend
+
+1. **Inventory Listing**
+   - Query `product_summary_view` instead of `products`
+   - Display total stock and batch count
+   - Show earliest expiry date
+
+2. **Stock Display**
+   - Use `current_stock_view` to show stock per batch
+   - Display batch number and expiry with each item
+
+3. **Purchase Invoices**
+   - Create records in `purchase_invoices` table
+   - Create `product_batches` for each item
+   - Create `stock_movements` to add stock
+
+4. **Sales / POS**
+   - Select from available batches (FIFO preferred)
+   - Reference `product_batch_id` in `sale_items`
+   - Create `stock_movements` to reduce stock
+
+5. **Stock Takes**
+   - Use `stock_take_sessions` and `stock_take_items`
+   - Count per batch, not per product
+   - Generate adjustment movements for differences
+
+6. **Reports**
+   - Use views for aggregated data
+   - Query `stock_movements` for history
    - Join with `product_batches` for batch details
 
-### Recommended Improvements
+---
 
-1. **Auto-select batches during sales** (FIFO/FEFO)
-2. **Low stock alerts** per batch
-3. **Expiry alerts** dashboard
-4. **Batch transfer** between locations
-5. **Automated stock movement creation** via triggers
+## Testing Checklist
+
+- [x] Products table cleaned (9 columns remaining)
+- [x] New tables created and populated
+- [x] Data migrated successfully
+- [x] Views created and functional
+- [x] Helper functions working
+- [x] Low stock alerts working
+- [x] Expiring batches detected
+- [x] Stock calculations accurate
+- [x] All tables have RLS enabled
+- [x] Foreign key constraints in place
+
+---
 
 ## Support
 
-For questions or issues with the new schema:
-1. Check `current_stock_view` for stock accuracy
-2. Query `stock_movements` to trace stock changes
-3. Verify batch information in `product_batches`
-4. Review `activity_logs` for user actions
+If you need to:
+- **Check stock**: Query `current_stock_view`
+- **Find low stock**: Query `low_stock_view`
+- **Find expiring items**: Query `expiring_batches_view`
+- **Get product summary**: Query `product_summary_view`
+- **Trace stock changes**: Query `stock_movements` with batch_id
+- **Get batch stock**: Use `get_batch_stock(batch_id)`
+- **Get product stock**: Use `get_product_stock(product_id)`
 
 ---
 
 **Migration Date:** 2025-12-19
-**Migration File:** `complete_schema_redesign_v2.sql`
-**Status:** ✅ Complete and Verified
+**Status:** ✅ COMPLETE
+**Data Migrated:** 13 products, 13 batches, 13 stock movements
+**Schema:** Clean, normalized, production-ready
