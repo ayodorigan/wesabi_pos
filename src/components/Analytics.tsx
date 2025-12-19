@@ -63,6 +63,28 @@ const Analytics: React.FC = () => {
             startDate.setFullYear(2020);
         }
 
+        // First get sales in the date range
+        const { data: salesData, error: salesError } = await supabase
+          .from('sales')
+          .select('id, created_at')
+          .gte('created_at', startDate.toISOString())
+          .order('created_at', { ascending: false });
+
+        if (salesError) {
+          console.error('Error fetching sales:', salesError);
+          showAlert({ title: 'Error', message: 'Failed to load sales data', type: 'error' });
+          return;
+        }
+
+        if (!salesData || salesData.length === 0) {
+          setSaleItems([]);
+          return;
+        }
+
+        // Get sale IDs
+        const saleIds = salesData.map(sale => sale.id);
+
+        // Now fetch sale items for those sales
         const { data, error } = await supabase
           .from('sale_items')
           .select(`
@@ -74,15 +96,17 @@ const Analytics: React.FC = () => {
             price_type_used,
             product_name,
             quantity,
-            sales!inner(created_at)
+            sale_id
           `)
-          .gte('sales.created_at', startDate.toISOString())
-          .order('sales.created_at', { ascending: false });
+          .in('sale_id', saleIds);
 
         if (error) {
           console.error('Error fetching sale items:', error);
           showAlert({ title: 'Error', message: 'Failed to load profit data', type: 'error' });
         } else {
+          // Map sale items with their sale dates
+          const salesMap = new Map(salesData.map(sale => [sale.id, sale.created_at]));
+
           const formattedData: SaleItemData[] = (data || []).map((item: any) => ({
             id: item.id,
             profit: parseFloat(item.profit) || 0,
@@ -92,8 +116,12 @@ const Analytics: React.FC = () => {
             price_type_used: item.price_type_used,
             product_name: item.product_name,
             quantity: item.quantity,
-            sale_date: item.sales.created_at
+            sale_date: salesMap.get(item.sale_id) || new Date().toISOString()
           }));
+
+          // Sort by sale date
+          formattedData.sort((a, b) => new Date(b.sale_date).getTime() - new Date(a.sale_date).getTime());
+
           setSaleItems(formattedData);
         }
       } catch (error) {

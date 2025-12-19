@@ -69,9 +69,13 @@ const POS: React.FC = () => {
     const existingItem = cart.find(item => item.productId === product.id);
 
     if (existingItem) {
-      // Don't add duplicate products, just show a message
-      showAlert({ title: 'Point of Sale', message: 'Product already in cart. Adjust quantity if needed.', type: 'warning' });
-      return;
+      // Automatically increase quantity if product already in cart
+      const newQuantity = existingItem.quantity + 1;
+      if (newQuantity <= product.currentStock) {
+        updateQuantity(product.id, newQuantity);
+      } else {
+        showAlert({ title: 'Point of Sale', message: 'Cannot add more. Stock limit reached.', type: 'warning' });
+      }
     } else {
       // Use the new pricing system to calculate all pricing fields
       const pricing = getProductPricing(product);

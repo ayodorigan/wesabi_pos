@@ -362,12 +362,24 @@ const InvoiceManagement: React.FC = () => {
             throw new Error(`Failed to update product ${item.productName}: ${updateError.message}`);
           }
         } else {
+          let expiryDateStr: string;
+          try {
+            const expiryDate = item.expiryDate instanceof Date ? item.expiryDate : new Date(item.expiryDate);
+            if (isNaN(expiryDate.getTime())) {
+              expiryDateStr = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            } else {
+              expiryDateStr = expiryDate.toISOString().split('T')[0];
+            }
+          } catch (e) {
+            expiryDateStr = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          }
+
           const insertData: any = {
             name: item.productName,
             category: item.category,
             supplier: invoiceData.supplier,
             batch_number: item.batchNumber,
-            expiry_date: item.expiryDate.toISOString().split('T')[0],
+            expiry_date: expiryDateStr,
             invoice_price: item.invoicePrice,
             supplier_discount_percent: item.supplierDiscountPercent,
             vat_rate: item.vatRate,
@@ -407,13 +419,25 @@ const InvoiceManagement: React.FC = () => {
           processedProducts.push({ id: newProduct.id, originalStock: 0 });
         }
 
+        let invoiceItemExpiryDate: string;
+        try {
+          const expiryDate = item.expiryDate instanceof Date ? item.expiryDate : new Date(item.expiryDate);
+          if (isNaN(expiryDate.getTime())) {
+            invoiceItemExpiryDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          } else {
+            invoiceItemExpiryDate = expiryDate.toISOString().split('T')[0];
+          }
+        } catch (e) {
+          invoiceItemExpiryDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        }
+
         const invoiceItemData: any = {
           invoice_id: invoiceId,
           product_id: productId,
           product_name: item.productName,
           category: item.category,
           batch_number: item.batchNumber,
-          expiry_date: item.expiryDate.toISOString().split('T')[0],
+          expiry_date: invoiceItemExpiryDate,
           quantity: item.quantity,
           invoice_price: item.invoicePrice,
           supplier_discount_percent: item.supplierDiscountPercent,
