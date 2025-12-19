@@ -43,7 +43,7 @@ const InvoiceManagement: React.FC = () => {
     quantity: '',
     costPrice: '',
     supplierDiscountPercent: '0',
-    vatRate: '16',
+    vatRate: '0',
     discountedCostPrice: '',
     sellingPrice: '',
     discountedSellingPrice: '',
@@ -147,7 +147,7 @@ const InvoiceManagement: React.FC = () => {
 
       const costPrice = parseFloat(updated.costPrice) || 0;
       const supplierDiscountPercent = parseFloat(updated.supplierDiscountPercent) || 0;
-      const vatRate = parseFloat(updated.vatRate) || 16;
+      const vatRate = parseFloat(updated.vatRate) || 0;
 
       if (costPrice > 0) {
         const discountedCostPrice = supplierDiscountPercent > 0
@@ -233,7 +233,7 @@ const InvoiceManagement: React.FC = () => {
       quantity: '',
       costPrice: '',
       supplierDiscountPercent: '0',
-      vatRate: '16',
+      vatRate: '0',
       discountedCostPrice: '',
       sellingPrice: '',
       discountedSellingPrice: '',
@@ -638,7 +638,7 @@ const InvoiceManagement: React.FC = () => {
 
         const costPrice = parseFloat(row.costprice) || 0;
         const supplierDiscountPercent = parseFloat(row.supplierdiscountpercent) || 0;
-        const vatRate = parseFloat(row.vatrate) || 16;
+        const vatRate = parseFloat(row.vatrate) || 0;
 
         const discountedCostPrice = supplierDiscountPercent > 0
           ? costPrice * (1 - supplierDiscountPercent / 100)
@@ -927,7 +927,7 @@ const InvoiceManagement: React.FC = () => {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Disc %</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Disc. Cost Price</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling Price</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT %</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Profit %</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
                       </tr>
@@ -961,7 +961,7 @@ const InvoiceManagement: React.FC = () => {
                               {formatKES(item.sellingPrice)}
                             </td>
                             <td className="px-3 py-2 text-sm">
-                              {item.vat ? formatKES(item.vat) : '-'}
+                              {item.vatRate ? `${item.vatRate}%` : '0%'}
                             </td>
                             <td className="px-3 py-2 text-sm">
                               <span className={`font-semibold ${profitMargin >= 25 ? 'text-green-600' : 'text-yellow-600'}`}>
@@ -1292,7 +1292,7 @@ const InvoiceManagement: React.FC = () => {
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Disc %</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Disc. Cost Price</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling Price</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT %</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Profit %</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total Cost</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500"></th>
@@ -1327,7 +1327,7 @@ const InvoiceManagement: React.FC = () => {
                                   {formatKES(item.sellingPrice)}
                                 </td>
                                 <td className="px-3 py-2 text-sm">
-                                  {item.vat ? formatKES(item.vat) : '-'}
+                                  {item.vatRate ? `${item.vatRate}%` : '0%'}
                                 </td>
                                 <td className="px-3 py-2 text-sm">
                                   <span className={`font-semibold ${profitMargin >= 25 ? 'text-green-600' : 'text-yellow-600'}`}>

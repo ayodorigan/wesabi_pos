@@ -514,6 +514,7 @@ const Inventory: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disc. Cost Price</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disc. Selling Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VAT %</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit Margin</th>
                   </>
                 )}
@@ -612,6 +613,11 @@ const Inventory: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
                             {product.discountedSellingPrice ? formatCurrency(product.discountedSellingPrice) : formatCurrency(product.sellingPrice)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {product.vatRate ? `${product.vatRate}%` : '0%'}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
