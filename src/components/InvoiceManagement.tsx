@@ -159,20 +159,21 @@ const InvoiceManagement: React.FC = () => {
           vatRate
         });
 
-        const discountedCostPrice = pricing.discountedCost || costPrice;
+        const discountedCostPrice = pricing.discountedCost;
         const sellingPrice = pricing.sellingPriceRounded;
-        const discountedSellingPrice = pricing.discountedPriceRounded || sellingPrice;
+        const discountedSellingPrice = pricing.discountedPriceRounded;
 
+        const actualCost = discountedCostPrice || costPrice;
         const vat = hasVAT ? (pricing.sellingPriceExVAT * (vatRate / 100)) : 0;
-        const grossProfitMargin = discountedCostPrice > 0
-          ? (((pricing.discountedPriceExVAT || pricing.sellingPriceExVAT) - discountedCostPrice) / discountedCostPrice * 100)
+        const grossProfitMargin = actualCost > 0
+          ? (((discountedSellingPrice || sellingPrice) - actualCost) / actualCost * 100)
           : 0;
 
         return {
           ...updated,
-          discountedCostPrice: discountedCostPrice.toFixed(2),
+          discountedCostPrice: discountedCostPrice ? discountedCostPrice.toFixed(2) : '',
           sellingPrice: sellingPrice.toFixed(2),
-          discountedSellingPrice: discountedSellingPrice.toFixed(2),
+          discountedSellingPrice: discountedSellingPrice ? discountedSellingPrice.toFixed(2) : '',
           vat: vat.toFixed(2),
           grossProfitMargin: grossProfitMargin.toFixed(2)
         };
@@ -644,13 +645,14 @@ const InvoiceManagement: React.FC = () => {
           vatRate
         });
 
-        const discountedCostPrice = pricing.discountedCost || costPrice;
+        const discountedCostPrice = pricing.discountedCost;
         const sellingPrice = pricing.sellingPriceRounded;
-        const discountedSellingPrice = pricing.discountedPriceRounded || sellingPrice;
+        const discountedSellingPrice = pricing.discountedPriceRounded;
 
+        const actualCost = discountedCostPrice || costPrice;
         const vat = hasVAT ? (pricing.sellingPriceExVAT * (vatRate / 100)) : 0;
-        const grossProfitMargin = discountedCostPrice > 0
-          ? ((pricing.discountedPriceExVAT || pricing.sellingPriceExVAT - discountedCostPrice) / discountedCostPrice * 100)
+        const grossProfitMargin = actualCost > 0
+          ? (((discountedSellingPrice || sellingPrice) - actualCost) / actualCost * 100)
           : 0;
 
         items.push({
@@ -667,7 +669,7 @@ const InvoiceManagement: React.FC = () => {
           grossProfitMargin,
           supplierDiscountPercent: supplierDiscountPercent || undefined,
           vatRate: vatRate || undefined,
-          totalCost: (parseInt(row.quantity) || 0) * discountedCostPrice,
+          totalCost: (parseInt(row.quantity) || 0) * actualCost,
           barcode: row.barcode || `${Date.now()}-${i}`,
         });
       }

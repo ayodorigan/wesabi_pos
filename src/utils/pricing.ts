@@ -44,18 +44,7 @@ export interface SalePricingResult {
 }
 
 export function roundUpToNearest5Or10(value: number): number {
-  const intValue = Math.ceil(value);
-  const lastDigit = intValue % 10;
-
-  if (lastDigit === 0 || lastDigit === 5) {
-    return intValue;
-  }
-
-  if (lastDigit < 5) {
-    return intValue + (5 - lastDigit);
-  }
-
-  return intValue + (10 - lastDigit);
+  return Math.ceil(value / 5) * 5;
 }
 
 export function calculateProductPricing(input: PricingInput): PricingResult {
