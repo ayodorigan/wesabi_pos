@@ -628,15 +628,15 @@ const InvoiceManagement: React.FC = () => {
         });
 
         if (!row.productname || !row.quantity) continue;
-        if (!row.costprice) continue;
+
+        const costPrice = parseFloat(row.costprice || row.invoiceprice || row.price) || 0;
+        if (costPrice === 0) continue;
 
         if (i === 1) {
           extractedInvoiceNumber = row.invoicenumber || row.invoice_number || '';
           extractedSupplier = row.supplier || '';
           extractedInvoiceDate = row.invoicedate || row.invoice_date || '';
         }
-
-        const costPrice = parseFloat(row.costprice) || 0;
         const supplierDiscountPercent = parseFloat(row.supplierdiscountpercent) || 0;
         const vatRate = parseFloat(row.vatrate) || 0;
 
