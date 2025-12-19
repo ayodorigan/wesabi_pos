@@ -260,20 +260,40 @@ const InvoiceManagement: React.FC = () => {
     setSavingProgress({ current: 0, total: invoiceItems.length + 2, message: 'Creating invoice...' });
 
     let invoiceId: string | null = null;
-    const processedProducts: Array<{ id: string; originalStock: number }> = [];
 
     try {
       const totalAmount = invoiceItems.reduce((sum, item) => sum + item.totalCost, 0);
 
+      // Get or create supplier
+      let supplierId: string;
+      const { data: existingSupplier } = await supabase
+        .from('suppliers')
+        .select('id')
+        .eq('name', invoiceData.supplier)
+        .maybeSingle();
+
+      if (existingSupplier) {
+        supplierId = existingSupplier.id;
+      } else {
+        const { data: newSupplier, error: supplierError } = await supabase
+          .from('suppliers')
+          .insert({ name: invoiceData.supplier })
+          .select('id')
+          .single();
+
+        if (supplierError) throw supplierError;
+        supplierId = newSupplier.id;
+      }
+
+      // Insert into purchase_invoices (not the view)
       const { data: invoice, error: invoiceError } = await supabase
-        .from('invoices')
+        .from('purchase_invoices')
         .insert({
           invoice_number: invoiceData.invoiceNumber,
-          supplier: invoiceData.supplier,
+          supplier_id: supplierId,
           invoice_date: invoiceData.invoiceDate,
-          total_amount: totalAmount,
-          user_id: user.user_id,
-          user_name: user.name,
+          notes: '',
+          created_by: user.user_id,
         })
         .select()
         .single();
@@ -283,7 +303,6 @@ const InvoiceManagement: React.FC = () => {
 
       setSavingProgress({ current: 1, total: invoiceItems.length + 2, message: 'Processing products...' });
 
-      const invoiceItemsToInsert: Array<any> = [];
       let processedCount = 0;
 
       for (const item of invoiceItems) {
@@ -294,82 +313,63 @@ const InvoiceManagement: React.FC = () => {
           message: `Processing ${item.productName} (${processedCount}/${invoiceItems.length})...`
         });
 
+        // Get or create category
+        let categoryId: string | null = null;
+        if (item.category) {
+          const { data: existingCategory } = await supabase
+            .from('categories')
+            .select('id')
+            .eq('name', item.category)
+            .maybeSingle();
+
+          if (existingCategory) {
+            categoryId = existingCategory.id;
+          } else {
+            const { data: newCategory, error: categoryError } = await supabase
+              .from('categories')
+              .insert({ name: item.category })
+              .select('id')
+              .single();
+
+            if (!categoryError && newCategory) {
+              categoryId = newCategory.id;
+            }
+          }
+        }
+
+        // Get or create product (master data only, no batch-specific info)
+        let productId: string;
         const { data: existingProduct } = await supabase
           .from('products')
-          .select('*')
+          .select('id')
           .eq('name', item.productName)
-          .eq('batch_number', item.batchNumber)
           .maybeSingle();
 
-        let productId = existingProduct?.id;
-
         if (existingProduct) {
-          processedProducts.push({
-            id: existingProduct.id,
-            originalStock: existingProduct.current_stock
-          });
+          productId = existingProduct.id;
 
-          const updateData: any = {
-            current_stock: existingProduct.current_stock + item.quantity,
-            cost_price: item.costPrice,
-            discounted_cost_price: item.discountedCostPrice,
-            selling_price: item.sellingPrice,
-            discounted_selling_price: item.discountedSellingPrice,
-            vat: item.vat,
-            gross_profit_margin: item.grossProfitMargin,
-            supplier_discount_percent: item.supplierDiscountPercent,
-            vat_rate: item.vatRate,
-            has_vat: item.vatRate !== undefined && item.vatRate !== null && item.vatRate > 0,
-            updated_at: new Date().toISOString(),
-          };
-
-          const { error: updateError } = await supabase
-            .from('products')
-            .update(updateData)
-            .eq('id', existingProduct.id);
-
-          if (updateError) {
-            console.error(`Error updating product ${item.productName}:`, updateError);
-            throw new Error(`Failed to update product ${item.productName}: ${updateError.message}`);
+          // Update category if provided
+          if (categoryId) {
+            await supabase
+              .from('products')
+              .update({
+                category_id: categoryId,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingProduct.id);
           }
         } else {
-          let expiryDateStr: string;
-          try {
-            const expiryDate = item.expiryDate instanceof Date ? item.expiryDate : new Date(item.expiryDate);
-            if (isNaN(expiryDate.getTime())) {
-              expiryDateStr = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            } else {
-              expiryDateStr = expiryDate.toISOString().split('T')[0];
-            }
-          } catch (e) {
-            expiryDateStr = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          }
-
-          const insertData: any = {
-            name: item.productName,
-            category: item.category,
-            supplier: invoiceData.supplier,
-            batch_number: item.batchNumber,
-            expiry_date: expiryDateStr,
-            cost_price: item.costPrice,
-            discounted_cost_price: item.discountedCostPrice,
-            selling_price: item.sellingPrice,
-            discounted_selling_price: item.discountedSellingPrice,
-            vat: item.vat,
-            gross_profit_margin: item.grossProfitMargin,
-            supplier_discount_percent: item.supplierDiscountPercent,
-            vat_rate: item.vatRate,
-            has_vat: item.vatRate !== undefined && item.vatRate !== null && item.vatRate > 0,
-            current_stock: item.quantity,
-            min_stock_level: 10,
-            barcode: item.barcode,
-            invoice_number: invoiceData.invoiceNumber,
-          };
-
+          // Create new product
           const { data: newProduct, error: productError } = await supabase
             .from('products')
-            .insert(insertData)
-            .select()
+            .insert({
+              name: item.productName,
+              category_id: categoryId,
+              barcode: item.barcode || null,
+              min_stock_level: 10,
+              is_vat_exempt: !item.vatRate || item.vatRate === 0,
+            })
+            .select('id')
             .single();
 
           if (productError) {
@@ -378,58 +378,64 @@ const InvoiceManagement: React.FC = () => {
           }
 
           productId = newProduct.id;
-          processedProducts.push({ id: newProduct.id, originalStock: 0 });
         }
 
-        let invoiceItemExpiryDate: string;
+        // Prepare expiry date
+        let expiryDateStr: string | null = null;
         try {
           const expiryDate = item.expiryDate instanceof Date ? item.expiryDate : new Date(item.expiryDate);
-          if (isNaN(expiryDate.getTime())) {
-            invoiceItemExpiryDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          } else {
-            invoiceItemExpiryDate = expiryDate.toISOString().split('T')[0];
+          if (!isNaN(expiryDate.getTime())) {
+            expiryDateStr = expiryDate.toISOString().split('T')[0];
           }
         } catch (e) {
-          invoiceItemExpiryDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          expiryDateStr = null;
         }
 
-        const invoiceItemData: any = {
-          invoice_id: invoiceId,
-          product_id: productId,
-          product_name: item.productName,
-          category: item.category,
-          batch_number: item.batchNumber,
-          expiry_date: invoiceItemExpiryDate,
-          quantity: item.quantity,
-          cost_price: item.costPrice,
-          discounted_cost_price: item.discountedCostPrice,
-          selling_price: item.sellingPrice,
-          discounted_selling_price: item.discountedSellingPrice,
-          vat: item.vat,
-          gross_profit_margin: item.grossProfitMargin,
-          supplier_discount_percent: item.supplierDiscountPercent,
-          vat_rate: item.vatRate,
-          total_cost: item.totalCost,
-          barcode: item.barcode,
-        };
+        // Insert product batch with pricing, VAT, and batch-specific data
+        const { data: productBatch, error: batchError } = await supabase
+          .from('product_batches')
+          .insert({
+            product_id: productId,
+            supplier_id: supplierId,
+            purchase_invoice_id: invoiceId,
+            batch_number: item.batchNumber || `BATCH-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            expiry_date: expiryDateStr,
+            cost_price: item.costPrice,
+            supplier_discount_percent: item.supplierDiscountPercent || 0,
+            vat_rate: item.vatRate || 0,
+            quantity_received: item.quantity,
+          })
+          .select('id')
+          .single();
 
-        invoiceItemsToInsert.push(invoiceItemData);
+        if (batchError) {
+          console.error(`Error creating batch for ${item.productName}:`, batchError);
+          throw new Error(`Failed to create batch for ${item.productName}: ${batchError.message}`);
+        }
+
+        // Create stock movement for the purchase
+        const { error: movementError } = await supabase
+          .from('stock_movements')
+          .insert({
+            product_batch_id: productBatch.id,
+            movement_type: 'purchase',
+            quantity: item.quantity,
+            reference_type: 'purchase_invoice',
+            reference_id: invoiceId,
+            created_by: user.user_id,
+          });
+
+        if (movementError) {
+          console.error(`Error creating stock movement for ${item.productName}:`, movementError);
+          throw new Error(`Failed to create stock movement for ${item.productName}: ${movementError.message}`);
+        }
       }
 
       setSavingProgress({
         current: invoiceItems.length + 1,
         total: invoiceItems.length + 2,
-        message: 'Saving invoice items...'
+        message: 'Finalizing invoice...'
       });
-
-      const { error: batchInsertError } = await supabase
-        .from('invoice_items')
-        .insert(invoiceItemsToInsert);
-
-      if (batchInsertError) {
-        console.error('Error batch inserting invoice items:', batchInsertError);
-        throw new Error(`Failed to save invoice items: ${batchInsertError.message}`);
-      }
 
       setSavingProgress({
         current: invoiceItems.length + 2,
@@ -454,22 +460,12 @@ const InvoiceManagement: React.FC = () => {
 
       setSavingProgress({ current: 0, total: 1, message: 'Rolling back changes...' });
 
+      // Delete the purchase invoice - all batches and stock movements will cascade delete automatically
       if (invoiceId) {
         try {
-          await supabase.from('invoices').delete().eq('id', invoiceId);
+          await supabase.from('purchase_invoices').delete().eq('id', invoiceId);
         } catch (cleanupError) {
           console.error('Error cleaning up invoice:', cleanupError);
-        }
-      }
-
-      for (const product of processedProducts) {
-        try {
-          await supabase
-            .from('products')
-            .update({ current_stock: product.originalStock })
-            .eq('id', product.id);
-        } catch (rollbackError) {
-          console.error('Error rolling back product stock:', rollbackError);
         }
       }
 
