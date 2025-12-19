@@ -639,6 +639,12 @@ const Inventory: React.FC = () => {
                                 Discounted
                               </span>
                             )}
+                            {isCloseToMinimum && (
+                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-yellow-100 text-yellow-800">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                Low Margin
+                              </span>
+                            )}
                           </div>
                         </td>
                       </>

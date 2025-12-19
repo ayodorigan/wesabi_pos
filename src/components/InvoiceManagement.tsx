@@ -150,27 +150,22 @@ const InvoiceManagement: React.FC = () => {
       const vatRate = parseFloat(updated.vatRate) || 0;
 
       if (costPrice > 0) {
-        const discountedCostPrice = supplierDiscountPercent > 0
-          ? costPrice * (1 - supplierDiscountPercent / 100)
-          : costPrice;
+        const hasVAT = vatRate > 0;
 
-        const MARKUP_MULTIPLIER = 1.33;
-        const sellingPriceBeforeVAT = discountedCostPrice * MARKUP_MULTIPLIER;
+        const pricing = calculateProductPricing({
+          originalCost: costPrice,
+          discountPercent: supplierDiscountPercent,
+          hasVAT,
+          vatRate
+        });
 
-        const roundUpToNearest5Or10 = (price: number) => {
-          const ones = price % 10;
-          if (ones <= 5) {
-            return Math.ceil(price / 5) * 5;
-          } else {
-            return Math.ceil(price / 10) * 10;
-          }
-        };
+        const discountedCostPrice = pricing.discountedCost || costPrice;
+        const sellingPrice = pricing.sellingPriceRounded;
+        const discountedSellingPrice = pricing.discountedPriceRounded || sellingPrice;
 
-        const sellingPrice = roundUpToNearest5Or10(sellingPriceBeforeVAT);
-        const discountedSellingPrice = sellingPrice;
-        const vat = vatRate > 0 ? (discountedSellingPrice * vatRate / 100) : 0;
+        const vat = hasVAT ? (pricing.sellingPriceExVAT * (vatRate / 100)) : 0;
         const grossProfitMargin = discountedCostPrice > 0
-          ? ((discountedSellingPrice - discountedCostPrice) / discountedCostPrice * 100)
+          ? (((pricing.discountedPriceExVAT || pricing.sellingPriceExVAT) - discountedCostPrice) / discountedCostPrice * 100)
           : 0;
 
         return {
@@ -637,30 +632,25 @@ const InvoiceManagement: React.FC = () => {
           extractedSupplier = row.supplier || '';
           extractedInvoiceDate = row.invoicedate || row.invoice_date || '';
         }
-        const supplierDiscountPercent = parseFloat(row.supplierdiscountpercent) || 0;
-        const vatRate = parseFloat(row.vatrate) || 0;
 
-        const discountedCostPrice = supplierDiscountPercent > 0
-          ? costPrice * (1 - supplierDiscountPercent / 100)
-          : costPrice;
+        const supplierDiscountPercent = parseFloat(row.supplierdiscountpercent || row.supplierdiscount) || 0;
+        const vatRate = parseFloat(row.vatrate || row.vat) || 0;
+        const hasVAT = vatRate > 0;
 
-        const MARKUP_MULTIPLIER = 1.33;
-        const sellingPriceBeforeVAT = discountedCostPrice * MARKUP_MULTIPLIER;
+        const pricing = calculateProductPricing({
+          originalCost: costPrice,
+          discountPercent: supplierDiscountPercent,
+          hasVAT,
+          vatRate
+        });
 
-        const roundUpToNearest5Or10 = (price: number) => {
-          const ones = price % 10;
-          if (ones <= 5) {
-            return Math.ceil(price / 5) * 5;
-          } else {
-            return Math.ceil(price / 10) * 10;
-          }
-        };
+        const discountedCostPrice = pricing.discountedCost || costPrice;
+        const sellingPrice = pricing.sellingPriceRounded;
+        const discountedSellingPrice = pricing.discountedPriceRounded || sellingPrice;
 
-        const sellingPrice = roundUpToNearest5Or10(sellingPriceBeforeVAT);
-        const discountedSellingPrice = sellingPrice;
-        const vat = vatRate > 0 ? (discountedSellingPrice * vatRate / 100) : 0;
+        const vat = hasVAT ? (pricing.sellingPriceExVAT * (vatRate / 100)) : 0;
         const grossProfitMargin = discountedCostPrice > 0
-          ? ((discountedSellingPrice - discountedCostPrice) / discountedCostPrice * 100)
+          ? ((pricing.discountedPriceExVAT || pricing.sellingPriceExVAT - discountedCostPrice) / discountedCostPrice * 100)
           : 0;
 
         items.push({

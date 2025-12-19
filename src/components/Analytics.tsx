@@ -28,6 +28,8 @@ interface SaleItemData {
   product_name: string;
   quantity: number;
   sale_date: string;
+  cost_price: number;
+  product_id: string;
 }
 
 const Analytics: React.FC = () => {
@@ -84,7 +86,7 @@ const Analytics: React.FC = () => {
         // Get sale IDs
         const saleIds = salesData.map(sale => sale.id);
 
-        // Now fetch sale items for those sales
+        // Now fetch sale items for those sales with product info for discount calculation
         const { data, error } = await supabase
           .from('sale_items')
           .select(`
@@ -96,7 +98,9 @@ const Analytics: React.FC = () => {
             price_type_used,
             product_name,
             quantity,
-            sale_id
+            sale_id,
+            cost_price,
+            product_id
           `)
           .in('sale_id', saleIds);
 
@@ -116,7 +120,9 @@ const Analytics: React.FC = () => {
             price_type_used: item.price_type_used,
             product_name: item.product_name,
             quantity: item.quantity,
-            sale_date: salesMap.get(item.sale_id) || new Date().toISOString()
+            sale_date: salesMap.get(item.sale_id) || new Date().toISOString(),
+            cost_price: parseFloat(item.cost_price) || 0,
+            product_id: item.product_id
           }));
 
           // Sort by sale date
@@ -164,11 +170,12 @@ const Analytics: React.FC = () => {
   const totalTransactions = filteredSales.length;
   const averageTransaction = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
 
-  // Calculate profit metrics
+  // Calculate profit metrics with detailed breakdown
   const profitMetrics = React.useMemo(() => {
     if (saleItems.length === 0) {
       return {
         totalProfit: 0,
+        discountDrivenProfit: 0,
         roundingDrivenProfit: 0,
         baseProfit: 0,
         averageMargin: 0,
@@ -177,20 +184,26 @@ const Analytics: React.FC = () => {
       };
     }
 
-    const totalProfit = saleItems.reduce((sum, item) => sum + item.profit, 0);
-    const roundingDrivenProfit = saleItems.reduce((sum, item) => sum + item.rounding_extra, 0);
-    const baseProfit = totalProfit - roundingDrivenProfit;
-    const totalRevenue = saleItems.reduce((sum, item) => sum + item.selling_price_ex_vat, 0);
-    const averageMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    const salesDataForBreakdown = saleItems.map(item => ({
+      profit: item.profit,
+      actualCost: item.actual_cost_at_sale,
+      sellingPriceExVAT: item.selling_price_ex_vat,
+      roundingExtra: item.rounding_extra,
+      discountedCost: item.actual_cost_at_sale,
+      originalCost: item.cost_price
+    }));
+
+    const breakdown = calculateProfitBreakdown(salesDataForBreakdown);
 
     const discountedPriceCount = saleItems.filter(item => item.price_type_used === 'DISCOUNTED').length;
     const sellingPriceCount = saleItems.filter(item => item.price_type_used === 'SELLING').length;
 
     return {
-      totalProfit,
-      roundingDrivenProfit,
-      baseProfit,
-      averageMargin,
+      totalProfit: breakdown.totalProfit,
+      discountDrivenProfit: breakdown.discountDrivenProfit,
+      roundingDrivenProfit: breakdown.roundingDrivenProfit,
+      baseProfit: breakdown.baseProfit,
+      averageMargin: breakdown.averageMargin,
       discountedPriceCount,
       sellingPriceCount
     };
@@ -772,7 +785,7 @@ const Analytics: React.FC = () => {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-medium text-green-800">Total Profit</p>
@@ -793,11 +806,20 @@ const Analytics: React.FC = () => {
 
             <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-purple-800">Base Profit</p>
+                <p className="text-sm font-medium text-purple-800">Markup Profit</p>
                 <DollarSign className="h-5 w-5 text-purple-600" />
               </div>
               <p className="text-2xl font-bold text-purple-900">{formatKES(profitMetrics.baseProfit)}</p>
-              <p className="text-xs text-purple-600 mt-1">Excluding rounding</p>
+              <p className="text-xs text-purple-600 mt-1">From 33% markup</p>
+            </div>
+
+            <div className="p-4 bg-gradient-to-br from-teal-50 to-teal-100 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-teal-800">Discount Profit</p>
+                <TrendingUp className="h-5 w-5 text-teal-600" />
+              </div>
+              <p className="text-2xl font-bold text-teal-900">{formatKES(profitMetrics.discountDrivenProfit)}</p>
+              <p className="text-xs text-teal-600 mt-1">From supplier discounts</p>
             </div>
 
             <div className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg">
@@ -869,11 +891,15 @@ const Analytics: React.FC = () => {
                   <p className="text-sm font-medium text-blue-800 mb-2">Profit Sources</p>
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-blue-700">Base:</span>
+                      <span className="text-sm text-blue-700">Markup Margin:</span>
                       <span className="font-bold text-blue-900">{formatKES(profitMetrics.baseProfit)}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-blue-700">Rounding:</span>
+                      <span className="text-sm text-blue-700">Supplier Discount:</span>
+                      <span className="font-bold text-blue-900">{formatKES(profitMetrics.discountDrivenProfit)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-blue-700">Rounding Extra:</span>
                       <span className="font-bold text-blue-900">{formatKES(profitMetrics.roundingDrivenProfit)}</span>
                     </div>
                     <div className="pt-2 border-t border-blue-200">
