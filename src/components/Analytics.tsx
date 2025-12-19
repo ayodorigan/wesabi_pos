@@ -24,7 +24,7 @@ interface SaleItemData {
   rounding_extra: number;
   actual_cost_at_sale: number;
   selling_price_ex_vat: number;
-  price_type_used: 'MINIMUM' | 'TARGET';
+  price_type_used: 'DISCOUNTED' | 'SELLING';
   product_name: string;
   quantity: number;
   sale_date: string;
@@ -172,8 +172,8 @@ const Analytics: React.FC = () => {
         roundingDrivenProfit: 0,
         baseProfit: 0,
         averageMargin: 0,
-        minimumPriceCount: 0,
-        targetPriceCount: 0
+        discountedPriceCount: 0,
+        sellingPriceCount: 0
       };
     }
 
@@ -183,16 +183,16 @@ const Analytics: React.FC = () => {
     const totalRevenue = saleItems.reduce((sum, item) => sum + item.selling_price_ex_vat, 0);
     const averageMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
-    const minimumPriceCount = saleItems.filter(item => item.price_type_used === 'MINIMUM').length;
-    const targetPriceCount = saleItems.filter(item => item.price_type_used === 'TARGET').length;
+    const discountedPriceCount = saleItems.filter(item => item.price_type_used === 'DISCOUNTED').length;
+    const sellingPriceCount = saleItems.filter(item => item.price_type_used === 'SELLING').length;
 
     return {
       totalProfit,
       roundingDrivenProfit,
       baseProfit,
       averageMargin,
-      minimumPriceCount,
-      targetPriceCount
+      discountedPriceCount,
+      sellingPriceCount
     };
   }, [saleItems]);
 
@@ -580,8 +580,8 @@ const Analytics: React.FC = () => {
     <tr><td>Base Profit</td><td>${formatKES(profitMetrics.baseProfit)}</td></tr>
     <tr><td>Rounding-Driven Profit</td><td>${formatKES(profitMetrics.roundingDrivenProfit)}</td></tr>
     <tr><td>Average Margin</td><td>${profitMetrics.averageMargin.toFixed(2)}%</td></tr>
-    <tr><td>Items Sold at Minimum Price</td><td>${profitMetrics.minimumPriceCount}</td></tr>
-    <tr><td>Items Sold at Target Price</td><td>${profitMetrics.targetPriceCount}</td></tr>
+    <tr><td>Items Sold at Discounted Price</td><td>${profitMetrics.discountedPriceCount}</td></tr>
+    <tr><td>Items Sold at Selling Price</td><td>${profitMetrics.sellingPriceCount}</td></tr>
   </table>
 
   <h2>Top Profitable Products</h2>
@@ -848,17 +848,17 @@ const Analytics: React.FC = () => {
                   <p className="text-sm font-medium text-green-800 mb-2">Pricing Strategy</p>
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-green-700">Target Price Sales:</span>
-                      <span className="font-bold text-green-900">{profitMetrics.targetPriceCount}</span>
+                      <span className="text-sm text-green-700">Selling Price Sales:</span>
+                      <span className="font-bold text-green-900">{profitMetrics.sellingPriceCount}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-green-700">Minimum Price Sales:</span>
-                      <span className="font-bold text-green-900">{profitMetrics.minimumPriceCount}</span>
+                      <span className="text-sm text-green-700">Discounted Price Sales:</span>
+                      <span className="font-bold text-green-900">{profitMetrics.discountedPriceCount}</span>
                     </div>
                     <div className="pt-2 border-t border-green-200">
                       <span className="text-xs text-green-600">
-                        {profitMetrics.targetPriceCount + profitMetrics.minimumPriceCount > 0
-                          ? `${((profitMetrics.targetPriceCount / (profitMetrics.targetPriceCount + profitMetrics.minimumPriceCount)) * 100).toFixed(1)}% at target price`
+                        {profitMetrics.sellingPriceCount + profitMetrics.discountedPriceCount > 0
+                          ? `${((profitMetrics.sellingPriceCount / (profitMetrics.sellingPriceCount + profitMetrics.discountedPriceCount)) * 100).toFixed(1)}% at selling price`
                           : 'No sales data'}
                       </span>
                     </div>

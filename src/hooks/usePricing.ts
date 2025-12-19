@@ -3,7 +3,7 @@ import { Product, SaleItem } from '../types';
 import {
   calculateProductPricing,
   calculateSalePricing,
-  validateMinimumPrice,
+  validateDiscountedPrice,
   PriceType
 } from '../utils/pricing';
 
@@ -12,8 +12,8 @@ export function usePricing() {
     return calculateProductPricing({
       originalCost: product.costPrice,
       discountPercent: product.supplierDiscountPercent || 0,
-      hasVAT: product.hasVat ?? true,
-      vatRate: product.vatRate || 16
+      hasVAT: product.hasVat ?? false,
+      vatRate: product.vatRate || 0
     });
   }, []);
 
@@ -28,17 +28,18 @@ export function usePricing() {
     const actualCost = pricing.actualCost;
 
     let sellingPriceExVAT: number;
-    if (priceType === 'MINIMUM') {
-      sellingPriceExVAT = pricing.minimumPriceExVAT || pricing.targetPriceExVAT;
+    if (priceType === 'DISCOUNTED') {
+      sellingPriceExVAT = pricing.discountedPriceExVAT || pricing.sellingPriceExVAT;
     } else {
-      sellingPriceExVAT = pricing.targetPriceExVAT;
+      sellingPriceExVAT = pricing.sellingPriceExVAT;
     }
 
-    if (selectedPrice !== pricing.minimumPriceRounded &&
-        selectedPrice !== pricing.targetPriceRounded) {
-      const hasVAT = product.hasVat ?? true;
-      if (hasVAT) {
-        sellingPriceExVAT = selectedPrice / 1.16;
+    if (selectedPrice !== pricing.discountedPriceRounded &&
+        selectedPrice !== pricing.sellingPriceRounded) {
+      const hasVAT = product.hasVat ?? false;
+      const vatRate = product.vatRate || 0;
+      if (hasVAT && vatRate > 0) {
+        sellingPriceExVAT = selectedPrice / (1 + vatRate / 100);
       } else {
         sellingPriceExVAT = selectedPrice;
       }
@@ -47,8 +48,8 @@ export function usePricing() {
     const salePricing = calculateSalePricing({
       actualCost,
       sellingPriceExVAT,
-      hasVAT: product.hasVat ?? true,
-      vatRate: product.vatRate || 16,
+      hasVAT: product.hasVat ?? false,
+      vatRate: product.vatRate || 0,
       priceType
     });
 
@@ -58,8 +59,8 @@ export function usePricing() {
       quantity,
       unitPrice: salePricing.finalPriceRounded,
       totalPrice: salePricing.finalPriceRounded * quantity,
-      originalPrice: pricing.targetPriceRounded,
-      priceAdjusted: selectedPrice !== pricing.targetPriceRounded,
+      originalPrice: pricing.sellingPriceRounded,
+      priceAdjusted: selectedPrice !== pricing.sellingPriceRounded,
       batchNumber: product.batchNumber,
       costPrice: product.costPrice,
       sellingPriceExVat: salePricing.sellingPriceExVAT,
@@ -75,11 +76,11 @@ export function usePricing() {
   const validatePrice = useCallback((product: Product, price: number): { valid: boolean; message?: string } => {
     const pricing = getProductPricing(product);
 
-    if (pricing.minimumPriceRounded) {
-      if (price < pricing.minimumPriceRounded) {
+    if (pricing.discountedPriceRounded) {
+      if (price < pricing.discountedPriceRounded) {
         return {
           valid: false,
-          message: `Price cannot be less than minimum selling price: KES ${pricing.minimumPriceRounded.toFixed(2)}`
+          message: `Price cannot be less than discounted price: KES ${pricing.discountedPriceRounded.toFixed(2)}`
         };
       }
     }

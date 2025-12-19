@@ -80,12 +80,12 @@ const POS: React.FC = () => {
       // Use the new pricing system to calculate all pricing fields
       const pricing = getProductPricing(product);
 
-      // Use target price by default
+      // Use selling price by default
       const saleItem = calculateSaleItemPricing(
         product,
         1,
-        pricing.targetPriceRounded,
-        'TARGET'
+        pricing.sellingPriceRounded,
+        'SELLING'
       );
 
       setCart(prev => [saleItem, ...prev]);
@@ -117,7 +117,7 @@ const POS: React.FC = () => {
 
     // Recalculate pricing with new quantity
     const pricing = getProductPricing(product);
-    const priceType = currentItem.priceTypeUsed || 'TARGET';
+    const priceType = currentItem.priceTypeUsed || 'SELLING';
 
     const updatedItem = calculateSaleItemPricing(
       product,
@@ -158,7 +158,7 @@ const POS: React.FC = () => {
 
     // Recalculate all pricing fields with the new price
     const pricing = getProductPricing(product);
-    const priceType = newPrice === pricing.minimumPriceRounded ? 'MINIMUM' : 'TARGET';
+    const priceType = newPrice === pricing.discountedPriceRounded ? 'DISCOUNTED' : 'SELLING';
 
     const updatedItem = calculateSaleItemPricing(
       product,
@@ -663,13 +663,13 @@ const POS: React.FC = () => {
                                 const validation = validatePrice(product, priceToUse);
                                 if (!validation.valid) {
                                   const pricing = getProductPricing(product);
-                                  priceToUse = pricing.minimumPriceRounded || pricing.targetPriceRounded;
-                                  showAlert({ title: 'Point of Sale', message: validation.message || 'Price adjusted to minimum', type: 'info' });
+                                  priceToUse = pricing.discountedPriceRounded || pricing.sellingPriceRounded;
+                                  showAlert({ title: 'Point of Sale', message: validation.message || 'Price adjusted to discounted price', type: 'info' });
                                 }
 
                                 // Recalculate with new pricing system
                                 const pricing = getProductPricing(product);
-                                const priceType = priceToUse === pricing.minimumPriceRounded ? 'MINIMUM' : 'TARGET';
+                                const priceType = priceToUse === pricing.discountedPriceRounded ? 'DISCOUNTED' : 'SELLING';
 
                                 const updatedItem = calculateSaleItemPricing(
                                   product,
@@ -738,29 +738,17 @@ const POS: React.FC = () => {
               {/* Pricing Information Panel */}
               {showPricingInfo[item.productId] && pricing && (
                 <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs space-y-1">
-                  <div className="font-semibold text-blue-800 mb-1">Pricing Details:</div>
-                  {pricing.hasDiscount && pricing.minimumPriceRounded && (
+                  <div className="font-semibold text-blue-800 mb-1">Pricing Options:</div>
+                  {pricing.hasDiscount && pricing.discountedPriceRounded && (
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Minimum Price:</span>
-                      <span className="font-medium">{formatKES(pricing.minimumPriceRounded)}</span>
+                      <span className="text-gray-600">Discounted Price:</span>
+                      <span className="font-medium">{formatKES(pricing.discountedPriceRounded)}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Target Price:</span>
-                    <span className="font-medium">{formatKES(pricing.targetPriceRounded)}</span>
+                    <span className="text-gray-600">Selling Price:</span>
+                    <span className="font-medium">{formatKES(pricing.sellingPriceRounded)}</span>
                   </div>
-                  {item.profit !== undefined && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Profit (per unit):</span>
-                      <span className="font-medium text-green-600">{formatKES(item.profit / item.quantity)}</span>
-                    </div>
-                  )}
-                  {item.priceTypeUsed && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Price Type:</span>
-                      <span className="font-medium">{item.priceTypeUsed === 'MINIMUM' ? 'Minimum' : 'Target'}</span>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -993,11 +981,6 @@ const POS: React.FC = () => {
                             {history.date.toLocaleDateString()} by {history.userName}
                           </p>
                         </div>
-                        {index === 0 && (
-                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                            Current
-                          </span>
-                        )}
                       </div>
                     ))}
                   </div>

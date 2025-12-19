@@ -1,7 +1,7 @@
 export const MARKUP_MULTIPLIER = 1.33;
-export const DEFAULT_VAT_RATE = 16;
+export const DEFAULT_VAT_RATE = 0;
 
-export type PriceType = 'MINIMUM' | 'TARGET';
+export type PriceType = 'DISCOUNTED' | 'SELLING';
 
 export interface PricingInput {
   originalCost: number;
@@ -13,14 +13,14 @@ export interface PricingInput {
 export interface PricingResult {
   discountedCost: number | null;
   actualCost: number;
-  minimumSellingPrice: number | null;
-  targetSellingPrice: number;
-  minimumPriceExVAT: number | null;
-  targetPriceExVAT: number;
-  minimumPriceWithVAT: number | null;
-  targetPriceWithVAT: number;
-  minimumPriceRounded: number | null;
-  targetPriceRounded: number;
+  discountedPrice: number | null;
+  sellingPrice: number;
+  discountedPriceExVAT: number | null;
+  sellingPriceExVAT: number;
+  discountedPriceWithVAT: number | null;
+  sellingPriceWithVAT: number;
+  discountedPriceRounded: number | null;
+  sellingPriceRounded: number;
   hasDiscount: boolean;
 }
 
@@ -62,7 +62,7 @@ export function calculateProductPricing(input: PricingInput): PricingResult {
   const {
     originalCost,
     discountPercent = 0,
-    hasVAT = true,
+    hasVAT = false,
     vatRate = DEFAULT_VAT_RATE
   } = input;
 
@@ -74,40 +74,40 @@ export function calculateProductPricing(input: PricingInput): PricingResult {
 
   const actualCost = discountedCost ?? originalCost;
 
-  const minimumPriceExVAT = hasDiscount
+  const discountedPriceExVAT = hasDiscount
     ? discountedCost! * MARKUP_MULTIPLIER
     : null;
 
-  const targetPriceExVAT = originalCost * MARKUP_MULTIPLIER;
+  const sellingPriceExVAT = originalCost * MARKUP_MULTIPLIER;
 
   const vatMultiplier = hasVAT ? (1 + vatRate / 100) : 1;
 
-  const minimumPriceWithVAT = minimumPriceExVAT
-    ? minimumPriceExVAT * vatMultiplier
+  const discountedPriceWithVAT = discountedPriceExVAT
+    ? discountedPriceExVAT * vatMultiplier
     : null;
 
-  const targetPriceWithVAT = targetPriceExVAT * vatMultiplier;
+  const sellingPriceWithVAT = sellingPriceExVAT * vatMultiplier;
 
-  const minimumPriceRounded = minimumPriceWithVAT
-    ? roundUpToNearest5Or10(minimumPriceWithVAT)
+  const discountedPriceRounded = discountedPriceWithVAT
+    ? roundUpToNearest5Or10(discountedPriceWithVAT)
     : null;
 
-  const targetPriceRounded = roundUpToNearest5Or10(targetPriceWithVAT);
+  const sellingPriceRounded = roundUpToNearest5Or10(sellingPriceWithVAT);
 
-  const minimumSellingPrice = minimumPriceRounded;
-  const targetSellingPrice = targetPriceRounded;
+  const discountedPrice = discountedPriceRounded;
+  const sellingPrice = sellingPriceRounded;
 
   return {
     discountedCost,
     actualCost,
-    minimumSellingPrice,
-    targetSellingPrice,
-    minimumPriceExVAT,
-    targetPriceExVAT,
-    minimumPriceWithVAT,
-    targetPriceWithVAT,
-    minimumPriceRounded,
-    targetPriceRounded,
+    discountedPrice,
+    sellingPrice,
+    discountedPriceExVAT,
+    sellingPriceExVAT,
+    discountedPriceWithVAT,
+    sellingPriceWithVAT,
+    discountedPriceRounded,
+    sellingPriceRounded,
     hasDiscount
   };
 }
@@ -116,7 +116,7 @@ export function calculateSalePricing(input: SalePricingInput): SalePricingResult
   const {
     actualCost,
     sellingPriceExVAT,
-    hasVAT = true,
+    hasVAT = false,
     vatRate = DEFAULT_VAT_RATE,
     priceType
   } = input;
@@ -145,15 +145,15 @@ export function calculateSalePricing(input: SalePricingInput): SalePricingResult
   };
 }
 
-export function validateMinimumPrice(
+export function validateDiscountedPrice(
   sellingPrice: number,
-  minimumPrice: number | null
+  discountedPrice: number | null
 ): boolean {
-  if (minimumPrice === null) {
+  if (discountedPrice === null) {
     return true;
   }
 
-  return sellingPrice >= minimumPrice;
+  return sellingPrice >= discountedPrice;
 }
 
 export function formatCurrency(amount: number): string {
@@ -208,20 +208,20 @@ export function calculateProfitBreakdown(salesData: {
 }
 
 export function getPriceTypeLabel(priceType: PriceType): string {
-  return priceType === 'MINIMUM' ? 'Minimum Price' : 'Target Price';
+  return priceType === 'DISCOUNTED' ? 'Discounted Price' : 'Selling Price';
 }
 
 export function shouldWarnLowMargin(
-  sellingPrice: number,
-  minimumPrice: number | null,
-  targetPrice: number
+  currentPrice: number,
+  discountedPrice: number | null,
+  sellingPrice: number
 ): boolean {
-  if (!minimumPrice) {
+  if (!discountedPrice) {
     return false;
   }
 
-  const priceRange = targetPrice - minimumPrice;
-  const threshold = minimumPrice + (priceRange * 0.2);
+  const priceRange = sellingPrice - discountedPrice;
+  const threshold = discountedPrice + (priceRange * 0.2);
 
-  return sellingPrice <= threshold;
+  return currentPrice <= threshold;
 }

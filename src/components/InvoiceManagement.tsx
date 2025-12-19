@@ -49,8 +49,8 @@ const InvoiceManagement: React.FC = () => {
     sellingPrice: '',
     barcode: '',
     discountedCost: '',
-    minimumSellingPrice: '',
-    targetSellingPrice: '',
+    discountedPrice: '',
+    targetPrice: '',
   });
 
   const medicineNames = medicineTemplates.map(med => med.name);
@@ -110,8 +110,8 @@ const InvoiceManagement: React.FC = () => {
               totalCost: parseFloat(item.total_cost),
               barcode: item.barcode,
               discountedCost: item.discounted_cost ? parseFloat(item.discounted_cost) : undefined,
-              minimumSellingPrice: item.minimum_selling_price ? parseFloat(item.minimum_selling_price) : undefined,
-              targetSellingPrice: item.target_selling_price ? parseFloat(item.target_selling_price) : undefined,
+              discountedPrice: item.minimum_selling_price ? parseFloat(item.minimum_selling_price) : undefined,
+              targetPrice: item.target_selling_price ? parseFloat(item.target_selling_price) : undefined,
             })),
             createdAt: new Date(invoice.created_at),
             updatedAt: new Date(invoice.updated_at),
@@ -178,8 +178,8 @@ const InvoiceManagement: React.FC = () => {
           costPrice: calculatedCostPrice.toString(),
           sellingPrice: calculatedSellingPrice.toString(),
           discountedCost: pricingResult.discountedCost ? pricingResult.discountedCost.toString() : '',
-          minimumSellingPrice: pricingResult.minimumSellingPrice ? pricingResult.minimumSellingPrice.toString() : '',
-          targetSellingPrice: pricingResult.targetSellingPrice.toString()
+          discountedPrice: pricingResult.discountedPrice ? pricingResult.discountedPrice.toString() : '',
+          targetPrice: pricingResult.sellingPrice.toString()
         };
       } else if (field === 'costPrice' && costPrice > 0) {
         const calculatedSellingPrice = calculateSellingPrice(costPrice);
@@ -195,7 +195,7 @@ const InvoiceManagement: React.FC = () => {
         return {
           ...updated,
           sellingPrice: calculatedSellingPrice.toString(),
-          targetSellingPrice: pricingResult.targetSellingPrice.toString()
+          targetPrice: pricingResult.sellingPrice.toString()
         };
       }
 
@@ -219,7 +219,7 @@ const InvoiceManagement: React.FC = () => {
     const sellingPrice = parseFloat(currentItem.sellingPrice);
     const totalCost = quantity * costPrice;
 
-    const newItem: InvoiceItem & { discountedCost?: number; minimumSellingPrice?: number; targetSellingPrice?: number } = {
+    const newItem: InvoiceItem & { discountedCost?: number; discountedPrice?: number; targetPrice?: number } = {
       productName: currentItem.productName,
       category: currentItem.category || 'General',
       batchNumber: currentItem.batchNumber || '',
@@ -234,8 +234,8 @@ const InvoiceManagement: React.FC = () => {
       totalCost,
       barcode: currentItem.barcode || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       discountedCost: currentItem.discountedCost ? parseFloat(currentItem.discountedCost) : undefined,
-      minimumSellingPrice: currentItem.minimumSellingPrice ? parseFloat(currentItem.minimumSellingPrice) : undefined,
-      targetSellingPrice: currentItem.targetSellingPrice ? parseFloat(currentItem.targetSellingPrice) : undefined,
+      discountedPrice: currentItem.discountedPrice ? parseFloat(currentItem.discountedPrice) : undefined,
+      targetPrice: currentItem.targetPrice ? parseFloat(currentItem.targetPrice) : undefined,
     };
 
     setInvoiceItems([newItem, ...invoiceItems]);
@@ -254,8 +254,8 @@ const InvoiceManagement: React.FC = () => {
       sellingPrice: '',
       barcode: '',
       discountedCost: '',
-      minimumSellingPrice: '',
-      targetSellingPrice: '',
+      discountedPrice: '',
+      targetPrice: '',
     });
   };
 
@@ -345,11 +345,11 @@ const InvoiceManagement: React.FC = () => {
           if (typedItem.discountedCost) {
             updateData.discounted_cost = typedItem.discountedCost;
           }
-          if (typedItem.minimumSellingPrice) {
-            updateData.minimum_selling_price = typedItem.minimumSellingPrice;
+          if (typedItem.discountedPrice) {
+            updateData.minimum_selling_price = typedItem.discountedPrice;
           }
-          if (typedItem.targetSellingPrice) {
-            updateData.target_selling_price = typedItem.targetSellingPrice;
+          if (typedItem.targetPrice) {
+            updateData.target_selling_price = typedItem.targetPrice;
           }
 
           const { error: updateError } = await supabase
@@ -397,11 +397,11 @@ const InvoiceManagement: React.FC = () => {
           if (typedItem.discountedCost) {
             insertData.discounted_cost = typedItem.discountedCost;
           }
-          if (typedItem.minimumSellingPrice) {
-            insertData.minimum_selling_price = typedItem.minimumSellingPrice;
+          if (typedItem.discountedPrice) {
+            insertData.minimum_selling_price = typedItem.discountedPrice;
           }
-          if (typedItem.targetSellingPrice) {
-            insertData.target_selling_price = typedItem.targetSellingPrice;
+          if (typedItem.targetPrice) {
+            insertData.target_selling_price = typedItem.targetPrice;
           }
 
           const { data: newProduct, error: productError } = await supabase
@@ -454,11 +454,11 @@ const InvoiceManagement: React.FC = () => {
         if (typedItem.discountedCost) {
           invoiceItemData.discounted_cost = typedItem.discountedCost;
         }
-        if (typedItem.minimumSellingPrice) {
-          invoiceItemData.minimum_selling_price = typedItem.minimumSellingPrice;
+        if (typedItem.discountedPrice) {
+          invoiceItemData.minimum_selling_price = typedItem.discountedPrice;
         }
-        if (typedItem.targetSellingPrice) {
-          invoiceItemData.target_selling_price = typedItem.targetSellingPrice;
+        if (typedItem.targetPrice) {
+          invoiceItemData.target_selling_price = typedItem.targetPrice;
         }
 
         invoiceItemsToInsert.push(invoiceItemData);
@@ -720,8 +720,8 @@ const InvoiceManagement: React.FC = () => {
           totalCost: (parseInt(row.quantity) || 0) * calculatedCostPrice,
           barcode: row.barcode || `${Date.now()}-${i}`,
           discountedCost: pricingResult.discountedCost || undefined,
-          minimumSellingPrice: pricingResult.minimumSellingPrice || undefined,
-          targetSellingPrice: pricingResult.targetSellingPrice,
+          discountedPrice: pricingResult.discountedPrice || undefined,
+          targetPrice: pricingResult.sellingPrice,
         } as any);
       }
 
@@ -792,8 +792,8 @@ const InvoiceManagement: React.FC = () => {
       sellingPrice: '',
       barcode: '',
       discountedCost: '',
-      minimumSellingPrice: '',
-      targetSellingPrice: '',
+      discountedPrice: '',
+      targetPrice: '',
     });
   };
 
@@ -969,8 +969,8 @@ const InvoiceManagement: React.FC = () => {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost (w/ Disc)</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Min Selling</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Target Selling</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discounted</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Margin %</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
                       </tr>
@@ -978,7 +978,7 @@ const InvoiceManagement: React.FC = () => {
                     <tbody className="divide-y divide-gray-200">
                       {selectedInvoice.items.map((item, index) => {
                         const typedItem = item as any;
-                        const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                        const targetPrice = typedItem.targetPrice || item.sellingPrice;
                         const actualCost = typedItem.discountedCost || item.costPrice;
                         const profitMargin = ((targetPrice - actualCost) / targetPrice * 100).toFixed(1);
 
@@ -1003,7 +1003,7 @@ const InvoiceManagement: React.FC = () => {
                               )}
                             </td>
                             <td className="px-3 py-2 text-sm font-medium text-orange-600">
-                              {typedItem.minimumSellingPrice ? formatKES(typedItem.minimumSellingPrice) : '-'}
+                              {typedItem.discountedPrice ? formatKES(typedItem.discountedPrice) : '-'}
                             </td>
                             <td className="px-3 py-2 text-sm font-medium text-green-600">
                               {formatKES(targetPrice)}
@@ -1035,7 +1035,7 @@ const InvoiceManagement: React.FC = () => {
                       <p className="text-lg font-bold text-green-600">
                         {formatKES(selectedInvoice.items.reduce((sum, item) => {
                           const typedItem = item as any;
-                          const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                          const targetPrice = typedItem.targetPrice || item.sellingPrice;
                           return sum + (targetPrice * item.quantity);
                         }, 0))}
                       </p>
@@ -1045,7 +1045,7 @@ const InvoiceManagement: React.FC = () => {
                       <p className="text-lg font-bold text-blue-600">
                         {formatKES(selectedInvoice.items.reduce((sum, item) => {
                           const typedItem = item as any;
-                          const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                          const targetPrice = typedItem.targetPrice || item.sellingPrice;
                           const actualCost = typedItem.discountedCost || item.costPrice;
                           return sum + ((targetPrice - actualCost) * item.quantity);
                         }, 0))}
@@ -1057,7 +1057,7 @@ const InvoiceManagement: React.FC = () => {
                         {(() => {
                           const totalRevenue = selectedInvoice.items.reduce((sum, item) => {
                             const typedItem = item as any;
-                            const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                            const targetPrice = typedItem.sellingPrice || item.sellingPrice;
                             return sum + (targetPrice * item.quantity);
                           }, 0);
                           const totalCost = selectedInvoice.items.reduce((sum, item) => sum + item.totalCost, 0);
@@ -1264,7 +1264,7 @@ const InvoiceManagement: React.FC = () => {
                 </div>
 
                 {/* Pricing Information Display */}
-                {(currentItem.minimumSellingPrice || currentItem.targetSellingPrice) && (
+                {(currentItem.discountedPrice || currentItem.sellingPrice) && (
                   <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                     <h5 className="text-sm font-semibold text-green-900 mb-2">Calculated Pricing Information</h5>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1277,17 +1277,17 @@ const InvoiceManagement: React.FC = () => {
                           </p>
                         </div>
                       )}
-                      {currentItem.minimumSellingPrice && (
+                      {currentItem.discountedPrice && (
                         <div>
-                          <p className="text-xs text-gray-600">Minimum Selling Price</p>
-                          <p className="text-sm font-semibold text-orange-600">{formatKES(parseFloat(currentItem.minimumSellingPrice))}</p>
+                          <p className="text-xs text-gray-600">Discounted Price</p>
+                          <p className="text-sm font-semibold text-orange-600">{formatKES(parseFloat(currentItem.discountedPrice))}</p>
                           <p className="text-xs text-gray-500">Floor price with discount</p>
                         </div>
                       )}
-                      {currentItem.targetSellingPrice && (
+                      {currentItem.targetPrice && (
                         <div>
-                          <p className="text-xs text-gray-600">Target Selling Price</p>
-                          <p className="text-sm font-semibold text-green-600">{formatKES(parseFloat(currentItem.targetSellingPrice))}</p>
+                          <p className="text-xs text-gray-600">Selling Price</p>
+                          <p className="text-sm font-semibold text-green-600">{formatKES(parseFloat(currentItem.targetPrice))}</p>
                           <p className="text-xs text-gray-500">Recommended retail price</p>
                         </div>
                       )}
@@ -1320,8 +1320,8 @@ const InvoiceManagement: React.FC = () => {
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost (w/ Disc)</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Min Selling</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Target Selling</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discounted</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Profit Margin %</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total Cost</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500"></th>
@@ -1330,7 +1330,7 @@ const InvoiceManagement: React.FC = () => {
                         <tbody className="divide-y divide-gray-200">
                           {invoiceItems.map((item, index) => {
                             const typedItem = item as any;
-                            const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                            const targetPrice = typedItem.sellingPrice || item.sellingPrice;
                             const actualCost = typedItem.discountedCost || item.costPrice;
                             const profitMargin = ((targetPrice - actualCost) / targetPrice * 100).toFixed(1);
 
@@ -1355,7 +1355,7 @@ const InvoiceManagement: React.FC = () => {
                                   )}
                                 </td>
                                 <td className="px-3 py-2 text-sm font-medium text-orange-600">
-                                  {typedItem.minimumSellingPrice ? formatKES(typedItem.minimumSellingPrice) : '-'}
+                                  {typedItem.discountedPrice ? formatKES(typedItem.discountedPrice) : '-'}
                                 </td>
                                 <td className="px-3 py-2 text-sm font-medium text-green-600">
                                   {formatKES(targetPrice)}
@@ -1395,7 +1395,7 @@ const InvoiceManagement: React.FC = () => {
                           <p className="text-lg font-bold text-green-600">
                             {formatKES(invoiceItems.reduce((sum, item) => {
                               const typedItem = item as any;
-                              const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                              const targetPrice = typedItem.sellingPrice || item.sellingPrice;
                               return sum + (targetPrice * item.quantity);
                             }, 0))}
                           </p>
@@ -1405,7 +1405,7 @@ const InvoiceManagement: React.FC = () => {
                           <p className="text-lg font-bold text-blue-600">
                             {formatKES(invoiceItems.reduce((sum, item) => {
                               const typedItem = item as any;
-                              const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                              const targetPrice = typedItem.sellingPrice || item.sellingPrice;
                               const actualCost = typedItem.discountedCost || item.costPrice;
                               return sum + ((targetPrice - actualCost) * item.quantity);
                             }, 0))}
@@ -1417,7 +1417,7 @@ const InvoiceManagement: React.FC = () => {
                             {(() => {
                               const totalRevenue = invoiceItems.reduce((sum, item) => {
                                 const typedItem = item as any;
-                                const targetPrice = typedItem.targetSellingPrice || item.sellingPrice;
+                                const targetPrice = typedItem.sellingPrice || item.sellingPrice;
                                 return sum + (targetPrice * item.quantity);
                               }, 0);
                               const totalCost = invoiceItems.reduce((sum, item) => sum + item.totalCost, 0);
