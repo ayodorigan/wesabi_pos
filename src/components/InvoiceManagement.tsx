@@ -142,58 +142,44 @@ const InvoiceManagement: React.FC = () => {
   };
 
   const handlePricingChange = (field: string, value: string) => {
-    setCurrentItem(prev => {
+    setCurrentItem((prev: any) => {
       const updated = { ...prev, [field]: value };
 
-      const invoicePrice = parseFloat(updated.invoicePrice) || 0;
-      const supplierDiscountPercent = parseFloat(updated.supplierDiscountPercent) || 0;
-      const vatRate = parseFloat(updated.vatRate) || 0;
-      const otherCharges = parseFloat(updated.otherCharges) || 0;
       const costPrice = parseFloat(updated.costPrice) || 0;
+      const supplierDiscountPercent = parseFloat(updated.supplierDiscountPercent) || 0;
+      const vatRate = parseFloat(updated.vatRate) || 16;
 
-      const pricingInputs = {
-        invoicePrice: invoicePrice || undefined,
-        supplierDiscountPercent: supplierDiscountPercent || undefined,
-        vatRate: vatRate || 0,
-        otherCharges: otherCharges || undefined,
-        costPrice: costPrice
-      };
+      if (costPrice > 0) {
+        const discountedCostPrice = supplierDiscountPercent > 0
+          ? costPrice * (1 - supplierDiscountPercent / 100)
+          : costPrice;
 
-      if (invoicePrice > 0) {
-        const calculatedCostPrice = calculateNetCost(pricingInputs);
-        const calculatedSellingPrice = calculateSellingPrice(pricingInputs);
+        const MARKUP_MULTIPLIER = 1.33;
+        const sellingPriceBeforeVAT = discountedCostPrice * MARKUP_MULTIPLIER;
 
-        // Calculate pricing using the new pricing utilities
-        const pricingResult = calculateProductPricing({
-          originalCost: invoicePrice,
-          discountPercent: supplierDiscountPercent,
-          hasVAT: true,
-          vatRate: vatRate || 16
-        });
-
-        return {
-          ...updated,
-          costPrice: calculatedCostPrice.toString(),
-          sellingPrice: calculatedSellingPrice.toString(),
-          discountedCost: pricingResult.discountedCost ? pricingResult.discountedCost.toString() : '',
-          discountedPrice: pricingResult.discountedPrice ? pricingResult.discountedPrice.toString() : '',
-          targetPrice: pricingResult.sellingPrice.toString()
+        const roundUpToNearest5Or10 = (price: number) => {
+          const ones = price % 10;
+          if (ones <= 5) {
+            return Math.ceil(price / 5) * 5;
+          } else {
+            return Math.ceil(price / 10) * 10;
+          }
         };
-      } else if (field === 'costPrice' && costPrice > 0) {
-        const calculatedSellingPrice = calculateSellingPrice(costPrice);
 
-        // Calculate pricing using the new pricing utilities
-        const pricingResult = calculateProductPricing({
-          originalCost: costPrice,
-          discountPercent: 0,
-          hasVAT: true,
-          vatRate: vatRate || 16
-        });
+        const sellingPrice = roundUpToNearest5Or10(sellingPriceBeforeVAT);
+        const discountedSellingPrice = sellingPrice;
+        const vat = vatRate > 0 ? (discountedSellingPrice * vatRate / 100) : 0;
+        const grossProfitMargin = discountedCostPrice > 0
+          ? ((discountedSellingPrice - discountedCostPrice) / discountedCostPrice * 100)
+          : 0;
 
         return {
           ...updated,
-          sellingPrice: calculatedSellingPrice.toString(),
-          targetPrice: pricingResult.sellingPrice.toString()
+          discountedCostPrice: discountedCostPrice.toFixed(2),
+          sellingPrice: sellingPrice.toFixed(2),
+          discountedSellingPrice: discountedSellingPrice.toFixed(2),
+          vat: vat.toFixed(2),
+          grossProfitMargin: grossProfitMargin.toFixed(2)
         };
       }
 
@@ -642,7 +628,7 @@ const InvoiceManagement: React.FC = () => {
         });
 
         if (!row.productname || !row.quantity) continue;
-        if (!row.invoiceprice && !row.costprice) continue;
+        if (!row.costprice) continue;
 
         if (i === 1) {
           extractedInvoiceNumber = row.invoicenumber || row.invoice_number || '';
@@ -650,30 +636,32 @@ const InvoiceManagement: React.FC = () => {
           extractedInvoiceDate = row.invoicedate || row.invoice_date || '';
         }
 
-        const invoicePrice = parseFloat(row.invoiceprice) || 0;
-        const supplierDiscountPercent = parseFloat(row.supplierdiscountpercent) || 0;
-        const vatRate = parseFloat(row.vatrate) || 0;
-        const otherCharges = parseFloat(row.othercharges) || 0;
         const costPrice = parseFloat(row.costprice) || 0;
+        const supplierDiscountPercent = parseFloat(row.supplierdiscountpercent) || 0;
+        const vatRate = parseFloat(row.vatrate) || 16;
 
-        const pricingInputs = {
-          invoicePrice: invoicePrice || undefined,
-          supplierDiscountPercent: supplierDiscountPercent || undefined,
-          vatRate: vatRate || 0,
-          otherCharges: otherCharges || undefined,
-          costPrice: costPrice
+        const discountedCostPrice = supplierDiscountPercent > 0
+          ? costPrice * (1 - supplierDiscountPercent / 100)
+          : costPrice;
+
+        const MARKUP_MULTIPLIER = 1.33;
+        const sellingPriceBeforeVAT = discountedCostPrice * MARKUP_MULTIPLIER;
+
+        const roundUpToNearest5Or10 = (price: number) => {
+          const ones = price % 10;
+          if (ones <= 5) {
+            return Math.ceil(price / 5) * 5;
+          } else {
+            return Math.ceil(price / 10) * 10;
+          }
         };
 
-        const calculatedCostPrice = invoicePrice ? calculateNetCost(pricingInputs) : costPrice;
-        const sellingPrice = calculateSellingPrice(pricingInputs);
-
-        // Calculate pricing using the new pricing utilities
-        const pricingResult = calculateProductPricing({
-          originalCost: invoicePrice || costPrice,
-          discountPercent: supplierDiscountPercent,
-          hasVAT: true,
-          vatRate: vatRate || 16
-        });
+        const sellingPrice = roundUpToNearest5Or10(sellingPriceBeforeVAT);
+        const discountedSellingPrice = sellingPrice;
+        const vat = vatRate > 0 ? (discountedSellingPrice * vatRate / 100) : 0;
+        const grossProfitMargin = discountedCostPrice > 0
+          ? ((discountedSellingPrice - discountedCostPrice) / discountedCostPrice * 100)
+          : 0;
 
         items.push({
           productName: row.productname,
@@ -681,18 +669,17 @@ const InvoiceManagement: React.FC = () => {
           batchNumber: row.batchnumber || '',
           expiryDate: row.expirydate ? new Date(row.expirydate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
           quantity: parseInt(row.quantity) || 0,
-          invoicePrice: invoicePrice || undefined,
+          costPrice,
+          discountedCostPrice,
+          sellingPrice,
+          discountedSellingPrice,
+          vat,
+          grossProfitMargin,
           supplierDiscountPercent: supplierDiscountPercent || undefined,
           vatRate: vatRate || undefined,
-          otherCharges: otherCharges || undefined,
-          costPrice: calculatedCostPrice,
-          sellingPrice,
-          totalCost: (parseInt(row.quantity) || 0) * calculatedCostPrice,
+          totalCost: (parseInt(row.quantity) || 0) * discountedCostPrice,
           barcode: row.barcode || `${Date.now()}-${i}`,
-          discountedCost: pricingResult.discountedCost || undefined,
-          discountedPrice: pricingResult.discountedPrice || undefined,
-          targetPrice: pricingResult.sellingPrice,
-        } as any);
+        });
       }
 
       setInvoiceItems(items);
@@ -936,51 +923,49 @@ const InvoiceManagement: React.FC = () => {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost (w/ Disc)</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discounted</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Margin %</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost Price</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Disc %</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Final Cost</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling Price</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Profit %</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {selectedInvoice.items.map((item, index) => {
-                        const typedItem = item as any;
-                        const targetPrice = typedItem.targetPrice || item.sellingPrice;
-                        const actualCost = typedItem.discountedCost || item.costPrice;
-                        const profitMargin = actualCost > 0 ? ((targetPrice - actualCost) / actualCost * 100).toFixed(1) : '0.0';
+                        const discountedCost = item.discountedCostPrice || item.costPrice;
+                        const profitMargin = item.grossProfitMargin || 0;
 
                         return (
                           <tr key={index}>
                             <td className="px-3 py-2 text-sm">{item.productName}</td>
                             <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
                             <td className="px-3 py-2 text-sm">{item.quantity}</td>
-                            <td className="px-3 py-2 text-sm">{item.invoicePrice ? formatKES(item.invoicePrice) : '-'}</td>
+                            <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
                             <td className="px-3 py-2 text-sm">
                               {item.supplierDiscountPercent || '0'}%
                               {item.supplierDiscountPercent && item.supplierDiscountPercent > 0 && (
-                                <span className="ml-1 text-green-600 font-semibold">!</span>
+                                <span className="ml-1 text-green-600 font-semibold">✓</span>
                               )}
                             </td>
-                            <td className="px-3 py-2 text-sm">
-                              {formatKES(actualCost)}
-                              {typedItem.discountedCost && (
+                            <td className="px-3 py-2 text-sm font-medium">
+                              {formatKES(discountedCost)}
+                              {item.discountedCostPrice && item.discountedCostPrice < item.costPrice && (
                                 <div className="text-xs text-gray-500 line-through">
-                                  {formatKES(item.invoicePrice || item.costPrice)}
+                                  {formatKES(item.costPrice)}
                                 </div>
                               )}
                             </td>
-                            <td className="px-3 py-2 text-sm font-medium text-orange-600">
-                              {typedItem.discountedPrice ? formatKES(typedItem.discountedPrice) : '-'}
-                            </td>
                             <td className="px-3 py-2 text-sm font-medium text-green-600">
-                              {formatKES(targetPrice)}
+                              {formatKES(item.sellingPrice)}
                             </td>
                             <td className="px-3 py-2 text-sm">
-                              <span className={`font-semibold ${parseFloat(profitMargin) >= 25 ? 'text-green-600' : 'text-yellow-600'}`}>
-                                {profitMargin}%
+                              {item.vat ? formatKES(item.vat) : '-'}
+                            </td>
+                            <td className="px-3 py-2 text-sm">
+                              <span className={`font-semibold ${profitMargin >= 25 ? 'text-green-600' : 'text-yellow-600'}`}>
+                                {profitMargin.toFixed(1)}%
                               </span>
                             </td>
                             <td className="px-3 py-2 text-sm font-medium">{formatKES(item.totalCost)}</td>
@@ -1173,14 +1158,15 @@ const InvoiceManagement: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Price (KES)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price (KES)</label>
+                    <p className="text-xs text-gray-500 mb-1">Original price paid to supplier before discount</p>
                     <input
                       type="number"
                       step="0.01"
-                      value={currentItem.invoicePrice}
-                      onChange={(e) => handlePricingChange('invoicePrice', e.target.value)}
+                      value={currentItem.costPrice}
+                      onChange={(e) => handlePricingChange('costPrice', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      placeholder="Supplier price"
+                      placeholder="Enter supplier price"
                     />
                   </div>
 
@@ -1192,6 +1178,7 @@ const InvoiceManagement: React.FC = () => {
                       value={currentItem.supplierDiscountPercent}
                       onChange={(e) => handlePricingChange('supplierDiscountPercent', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="0"
                     />
                   </div>
 
@@ -1201,35 +1188,45 @@ const InvoiceManagement: React.FC = () => {
                   />
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Other Charges (KES)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Discounted Cost Price (KES)</label>
+                    <p className="text-xs text-gray-500 mb-1">Actual buying price after supplier discount</p>
                     <input
-                      type="number"
-                      step="0.01"
-                      value={currentItem.otherCharges}
-                      onChange={(e) => handlePricingChange('otherCharges', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      placeholder="Shipping, etc."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price (KES)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={currentItem.costPrice}
-                      onChange={(e) => handlePricingChange('costPrice', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-gray-50"
+                      type="text"
+                      value={currentItem.discountedCostPrice}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
                       placeholder="Auto-calculated"
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (KES)</label>
+                    <p className="text-xs text-gray-500 mb-1">Price offered to customer</p>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
                       value={currentItem.sellingPrice}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                      placeholder="Auto-calculated"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">VAT Amount (KES)</label>
+                    <input
+                      type="text"
+                      value={currentItem.vat}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                      placeholder="Auto-calculated"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Gross Profit Margin %</label>
+                    <input
+                      type="text"
+                      value={currentItem.grossProfitMargin}
                       readOnly
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
                       placeholder="Auto-calculated"
@@ -1237,32 +1234,32 @@ const InvoiceManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Pricing Information Display */}
-                {(currentItem.discountedPrice || currentItem.sellingPrice) && (
+                {/* Pricing Summary */}
+                {currentItem.sellingPrice && (
                   <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <h5 className="text-sm font-semibold text-green-900 mb-2">Calculated Pricing Information</h5>
+                    <h5 className="text-sm font-semibold text-green-900 mb-2">Pricing Summary</h5>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {currentItem.discountedCost && (
-                        <div>
-                          <p className="text-xs text-gray-600">Discounted Cost</p>
-                          <p className="text-sm font-semibold text-gray-900">{formatKES(parseFloat(currentItem.discountedCost))}</p>
-                          <p className="text-xs text-gray-500 line-through">
-                            Original: {formatKES(parseFloat(currentItem.invoicePrice) || parseFloat(currentItem.costPrice))}
+                      <div>
+                        <p className="text-xs text-gray-600">Final Cost</p>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {currentItem.discountedCostPrice ? formatKES(parseFloat(currentItem.discountedCostPrice)) : formatKES(parseFloat(currentItem.costPrice) || 0)}
+                        </p>
+                        {currentItem.supplierDiscountPercent && parseFloat(currentItem.supplierDiscountPercent) > 0 && (
+                          <p className="text-xs text-gray-500">
+                            {currentItem.supplierDiscountPercent}% discount applied
                           </p>
-                        </div>
-                      )}
-                      {currentItem.discountedPrice && (
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">Selling Price</p>
+                        <p className="text-sm font-semibold text-green-600">{formatKES(parseFloat(currentItem.sellingPrice))}</p>
+                        <p className="text-xs text-gray-500">Customer price (ex-VAT)</p>
+                      </div>
+                      {currentItem.grossProfitMargin && (
                         <div>
-                          <p className="text-xs text-gray-600">Discounted Price</p>
-                          <p className="text-sm font-semibold text-orange-600">{formatKES(parseFloat(currentItem.discountedPrice))}</p>
-                          <p className="text-xs text-gray-500">Floor price with discount</p>
-                        </div>
-                      )}
-                      {currentItem.targetPrice && (
-                        <div>
-                          <p className="text-xs text-gray-600">Selling Price</p>
-                          <p className="text-sm font-semibold text-green-600">{formatKES(parseFloat(currentItem.targetPrice))}</p>
-                          <p className="text-xs text-gray-500">Recommended retail price</p>
+                          <p className="text-xs text-gray-600">Profit Margin</p>
+                          <p className="text-sm font-semibold text-blue-600">{parseFloat(currentItem.grossProfitMargin).toFixed(1)}%</p>
+                          <p className="text-xs text-gray-500">Gross profit</p>
                         </div>
                       )}
                     </div>
@@ -1291,52 +1288,50 @@ const InvoiceManagement: React.FC = () => {
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Batch</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Invoice Price</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discount %</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost (w/ Disc)</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Discounted</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Profit Margin %</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost Price</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Disc %</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Final Cost</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling Price</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Profit %</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total Cost</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                           {invoiceItems.map((item, index) => {
-                            const typedItem = item as any;
-                            const targetPrice = typedItem.sellingPrice || item.sellingPrice;
-                            const actualCost = typedItem.discountedCost || item.costPrice;
-                            const profitMargin = ((targetPrice - actualCost) / targetPrice * 100).toFixed(1);
+                            const discountedCost = item.discountedCostPrice || item.costPrice;
+                            const profitMargin = item.grossProfitMargin || 0;
 
                             return (
                               <tr key={index}>
                                 <td className="px-3 py-2 text-sm">{item.productName}</td>
                                 <td className="px-3 py-2 text-sm">{item.batchNumber}</td>
                                 <td className="px-3 py-2 text-sm">{item.quantity}</td>
-                                <td className="px-3 py-2 text-sm">{item.invoicePrice ? formatKES(item.invoicePrice) : '-'}</td>
+                                <td className="px-3 py-2 text-sm">{formatKES(item.costPrice)}</td>
                                 <td className="px-3 py-2 text-sm">
                                   {item.supplierDiscountPercent || '0'}%
                                   {item.supplierDiscountPercent && item.supplierDiscountPercent > 0 && (
-                                    <span className="ml-1 text-green-600 font-semibold">!</span>
+                                    <span className="ml-1 text-green-600 font-semibold">✓</span>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 text-sm">
-                                  {formatKES(actualCost)}
-                                  {typedItem.discountedCost && (
+                                <td className="px-3 py-2 text-sm font-medium">
+                                  {formatKES(discountedCost)}
+                                  {item.discountedCostPrice && item.discountedCostPrice < item.costPrice && (
                                     <div className="text-xs text-gray-500 line-through">
-                                      {formatKES(item.invoicePrice || item.costPrice)}
+                                      {formatKES(item.costPrice)}
                                     </div>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 text-sm font-medium text-orange-600">
-                                  {typedItem.discountedPrice ? formatKES(typedItem.discountedPrice) : '-'}
-                                </td>
                                 <td className="px-3 py-2 text-sm font-medium text-green-600">
-                                  {formatKES(targetPrice)}
+                                  {formatKES(item.sellingPrice)}
                                 </td>
                                 <td className="px-3 py-2 text-sm">
-                                  <span className={`font-semibold ${parseFloat(profitMargin) >= 25 ? 'text-green-600' : 'text-yellow-600'}`}>
-                                    {profitMargin}%
+                                  {item.vat ? formatKES(item.vat) : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-sm">
+                                  <span className={`font-semibold ${profitMargin >= 25 ? 'text-green-600' : 'text-yellow-600'}`}>
+                                    {profitMargin.toFixed(1)}%
                                   </span>
                                 </td>
                                 <td className="px-3 py-2 text-sm font-medium">{formatKES(item.totalCost)}</td>
