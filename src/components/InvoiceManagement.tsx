@@ -925,7 +925,7 @@ const InvoiceManagement: React.FC = () => {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost Price</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Disc %</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Final Cost</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Disc. Cost Price</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling Price</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Profit %</th>
@@ -1290,7 +1290,7 @@ const InvoiceManagement: React.FC = () => {
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Cost Price</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Disc %</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Final Cost</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Disc. Cost Price</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Selling Price</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">VAT</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Profit %</th>

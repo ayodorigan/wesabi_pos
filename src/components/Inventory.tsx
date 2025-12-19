@@ -509,12 +509,12 @@ const Inventory: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
                 {canManagePricing && (
                   <>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Original Cost</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discounted Cost</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discounted Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disc %</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disc. Cost Price</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Margin</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disc. Selling Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit Margin</th>
                   </>
                 )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry</th>
@@ -539,10 +539,10 @@ const Inventory: React.FC = () => {
                   pricing.sellingPriceRounded
                 );
 
-                // Calculate profit margins
-                const actualCost = pricing.actualCost;
+                // Calculate profit margins using database values
+                const actualCost = product.discountedCostPrice || product.costPrice;
                 const profitAmount = product.sellingPrice - actualCost;
-                const profitMarginPercent = actualCost > 0 ? (profitAmount / actualCost) * 100 : 0;
+                const profitMarginPercent = product.grossProfitMargin || (actualCost > 0 ? (profitAmount / actualCost) * 100 : 0);
 
                 // Calculate margin improvement from discount
                 const marginWithoutDiscount = pricing.sellingPriceRounded - product.costPrice;
@@ -579,44 +579,39 @@ const Inventory: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">
-                            {pricing.discountedCost ? (
-                              <div>
-                                <div>{formatCurrency(pricing.discountedCost)}</div>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                  {product.supplierDiscountPercent}% off
-                                </span>
-                              </div>
+                            {product.supplierDiscountPercent ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                {product.supplierDiscountPercent}%
+                              </span>
                             ) : (
-                              <span className="text-gray-400">-</span>
+                              <span className="text-gray-400">0%</span>
                             )}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm">
-                            {pricing.discountedPriceRounded ? (
+                          <div className="text-sm text-gray-900">
+                            {product.discountedCostPrice ? (
                               <div>
-                                <div className="font-medium text-gray-900">
-                                  {formatCurrency(pricing.discountedPriceRounded)}
-                                </div>
-                                {hasDiscount && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">
-                                    With Discount
-                                  </span>
+                                <div className="font-medium">{formatCurrency(product.discountedCostPrice)}</div>
+                                {product.supplierDiscountPercent && product.supplierDiscountPercent > 0 && (
+                                  <div className="text-xs text-gray-500 line-through">
+                                    {formatCurrency(product.costPrice)}
+                                  </div>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-gray-400">-</span>
+                              <span>{formatCurrency(product.costPrice)}</span>
                             )}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {formatCurrency(pricing.sellingPriceRounded)}
+                            {formatCurrency(product.sellingPrice)}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {formatKES(product.sellingPrice)}
+                            {product.discountedSellingPrice ? formatCurrency(product.discountedSellingPrice) : formatCurrency(product.sellingPrice)}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -627,19 +622,13 @@ const Inventory: React.FC = () => {
                             <div className="text-xs text-gray-500">
                               Profit: {formatCurrency(profitAmount)}
                             </div>
-                            {isHighMargin && (
+                            {profitMarginPercent >= 40 && (
                               <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
                                 <TrendingUp className="h-3 w-3 mr-1" />
                                 High Margin
                               </span>
                             )}
-                            {isCloseToMinimum && (
-                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-800">
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Close to Min
-                              </span>
-                            )}
-                            {hasDiscount && !isHighMargin && !isCloseToMinimum && (
+                            {product.supplierDiscountPercent && product.supplierDiscountPercent > 0 && (
                               <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-800">
                                 Discounted
                               </span>
