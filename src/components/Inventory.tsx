@@ -511,8 +511,8 @@ const Inventory: React.FC = () => {
                   <>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Original Cost</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discounted Cost</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min Price</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discounted Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Margin</th>
                   </>
@@ -535,14 +535,14 @@ const Inventory: React.FC = () => {
                 const hasDiscount = pricing.hasDiscount;
                 const isCloseToMinimum = shouldWarnLowMargin(
                   product.sellingPrice,
-                  pricing.minimumPriceRounded,
-                  pricing.targetPriceRounded
+                  pricing.discountedPriceRounded,
+                  pricing.sellingPriceRounded
                 );
 
                 // Calculate margin improvement from discount
-                const marginWithoutDiscount = pricing.targetPriceRounded - product.costPrice;
+                const marginWithoutDiscount = pricing.sellingPriceRounded - product.costPrice;
                 const marginWithDiscount = pricing.discountedCost
-                  ? pricing.targetPriceRounded - pricing.discountedCost
+                  ? pricing.sellingPriceRounded - pricing.discountedCost
                   : marginWithoutDiscount;
                 const marginImprovement = marginWithDiscount / marginWithoutDiscount;
                 const isHighMargin = hasDiscount && marginImprovement > 1.3;
@@ -588,10 +588,10 @@ const Inventory: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm">
-                            {pricing.minimumPriceRounded ? (
+                            {pricing.discountedPriceRounded ? (
                               <div>
                                 <div className="font-medium text-gray-900">
-                                  {formatCurrency(pricing.minimumPriceRounded)}
+                                  {formatCurrency(pricing.discountedPriceRounded)}
                                 </div>
                                 {hasDiscount && (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">
@@ -606,7 +606,7 @@ const Inventory: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {formatCurrency(pricing.targetPriceRounded)}
+                            {formatCurrency(pricing.sellingPriceRounded)}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
